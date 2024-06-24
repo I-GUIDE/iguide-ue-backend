@@ -39,7 +39,7 @@ async function searchResources(keyword, resourceType = null, sortBy = '_score', 
 }
 
 //Example: search the notebook with the keyword “twitter" and show the top two results sorted by 'id' in asc order
-searchResources('twitter', 'notebook', 'id', 'asc', 0, 2)
+
+searchResources('twitter', undefined, 'title')
   .then(data => console.log(data))
   .catch(error => console.error(error));
-
