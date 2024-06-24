@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenSearch Keyword Search</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    .result {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Search DataWithNotebooks</h1>
+  <input type="text" id="keyword" placeholder="Enter keyword">
+  <button onclick="search()">Search</button>
+  <div id="results"></div>
+
+  <script>
+    async function search() {
+      const keyword = document.getElementById('keyword').value;
+      const response = await fetch('http://localhost:3000/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ keyword }),
+      });
+
+      if (!response.ok) {
+        console.error('Error with search request:', response.statusText);
+        return;
+      }
+
+      const results = await response.json();
+      console.log('Search results:', results);
+
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = '';
+
+      if (!Array.isArray(results)) {
+        console.error('Results is not an array:', results);
+        resultsDiv.innerHTML = '<p>Error retrieving results</p>';
+        return;
+      }
+
+      if (results.length === 0) {
+        resultsDiv.innerHTML = '<p>No results found</p>';
+      } else {
+        results.forEach(result => {
+          const resultDiv = document.createElement('div');
+          resultDiv.className = 'result';
+          resultDiv.innerHTML = `
+            <h2>${result.title}</h2>
+            <p>${result.contents}</p>
+            <p><strong>Tags:</strong> ${result.tags.join(', ')}</p>
+          `;
+          resultsDiv.appendChild(resultDiv);
+        });
+      }
+    }
+  </script>
+</body>
+</html>
+
