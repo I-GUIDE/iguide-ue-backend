@@ -20,7 +20,7 @@ async function fetchResourcesByType(type, sortBy = '_score', order = 'desc', fro
 }
 
 // Example usage: retrieve the 1st notebook
-fetchResourcesByType('notebook', '_score', 'asc', 0, 1)
+fetchResourcesByType('notebook', 'title', 'asc', 0, 4)
   .then(data => console.log(data))
   .catch(error => console.error(error));
 
