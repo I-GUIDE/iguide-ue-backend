@@ -79,7 +79,7 @@ app.get('/api/featured-resources', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-app.post('/search', async (req, res) => {
+app.post('/api/search', async (req, res) => {
   const { keyword } = req.body;
 
   try {
