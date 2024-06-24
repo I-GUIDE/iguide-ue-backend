@@ -11,7 +11,7 @@ async function searchResources(keyword, resourceType = null, sortBy = '_score', 
     body.resource_type = resourceType;
   }
 
-  const response = await fetch('http://149.165.169.173:5000/search', {
+  const response = await fetch('http://149.165.169.173:5000/api/search', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
