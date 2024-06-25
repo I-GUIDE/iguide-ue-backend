@@ -217,7 +217,7 @@
           const formData = new FormData();
           formData.append('file', file);
 
-          const response = await fetch('http://149.165.169.173:3000/api/upload-thumbnail', {
+          const response = await fetch('http://149.165.169.173:5000/api/upload-thumbnail', {
             method: 'POST',
             body: formData,
           });
@@ -245,7 +245,7 @@
         });
         data['related-resources'] = relatedResources;
 
-        const response = await fetch('http://149.165.169.173:3000/api/resources', {
+        const response = await fetch('http://149.165.169.173:5000/api/resources', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json'
@@ -293,7 +293,7 @@
           const keyword = this.value;
           const resourceType = resourceTypeSelect.value;
           if (keyword.length > 2) {
-            const response = await fetch(`http://149.165.169.173:3000/search-resources?type=${resourceType}&keyword=${keyword}`);
+            const response = await fetch(`http://149.165.169.173:5000/search-resources?type=${resourceType}&keyword=${keyword}`);
             const results = await response.json();
             resourceDropdown.innerHTML = '';
             results.forEach(result => {
@@ -342,4 +342,3 @@
   </script>
 </body>
 </html>
-
