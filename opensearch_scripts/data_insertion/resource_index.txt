@@ -4,8 +4,22 @@ PUT /resources
     "properties": {
       "id": { "type": "keyword" },
       "resource-type": { "type": "keyword" },
-      "title": { "type": "text" },
-      "authors": { "type": "text" },
+      "title": { 
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+      },
+      "authors": { 
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+      },
       "tags": { "type": "keyword" },
       "contents": { "type": "text" },
       "related-notebooks": { "type": "keyword" },
@@ -27,3 +41,4 @@ PUT /resources
     }
   }
 }
+
