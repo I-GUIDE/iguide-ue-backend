@@ -29,8 +29,8 @@ async function getResourceCount(resourceType, keywords) {
 getResourceCount('any', 'twitter')
   .then(count => console.log(`Number of resources when searching 'twitter': ${count}`))
   .catch(error => console.error(error));
-getResourceCount(undefined, 'twitter')
-  .then(count => console.log(`Number of resources when searching 'twitter': ${count}`))
+getResourceCount(null, 'Chicago')
+  .then(count => console.log(`Number of resources when searching 'Chicago': ${count}`))
   .catch(error => console.error(error));
 // Example usage: Get the count of all notebooks
 getResourceCount('notebook')
