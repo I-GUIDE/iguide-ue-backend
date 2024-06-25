@@ -1,10 +1,12 @@
-const express = require('express');
-const multer = require('multer');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const { Client } = require('@opensearch-project/opensearch');
-const path = require('path');
-const fs = require('fs');
+import express from 'express';
+import multer from 'multer';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { Client } from '@opensearch-project/opensearch';
+import path from 'path';
+import fs from 'fs';
+import { exec } from 'child_process';
+import fetch from 'node-fetch';
 
 const app = express();
 app.use(cors());
@@ -26,23 +28,53 @@ const client = new Client({
   },
 });
 
-// Ensure uploads/thumbnails directory exists
-const uploadDir = process.env.THUMBNAIL_FOLDER;
-fs.mkdirSync(uploadDir, { recursive: true });
+// Ensure thumbnails and notebook_html directories exist
+const thumbnailDir = path.join(process.env.UPLOAD_FOLDER, 'thumbnails');
+const notebookHtmlDir = path.join(process.env.UPLOAD_FOLDER, 'notebook_html');
+fs.mkdirSync(thumbnailDir, { recursive: true });
+fs.mkdirSync(notebookHtmlDir, { recursive: true });
 
-// Serve static files from the uploads/thumbnails directory
-app.use('/user-uploads/thumbnails', express.static(uploadDir));
+// Serve static files from the thumbnails directory
+app.use('/user-uploads/thumbnails', express.static(thumbnailDir));
+app.use('/user-uploads/notebook_html', express.static(notebookHtmlDir));
 
 // Configure storage for thumbnails
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadDir);
+    cb(null, thumbnailDir);
   },
   filename: (req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
   }
 });
 const uploadThumbnail = multer({ storage });
+
+// Function to convert notebook to HTML
+async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
+  const notebookUrl = `${githubRepo}/raw/main/${notebookPath}`;
+  const notebookName = path.basename(notebookPath, '.ipynb');
+  const timestamp = Date.now();
+  const htmlOutputPath = path.join(outputDir, `${timestamp}-${notebookName}.html`);
+  
+  const response = await fetch(notebookUrl);
+  if (!response.ok) {
+    throw new Error('Failed to fetch the notebook from GitHub');
+  }
+
+  const notebookContent = await response.text();
+  const notebookFilePath = path.join(outputDir, `${timestamp}-${notebookName}.ipynb`);
+  fs.writeFileSync(notebookFilePath, notebookContent);
+
+  return new Promise((resolve, reject) => {
+    exec(`jupyter nbconvert --to html ${notebookFilePath} --output ${htmlOutputPath}`, (error, stdout, stderr) => {
+      if (error) {
+        reject(`Error converting notebook: ${stderr}`);
+      } else {
+        resolve(htmlOutputPath);
+      }
+    });
+  });
+}
 
 // Endpoint to fetch documents by resource-type
 app.get('/api/resources', async (req, res) => {
@@ -207,7 +239,7 @@ app.post('/api/resource-count', async (req, res) => {
     }
   };
 
-  if (resourceType && resourceType!== null && resourceType !== 'any') {
+  if (resourceType && resourceType !== 'any') {
     query.bool.must.push({
       match: {
         'resource-type': resourceType
@@ -219,7 +251,7 @@ app.post('/api/resource-count', async (req, res) => {
     query.bool.must.push({
       multi_match: {
         query: keywords,
-        fields: ['title', 'contents', 'tags']
+        fields: ['title', 'contents','tags']
       }
     });
   }
@@ -248,17 +280,53 @@ app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => 
   });
 });
 
+// Endpoint to register a new resource, including converting notebook to HTML if provided
 app.put('/api/resources', async (req, res) => {
   const data = req.body;
 
   try {
+    // Check if the resource type is 'notebook' and contains the GitHub repo and notebook path
+    if (data['resource-type'] === 'notebook' && data['notebook-repo'] && data['notebook-file']) {
+      const htmlNotebookPath = await convertNotebookToHtml(data['notebook-repo'], data['notebook-file'], notebookHtmlDir);
+      data['html-notebook'] = `/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+    }
+
     await client.index({
       index: 'resources_dev',
       body: data,
     });
+
     res.status(200).json({ message: 'Resource registered successfully' });
   } catch (error) {
     console.error('Error indexing resource in OpenSearch:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Endpoint to retrieve a resource by id
+app.get('/api/resource/:field/:value', async (req, res) => {
+  const { field, value } = req.params;
+
+  try {
+    const resourceResponse = await client.search({
+      index: 'resources',
+      body: {
+        query: {
+          term: {
+            [field]: value,
+          },
+        },
+      },
+    });
+
+    if (resourceResponse.body.hits.total.value === 0) {
+      res.status(404).json({ message: 'No resource found' });
+      return;
+    }
+    const resource = resourceResponse.body.hits.hits[0]._source;
+    res.json(resource);
+  } catch (error) {
+    console.error('Error querying OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

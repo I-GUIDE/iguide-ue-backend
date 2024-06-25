@@ -251,7 +251,7 @@ app.post('/api/resource-count', async (req, res) => {
     query.bool.must.push({
       multi_match: {
         query: keywords,
-        fields: ['title', 'contents', 'authors', 'tags', 'external-links', 'license']
+        fields: ['title', 'contents','tags']
       }
     });
   }
@@ -299,6 +299,34 @@ app.put('/api/resources', async (req, res) => {
     res.status(200).json({ message: 'Resource registered successfully' });
   } catch (error) {
     console.error('Error indexing resource in OpenSearch:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Endpoint to retrieve a resource by id
+app.get('/api/resource/:field/:value', async (req, res) => {
+  const { field, value } = req.params;
+
+  try {
+    const resourceResponse = await client.search({
+      index: 'resources',
+      body: {
+        query: {
+          term: {
+            [field]: value,
+          },
+        },
+      },
+    });
+
+    if (resourceResponse.body.hits.total.value === 0) {
+      res.status(404).json({ message: 'No resource found' });
+      return;
+    }
+    const resource = resourceResponse.body.hits.hits[0]._source;
+    res.json(resource);
+  } catch (error) {
+    console.error('Error querying OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
