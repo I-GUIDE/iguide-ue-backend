@@ -303,33 +303,52 @@ app.put('/api/resources', async (req, res) => {
   }
 });
 
-// Endpoint to retrieve a resource by id
-app.get('/api/resource/:field/:value', async (req, res) => {
-  const { field, value } = req.params;
+// Endpoint to retrieve a resources by id
+app.get('/api/resources/:field/:values', async (req, res) => {
+  const { field, values } = req.params;
+  const valueArray = values.split(',');
 
   try {
     const resourceResponse = await client.search({
       index: 'resources',
       body: {
         query: {
-          term: {
-            [field]: value,
+          terms: {
+            [field]: valueArray,
+          },
+        },
+        sort: {
+          _script: {
+            type: 'number',
+            script: {
+              lang: 'painless',
+              source: `
+                int index = params.valueArray.indexOf(doc[params.field].value);
+                return index != -1 ? index : params.valueArray.length;
+              `,
+              params: {
+                valueArray: valueArray,
+                field: field,
+              },
+            },
+            order: 'asc',
           },
         },
       },
     });
 
     if (resourceResponse.body.hits.total.value === 0) {
-      res.status(404).json({ message: 'No resource found' });
+      res.status(404).json({ message: 'No resources found' });
       return;
     }
-    const resource = resourceResponse.body.hits.hits[0]._source;
-    res.json(resource);
+    const resources = resourceResponse.body.hits.hits.map(hit => hit._source);
+    res.json(resources);
   } catch (error) {
     console.error('Error querying OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
