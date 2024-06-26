@@ -9,6 +9,7 @@ import { exec } from 'child_process';
 import fetch from 'node-fetch';
 import { S3Client } from '@aws-sdk/client-s3';
 import multerS3 from 'multer-s3';
+import FileType from 'file-type';
 
 const app = express();
 app.use(cors());
@@ -280,16 +281,32 @@ const s3Client = new S3Client({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
+//File validation
+const fileFilter = async function(req, file, cb) {
+    // Read the first chunk to determine the file type
+    const buffer = await file.stream.read(4100); // Read enough bytes to check the MIME type
+    file.stream.unshift(buffer); // Put the chunk back to the stream
+
+    const fileType = await FileType.fromBuffer(buffer);
+
+    // Verify if the detected file type is allowed
+    if (fileType && (fileType.ext === 'csv' || fileType.ext === 'zip' || fileType.mime === 'application/zip' || fileType.ext === 'shp')) {
+        cb(null, true);
+    } else {
+        cb(new Error('Only geospatial data files are allowed!'), false);
+    }
+};
 
 const upload = multer({
-  storage: multerS3({
-    s3: s3Client,
-    bucket: process.env.AWS_BUCKET_NAME,
-    acl: 'public-read',
-    key: function (req, file, cb) {
-      cb(null, file.originalname);
-    },
-  }),
+    storage: multerS3({
+        s3: s3Client,
+        bucket: process.env.AWS_BUCKET_NAME,
+        acl: 'public-read',
+        key: function (req, file, cb) {
+            cb(null, file.originalname);
+        },
+    }),
+    fileFilter: fileFilter
 });
 //Upload the dataset to S3
 app.post('/api/upload-dataset', upload.single('file'), (req, res) => {
