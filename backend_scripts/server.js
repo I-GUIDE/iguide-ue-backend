@@ -272,7 +272,6 @@ app.post('/api/resource-count', async (req, res) => {
     res.status(500).send({ error: 'An error occurred while fetching the resource count' });
   }
 });
-//S3 client for data uploading
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
   credentials: {
@@ -288,11 +287,27 @@ const upload = multer({
     acl: 'public-read',
     key: function (req, file, cb) {
       cb(null, file.originalname);
-    },
+    }
   }),
+  fileFilter: function (req, file, cb) {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext !== '.csv' && ext !== '.zip') {
+      return cb(null, false, new Error('Only .csv and .zip files are allowed!'));
+    }
+    const allowedMimeTypes = ['text/csv', 'application/zip', 'application/x-zip-compressed'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      return cb(null, false, new Error('Invalid file type, only CSV and ZIP files are allowed!'));
+    }
+    cb(null, true);
+  }
 });
-//Upload the dataset to S3
+
 app.post('/api/upload-dataset', upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      message: 'No file uploaded or invalid file type (.csv or .zip)!'
+    });
+  }
   res.json({
     message: 'File uploaded successfully',
     url: req.file.location,
@@ -300,6 +315,21 @@ app.post('/api/upload-dataset', upload.single('file'), (req, res) => {
     key: req.file.key,
   });
 });
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    // A Multer error occurred when uploading.
+    return res.status(400).json({ message: err.message });
+  } else if (err) {
+    // An unknown error occurred.
+    return res.status(400).json({ message: err.message });
+  }
+
+  // Forward to next middleware if no errors
+  next();
+});
+
 // Upload thumbnail
 app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => {
   const filePath = `/user-uploads/thumbnails/${req.file.filename}`;
