@@ -336,7 +336,7 @@
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch('http://149.165.169.173:5000/api/upload', {
+        const response = await fetch('http://149.165.169.173:5000/api/upload-dataset', {
           method: 'POST',
           body: formData,
         });
@@ -345,6 +345,8 @@
         document.getElementById('result').innerHTML = `
           <p>File uploaded successfully!</p>
           <p>File URL: <a href="${result.url}" target="_blank">${result.url}</a></p>
+          <p>S3 bucket: ${result.bucket}</p>
+          <p>Key: ${result.key}</p>
         `;
       });
     });
