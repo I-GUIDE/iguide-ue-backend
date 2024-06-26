@@ -293,7 +293,16 @@
           const keyword = this.value;
           const resourceType = resourceTypeSelect.value;
           if (keyword.length > 2) {
-            const response = await fetch(`http://149.165.169.173:5000/search-resources?type=${resourceType}&keyword=${keyword}`);
+            const response = await fetch('http://149.165.169.173:5000/api/search', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                keyword: keyword,
+                resource_type: resourceType
+              })
+            });
             const results = await response.json();
             resourceDropdown.innerHTML = '';
             results.forEach(result => {
@@ -342,3 +351,4 @@
   </script>
 </body>
 </html>
+
