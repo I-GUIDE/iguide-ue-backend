@@ -58,11 +58,7 @@
       </div>
 
       <div id="notebookFields" class="hidden">
-        <div class="input-field col s12">
-          <input type="text" id="html-notebook" name="html-notebook">
-          <label for="html-notebook">HTML Notebook</label>
-        </div>
-
+        
         <div class="input-field col s12">
           <input type="text" id="notebook-repo" name="notebook-repo">
           <label for="notebook-repo">Notebook Repo</label>
@@ -80,19 +76,6 @@
           <label for="external-link">External Link</label>
         </div>
 
-        <div class="file-field input-field col s12">
-          <div class="btn">
-            <span>Choose Dataset</span>
-            <input type="file" name="file" id="file-input" required>
-          </div>
-          <div class="file-path-wrapper">
-            <input class="file-path validate" type="text">
-          </div>
-        </div>
-
-        <div id="result"></div>
-        <button type="button" id="upload-button" class="btn">Upload</button>
-
         <div class="input-field col s12">
           <input type="text" id="direct-download-link" name="direct-download-link">
           <label for="direct-download-link">Direct Download Link</label>
@@ -106,35 +89,16 @@
 
       <div id="publicationFields" class="hidden">
         <div class="input-field col s12">
-          <input type="text" id="related-notebooks" name="related-notebooks">
-          <label for="related-notebooks">Related Notebooks</label>
-        </div>
-
-        <div class="input-field col s12">
-          <input type="text" id="related-datasets" name="related-datasets">
-          <label for="related-datasets">Related Datasets</label>
-        </div>
-
-        <div class="input-field col s12">
-          <input type="text" id="related-publications" name="related-publications">
-          <label for="related-publications">Related Publications</label>
+          <input type="text" id="external-link-publication" name="external-link-publication">
+          <label for="external-link-publication">External Link</label>
         </div>
       </div>
 
       <div id="oerFields" class="hidden">
+       
         <div class="input-field col s12">
-          <input type="text" id="related-datasets" name="related-datasets">
-          <label for="related-datasets">Related Datasets</label>
-        </div>
-
-        <div class="input-field col s12">
-          <input type="text" id="related-notebooks" name="related-notebooks">
-          <label for="related-notebooks">Related Notebooks</label>
-        </div>
-
-        <div class="input-field col s12">
-          <input type="text" id="external-link" name="external-link">
-          <label for="external-link">External Link</label>
+          <input type="text" id="external-link-oer" name="external-link-oer">
+          <label for="external-link-oer">External Link</label>
         </div>
       </div>
 
@@ -217,7 +181,7 @@
           const formData = new FormData();
           formData.append('file', file);
 
-          const response = await fetch('http://149.165.169.173:5000/api/upload-thumbnail', {
+          const response = await fetch('http://149.165.154.200:5001/api/upload-thumbnail', {
             method: 'POST',
             body: formData,
           });
@@ -245,7 +209,7 @@
         });
         data['related-resources'] = relatedResources;
 
-        const response = await fetch('http://149.165.169.173:5000/api/resources', {
+        const response = await fetch('http://149.165.154.200:5001/api/resources', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json'
@@ -293,7 +257,7 @@
           const keyword = this.value;
           const resourceType = resourceTypeSelect.value;
           if (keyword.length > 2) {
-            const response = await fetch('http://149.165.169.173:5000/api/search', {
+            const response = await fetch('http://149.165.154.200:5001/api/search', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json'
@@ -327,27 +291,6 @@
           const lastRelatedResource = relatedResources[relatedResources.length - 1];
           lastRelatedResource.remove();
         }
-      });
-
-      document.getElementById('upload-button').addEventListener('click', async function() {
-        const fileInput = document.getElementById('file-input');
-        const file = fileInput.files[0];
-
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch('http://149.165.169.173:5000/api/upload-dataset', {
-          method: 'POST',
-          body: formData,
-        });
-
-        const result = await response.json();
-        document.getElementById('result').innerHTML = `
-          <p>File uploaded successfully!</p>
-          <p>File URL: <a href="${result.url}" target="_blank">${result.url}</a></p>
-          <p>S3 bucket: ${result.bucket}</p>
-          <p>Key: ${result.key}</p>
-        `;
       });
     });
   </script>

@@ -1,12 +1,20 @@
 import fetch from 'node-fetch';
 import fs from 'fs';
 
-const url = 'http://localhost:5000/api/resources';
+// Get the JSON file path from command-line arguments
+const filePath = process.argv[2];
 
-// Read datasets.json file
-fs.readFile('publications_and_oers.json', 'utf8', async (err, data) => {
+if (!filePath) {
+    console.error('Please provide the path to the JSON file as a command-line argument.');
+    process.exit(1);
+}
+
+const url = 'http://localhost:5001/api/resources';
+
+// Read the JSON file
+fs.readFile(filePath, 'utf8', async (err, data) => {
     if (err) {
-        console.error('Error reading datasets.json file:', err);
+        console.error('Error reading JSON file:', err);
         return;
     }
 
@@ -31,7 +39,7 @@ fs.readFile('publications_and_oers.json', 'utf8', async (err, data) => {
             }
         }
     } catch (error) {
-        console.error('Error parsing datasets.json file:', error);
+        console.error('Error parsing JSON file:', error);
     }
 });
 
