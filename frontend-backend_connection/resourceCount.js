@@ -9,7 +9,7 @@
  * @throws {Error} Throws an error if the fetch operation fails.
  */
 async function getResourceCount(resourceType, keywords) {
-  const response = await fetch('http://149.165.169.173:5000/api/resource-count', {
+  const response = await fetch('https://backend.i-guide.io:3000/api/resource-count', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'

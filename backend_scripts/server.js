@@ -9,6 +9,8 @@ import { exec } from 'child_process';
 import fetch from 'node-fetch';
 import { S3Client } from '@aws-sdk/client-s3';
 import multerS3 from 'multer-s3';
+import https from 'https';
+import http from 'http';
 
 const app = express();
 app.use(cors());
@@ -19,6 +21,12 @@ const os_node = process.env.OPENSEARCH_NODE;
 const os_usr = process.env.OPENSEARCH_USERNAME;
 const os_pswd = process.env.OPENSEARCH_PASSWORD;
 
+
+const options = {
+    key: fs.readFileSync(process.env.SSL_KEY),
+    cert: fs.readFileSync(process.env.SSL_CERT)
+};
+
 const client = new Client({
   node: os_node, // OpenSearch endpoint
   auth: {
@@ -26,6 +34,7 @@ const client = new Client({
     password: os_pswd,
   },
   ssl: {
+    ca: fs.readFileSync(process.env.SSL_CERT),
     rejectUnauthorized: false, // Use this only if you encounter SSL certificate issues
   },
 });
@@ -351,7 +360,7 @@ app.put('/api/resources', async (req, res) => {
     }
 
     await client.index({
-      index: 'resources_dev',
+      index: 'resources',
       body: data,
     });
 
@@ -409,8 +418,11 @@ app.get('/api/resources/:field/:values', async (req, res) => {
 });
 
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+https.createServer(options, app).listen(3000, () => {
+    console.log('Server is running on https://backend.i-guide.io:3000');
 });
+/*http.createServer((req, res) => {
+    res.writeHead(301, { "Location": "https://" + req.headers['host'] + req.url });
+    res.end();
+}).listen(5000);*/
 

@@ -7,6 +7,10 @@ import path from 'path';
 import fs from 'fs';
 import { exec } from 'child_process';
 import fetch from 'node-fetch';
+import { S3Client } from '@aws-sdk/client-s3';
+import multerS3 from 'multer-s3';
+import https from 'https';
+import http from 'http';
 
 const app = express();
 app.use(cors());
@@ -16,6 +20,11 @@ dotenv.config();
 const os_node = process.env.OPENSEARCH_NODE;
 const os_usr = process.env.OPENSEARCH_USERNAME;
 const os_pswd = process.env.OPENSEARCH_PASSWORD;
+
+const options = {
+    key: fs.readFileSync(process.env.SSL_KEY),
+    cert: fs.readFileSync(process.env.SSL_CERT)
+};
 
 const client = new Client({
   node: os_node, // OpenSearch endpoint
@@ -66,7 +75,7 @@ async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
   fs.writeFileSync(notebookFilePath, notebookContent);
 
   return new Promise((resolve, reject) => {
-    exec(`jupyter nbconvert --to html ${notebookFilePath} --output ${htmlOutputPath}`, (error, stdout, stderr) => {
+    exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${htmlOutputPath}"`, (error, stdout, stderr) => {
       if (error) {
         reject(`Error converting notebook: ${stderr}`);
       } else {
@@ -93,7 +102,7 @@ app.get('/api/resources', async (req, res) => {
 
   try {
     const resourceResponse = await client.search({
-      index: 'resources',
+      index: 'resources_dev',
       body: {
         from: from,
         size: size,
@@ -124,6 +133,8 @@ app.get('/api/resources', async (req, res) => {
   }
 });
 
+
+
 // Endpoint to fetch all featured documents
 app.get('/api/featured-resources', async (req, res) => {
   let sortBy = req.query.sort_by || '_score';
@@ -140,7 +151,7 @@ app.get('/api/featured-resources', async (req, res) => {
 
   try {
     const featuredResponse = await client.search({
-      index: 'resources',
+      index: 'resources_dev',
       body: {
         from: from,
         size: size,
@@ -202,7 +213,7 @@ app.post('/api/search', async (req, res) => {
 
   try {
     const searchResponse = await client.search({
-      index: 'resources',
+      index: 'resources_dev',
       body: {
         from: from,
         size: size,
@@ -258,7 +269,7 @@ app.post('/api/resource-count', async (req, res) => {
 
   try {
     const response = await client.count({
-      index: 'resources',
+      index: 'resources_dev',
       body: {
         query: query
       }
@@ -270,10 +281,67 @@ app.post('/api/resource-count', async (req, res) => {
     res.status(500).send({ error: 'An error occurred while fetching the resource count' });
   }
 });
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+const upload = multer({
+  storage: multerS3({
+    s3: s3Client,
+    bucket: process.env.AWS_BUCKET_NAME,
+    acl: 'public-read',
+    key: function (req, file, cb) {
+      cb(null, file.originalname);
+    }
+  }),
+  fileFilter: function (req, file, cb) {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext !== '.csv' && ext !== '.zip') {
+      return cb(null, false, new Error('Only .csv and .zip files are allowed!'));
+    }
+    const allowedMimeTypes = ['text/csv', 'application/zip', 'application/x-zip-compressed'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      return cb(null, false, new Error('Invalid file type, only CSV and ZIP files are allowed!'));
+    }
+    cb(null, true);
+  }
+});
+
+app.post('/api/upload-dataset', upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      message: 'No file uploaded or invalid file type (.csv or .zip)!'
+    });
+  }
+  res.json({
+    message: 'File uploaded successfully',
+    url: req.file.location,
+    bucket: process.env.AWS_BUCKET_NAME,
+    key: req.file.key,
+  });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    // A Multer error occurred when uploading.
+    return res.status(400).json({ message: err.message });
+  } else if (err) {
+    // An unknown error occurred.
+    return res.status(400).json({ message: err.message });
+  }
+
+  // Forward to next middleware if no errors
+  next();
+});
 
 // Upload thumbnail
 app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => {
-  const filePath = `/user-uploads/thumbnails/${req.file.filename}`;
+  const filePath = `https://backend.i-guide.io:5000/user-uploads/thumbnails/${req.file.filename}`;
   res.json({
     message: 'File uploaded successfully',
     url: filePath,
@@ -281,9 +349,9 @@ app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => 
 });
 
 // Endpoint to register a new resource, including converting notebook to HTML if provided
-app.put('/api/resources', async (req, res) => {
+/*app.put('/api/resources', async (req, res) => {
   const data = req.body;
-
+  //console.log(data);
   try {
     // Check if the resource type is 'notebook' and contains the GitHub repo and notebook path
     if (data['resource-type'] === 'notebook' && data['notebook-repo'] && data['notebook-file']) {
@@ -301,38 +369,233 @@ app.put('/api/resources', async (req, res) => {
     console.error('Error indexing resource in OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
+});*/
+// Function to update related documents
+const updateRelatedDocuments = async (resourceId, relatedIds, relatedField) => {
+  for (const relatedId of relatedIds) {
+    const { body: existingDoc } = await client.get({
+      index: 'resources_dev',
+      id: relatedId
+    });
+
+    if (existingDoc._source) {
+      existingDoc._source[relatedField] = existingDoc._source[relatedField] || [];
+      if (!existingDoc._source[relatedField].includes(resourceId)) {
+        existingDoc._source[relatedField].push(resourceId);
+      }
+
+      await client.index({
+        index: 'resources_dev',
+        id: relatedId,
+        body: existingDoc._source
+      });
+    }
+  }
+};
+// Endpoint to register a resource
+app.put('/api/resources', async (req, res) => {
+  const resource = req.body;
+  //console.log(resource)
+  //resource.id = uuidv4(); // Generate a unique ID
+
+  try {
+  if (resource['resource-type'] === 'notebook' && resource['notebook-repo'] && resource['notebook-file']) {
+      const htmlNotebookPath = await convertNotebookToHtml(resource['notebook-repo'], resource['notebook-file'], notebookHtmlDir);
+      resource['html-notebook'] = `https://backend.i-guide.io:5000/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+    }
+    // Retrieve and update related document IDs
+    const relatedNotebooks = [];
+    const relatedDatasets = [];
+    const relatedPublications = [];
+
+    const relatedResources = resource['related-resources'] || [];
+    for (const relatedResource of relatedResources) {
+      const { type, title } = relatedResource;
+
+      const { body } = await client.search({
+        index: 'resources_dev',
+        body: {
+          query: {
+            bool: {
+              must: [
+                { match: { 'resource-type': type } },
+                { match_phrase: { title: title } }
+              ]
+            }
+          },
+          size: 1
+        }
+      });
+
+      if (body.hits.hits.length > 0) {
+        const relatedId = body.hits.hits[0]._id;
+	//console.log(relatedId)
+        if (type === 'notebook') {
+          relatedNotebooks.push(relatedId);
+        } else if (type === 'dataset') {
+          relatedDatasets.push(relatedId);
+        } else if (type === 'publication') {
+          relatedPublications.push(relatedId);
+        }
+
+        //await updateRelatedDocuments(resource.id, [relatedId], `related-${type}s`);
+      }
+    }
+
+    resource['related-notebooks'] = relatedNotebooks;
+    resource['related-datasets'] = relatedDatasets;
+    resource['related-publications'] = relatedPublications;
+
+    // Remove temporary related-resources field
+    delete resource['related-resources'];
+
+    // Index the new resource
+    const response = await client.index({
+      index: 'resources_dev',
+      //id: resource.id,
+      body: resource
+    });
+    //console.log(response)
+    //console.log(response.body._id)
+
+    for (const relatedResource of relatedResources) {
+      const { type, title } = relatedResource;
+
+      const { body } = await client.search({
+        index: 'resources_dev',
+        body: {
+          query: {
+            bool: {
+              must: [
+                { match: { 'resource-type': type } },
+                { match_phrase: { title: title } }
+              ]
+            }
+          },
+          size: 1
+        }
+      });
+
+      if (body.hits.hits.length > 0) {
+        const relatedId = body.hits.hits[0]._id;
+	//console.log(relatedId)
+
+
+        await updateRelatedDocuments(response.body._id, [relatedId], `related-${resource['resource-type']}s`);
+      }
+    }
+
+    res.status(200).json({ message: 'Resource registered successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// Endpoint to retrieve a resource by id
-app.get('/api/resource/:field/:value', async (req, res) => {
-  const { field, value } = req.params;
+// Endpoint to delete a resource by ID
+app.delete('/api/resources/:id', async (req, res) => {
+  const resourceId = req.params.id;
+
+  try {
+    const { body: existingDoc } = await client.get({
+      index: 'resources_dev',
+      id: resourceId
+    });
+
+    if (existingDoc._source) {
+      // Update related documents to remove this resource ID
+      const relatedNotebooks = existingDoc._source['related-notebooks'] || [];
+      const relatedDatasets = existingDoc._source['related-datasets'] || [];
+      const relatedPublications = existingDoc._source['related-publications'] || [];
+
+      const relatedIds = [...relatedNotebooks, ...relatedDatasets, ...relatedPublications];
+      for (const relatedId of relatedIds) {
+        const { body: relatedDoc } = await client.get({
+          index: 'resources_dev',
+          id: relatedId
+        });
+
+        if (relatedDoc._source) {
+          const relatedField = `related-${existingDoc._source['resource-type']}s`;
+          relatedDoc._source[relatedField] = relatedDoc._source[relatedField] || [];
+          const index = relatedDoc._source[relatedField].indexOf(resourceId);
+          if (index > -1) {
+            relatedDoc._source[relatedField].splice(index, 1);
+          }
+
+          await client.index({
+            index: 'resources_dev',
+            id: relatedId,
+            body: relatedDoc._source
+          });
+        }
+      }
+    }
+
+    // Delete the resource
+    const response = await client.delete({
+      index: 'resources_dev',
+      id: resourceId
+    });
+
+    res.status(200).json(response);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint to retrieve a resources by id
+app.get('/api/resources/:field/:values', async (req, res) => {
+  const { field, values } = req.params;
+  const valueArray = values.split(',');
 
   try {
     const resourceResponse = await client.search({
-      index: 'resources',
+      index: 'resources_dev',
       body: {
         query: {
-          term: {
-            [field]: value,
+          terms: {
+            [field]: valueArray,
+          },
+        },
+        sort: {
+          _script: {
+            type: 'number',
+            script: {
+              lang: 'painless',
+              source: `
+                int index = params.valueArray.indexOf(doc[params.field].value);
+                return index != -1 ? index : params.valueArray.length;
+              `,
+              params: {
+                valueArray: valueArray,
+                field: field,
+              },
+            },
+            order: 'asc',
           },
         },
       },
     });
 
     if (resourceResponse.body.hits.total.value === 0) {
-      res.status(404).json({ message: 'No resource found' });
+      res.status(404).json({ message: 'No resources found' });
       return;
     }
-    const resource = resourceResponse.body.hits.hits[0]._source;
-    res.json(resource);
+    const resources = resourceResponse.body.hits.hits.map(hit => hit._source);
+    res.json(resources);
   } catch (error) {
     console.error('Error querying OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-const PORT = 3000;
+
+const PORT = 5001;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+});
+
+https.createServer(options, app).listen(5000, () => {
+    console.log('Server is running on https://backend.i-guide.io:5000');
 });
 
