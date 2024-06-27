@@ -68,7 +68,7 @@ async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
   fs.writeFileSync(notebookFilePath, notebookContent);
 
   return new Promise((resolve, reject) => {
-    exec(`jupyter nbconvert --to html ${notebookFilePath} --output ${htmlOutputPath}`, (error, stdout, stderr) => {
+    exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${htmlOutputPath}"`, (error, stdout, stderr) => {
       if (error) {
         reject(`Error converting notebook: ${stderr}`);
       } else {
@@ -95,7 +95,7 @@ app.get('/api/resources', async (req, res) => {
 
   try {
     const resourceResponse = await client.search({
-      index: 'resources',
+      index: 'resources_dev',
       body: {
         from: from,
         size: size,
@@ -126,6 +126,8 @@ app.get('/api/resources', async (req, res) => {
   }
 });
 
+
+
 // Endpoint to fetch all featured documents
 app.get('/api/featured-resources', async (req, res) => {
   let sortBy = req.query.sort_by || '_score';
@@ -142,7 +144,7 @@ app.get('/api/featured-resources', async (req, res) => {
 
   try {
     const featuredResponse = await client.search({
-      index: 'resources',
+      index: 'resources_dev',
       body: {
         from: from,
         size: size,
@@ -204,7 +206,7 @@ app.post('/api/search', async (req, res) => {
 
   try {
     const searchResponse = await client.search({
-      index: 'resources',
+      index: 'resources_dev',
       body: {
         from: from,
         size: size,
@@ -260,7 +262,7 @@ app.post('/api/resource-count', async (req, res) => {
 
   try {
     const response = await client.count({
-      index: 'resources',
+      index: 'resources_dev',
       body: {
         query: query
       }
@@ -340,9 +342,9 @@ app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => 
 });
 
 // Endpoint to register a new resource, including converting notebook to HTML if provided
-app.put('/api/resources', async (req, res) => {
+/*app.put('/api/resources', async (req, res) => {
   const data = req.body;
-  console.log(data);
+  //console.log(data);
   try {
     // Check if the resource type is 'notebook' and contains the GitHub repo and notebook path
     if (data['resource-type'] === 'notebook' && data['notebook-repo'] && data['notebook-file']) {
@@ -360,6 +362,178 @@ app.put('/api/resources', async (req, res) => {
     console.error('Error indexing resource in OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
+});*/
+// Function to update related documents
+const updateRelatedDocuments = async (resourceId, relatedIds, relatedField) => {
+  for (const relatedId of relatedIds) {
+    const { body: existingDoc } = await client.get({
+      index: 'resources_dev',
+      id: relatedId
+    });
+
+    if (existingDoc._source) {
+      existingDoc._source[relatedField] = existingDoc._source[relatedField] || [];
+      if (!existingDoc._source[relatedField].includes(resourceId)) {
+        existingDoc._source[relatedField].push(resourceId);
+      }
+
+      await client.index({
+        index: 'resources_dev',
+        id: relatedId,
+        body: existingDoc._source
+      });
+    }
+  }
+};
+// Endpoint to register a resource
+app.put('/api/resources', async (req, res) => {
+  const resource = req.body;
+  //console.log(resource)
+  //resource.id = uuidv4(); // Generate a unique ID
+
+  try {
+  if (resource['resource-type'] === 'notebook' && resource['notebook-repo'] && resource['notebook-file']) {
+      const htmlNotebookPath = await convertNotebookToHtml(resource['notebook-repo'], resource['notebook-file'], notebookHtmlDir);
+      resource['html-notebook'] = `/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+    }
+    // Retrieve and update related document IDs
+    const relatedNotebooks = [];
+    const relatedDatasets = [];
+    const relatedPublications = [];
+
+    const relatedResources = resource['related-resources'] || [];
+    for (const relatedResource of relatedResources) {
+      const { type, title } = relatedResource;
+
+      const { body } = await client.search({
+        index: 'resources_dev',
+        body: {
+          query: {
+            bool: {
+              must: [
+                { match: { 'resource-type': type } },
+                { match_phrase: { title: title } }
+              ]
+            }
+          },
+          size: 1
+        }
+      });
+
+      if (body.hits.hits.length > 0) {
+        const relatedId = body.hits.hits[0]._id;
+	//console.log(relatedId)
+        if (type === 'notebook') {
+          relatedNotebooks.push(relatedId);
+        } else if (type === 'dataset') {
+          relatedDatasets.push(relatedId);
+        } else if (type === 'publication') {
+          relatedPublications.push(relatedId);
+        }
+
+        //await updateRelatedDocuments(resource.id, [relatedId], `related-${type}s`);
+      }
+    }
+
+    resource['related-notebooks'] = relatedNotebooks;
+    resource['related-datasets'] = relatedDatasets;
+    resource['related-publications'] = relatedPublications;
+
+    // Remove temporary related-resources field
+    delete resource['related-resources'];
+
+    // Index the new resource
+    const response = await client.index({
+      index: 'resources_dev',
+      //id: resource.id,
+      body: resource
+    });
+    //console.log(response)
+    //console.log(response.body._id)
+
+    for (const relatedResource of relatedResources) {
+      const { type, title } = relatedResource;
+
+      const { body } = await client.search({
+        index: 'resources_dev',
+        body: {
+          query: {
+            bool: {
+              must: [
+                { match: { 'resource-type': type } },
+                { match_phrase: { title: title } }
+              ]
+            }
+          },
+          size: 1
+        }
+      });
+
+      if (body.hits.hits.length > 0) {
+        const relatedId = body.hits.hits[0]._id;
+	//console.log(relatedId)
+
+
+        await updateRelatedDocuments(response.body._id, [relatedId], `related-${resource['resource-type']}s`);
+      }
+    }
+
+    res.status(200).json({ message: 'Resource registered successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint to delete a resource by ID
+app.delete('/api/resources/:id', async (req, res) => {
+  const resourceId = req.params.id;
+
+  try {
+    const { body: existingDoc } = await client.get({
+      index: 'resources_dev',
+      id: resourceId
+    });
+
+    if (existingDoc._source) {
+      // Update related documents to remove this resource ID
+      const relatedNotebooks = existingDoc._source['related-notebooks'] || [];
+      const relatedDatasets = existingDoc._source['related-datasets'] || [];
+      const relatedPublications = existingDoc._source['related-publications'] || [];
+
+      const relatedIds = [...relatedNotebooks, ...relatedDatasets, ...relatedPublications];
+      for (const relatedId of relatedIds) {
+        const { body: relatedDoc } = await client.get({
+          index: 'resources_dev',
+          id: relatedId
+        });
+
+        if (relatedDoc._source) {
+          const relatedField = `related-${existingDoc._source['resource-type']}s`;
+          relatedDoc._source[relatedField] = relatedDoc._source[relatedField] || [];
+          const index = relatedDoc._source[relatedField].indexOf(resourceId);
+          if (index > -1) {
+            relatedDoc._source[relatedField].splice(index, 1);
+          }
+
+          await client.index({
+            index: 'resources_dev',
+            id: relatedId,
+            body: relatedDoc._source
+          });
+        }
+      }
+    }
+
+    // Delete the resource
+    const response = await client.delete({
+      index: 'resources_dev',
+      id: resourceId
+    });
+
+    res.status(200).json(response);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Endpoint to retrieve a resources by id
@@ -369,7 +543,7 @@ app.get('/api/resources/:field/:values', async (req, res) => {
 
   try {
     const resourceResponse = await client.search({
-      index: 'resources',
+      index: 'resources_dev',
       body: {
         query: {
           terms: {
