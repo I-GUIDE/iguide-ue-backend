@@ -1,161 +1,152 @@
-{
-  "id": "nb1",
-  "resource-type": "notebook",
-  "title": "Data Collection",
-  "authors": ["Fangzheng Lyu"],
-  "tags": ["Twitter", "Census Shapefile", "ACS", "Data Collection"],
-  "contents": "This notebook includes the data collection process for three datasets including US Census Tract Shapefile data, American Community Survey (ACS) Data, and Twitter data.",
-  "related-datasets": [],
-  "html-notebook": "/html_notebooks/Data_Collection.html",
-  "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
-  "notebook-file": "Data Collection.ipynb",
-  "thumbnail-image": "/images/notebook_images/nb1.png"
-}
-
-{
-  "id": "nb2",
-  "resource-type": "notebook",
-  "title": "National-level Analysis using Twitter Data",
-  "authors": ["Fangzheng Lyu"],
-  "tags": ["National-level Analysis", "Human sentiments of heat exposure", "Twitter"],
-  "contents": "This notebook provides a workflow for national-scale analysis of human sentiments of heat exposure using location-based social media Twitter data.",
-  "related-datasets": ["Twitter data", "Heat Dictionary", "County Level US Boundary Shapefile"],
-  "html-notebook": "/html_notebooks/National_Level_Analysis.html",
-  "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
-  "notebook-file": "National-level Analysis.ipynb",
-  "thumbnail-image": "/images/notebook_images/nb2.png",
-  "featured": true
-}
-
-{
-  "id": "nb3",
-  "resource-type": "notebook",
-  "title": "Fine Granularity Analysis - Fine Granularity Human Sentiments of Heat Exposure",
-  "authors": ["Fangzheng Lyu"],
-  "tags": ["Fine Temporal Scale Analysis", "Human sentiments of heat exposure", "Twitter"],
-  "contents": "Evaluating Twitter-based heat exposure dynamics can be analyzed at a finer temporal resolution. This notebook looks into how the heat exposure changes on September 26, 2021 at fine temporal granularity.",
-  "related-datasets": ["Twitter data", "Heat Dictionary", "Census tract level Chicago Boundary Shapefile"],
-  "html-notebook": "/html_notebooks/Hourly_Analysis.html",
-  "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
-  "notebook-file": "Hourly Analysis.ipynb",
-  "thumbnail-image": "/images/notebook_images/nb3.png"
-}
-
-{
-  "id": "nb4",
-  "resource-type": "notebook",
-  "title": "Choropleth Maps - Data Classification and Visualization",
-  "authors": ["Fangzheng Lyu"],
-  "tags": ["Equal Interval", "Jenks natural breaks", "Quantile Classification", "Visualization"],
-  "contents": "Choropleth map visually depicts quantitative data through shaded or patterned areas representing different values or categories across geographical regions or areas.",
-  "related-datasets": ["Twitter data", "Heat Dictionary", "Census tract level Chicago Boundary Shapefile"],
-  "html-notebook": "/html_notebooks/Choropleth_Maps.html",
-  "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
-  "notebook-file": "Choropleth Maps.ipynb",
-  "thumbnail-image": "/images/notebook_images/nb4.png"
-}
-
-{
-  "id": "nb5",
-  "resource-type": "notebook",
-  "title": "Who is facing the risk of potential dam failures?",
-  "authors": ["Jinwoo Park"],
-  "tags": ["Aging-Dams", "Infrastructure"],
-  "contents": "This study proposes a framework employing spatial metrics (Bivariate Moran's I and LISA) to discover where and whether socially vulnerable populations are more exposed to flood inundation risks induced by dam failures. This notebook, in particular, demonstrates the socioeconomic characteristics of at-risk populations, focusing on 345 dams in the conterminous United States.",
-  "related-datasets": ["National Inventory of Dams", "Google News Articles - Aging Dams", "Analysis-Ready Tables from International Censuses"],
-  "notebook-repo": "https://github.com/I-GUIDE/population_vulnerable_to_dam_failure",
-  "notebook-file": "at-risk populations impacted by the aging dam.ipynb",
-  "thumbnail-image": "/images/notebook_images/nb5.png",
-  "featured": true
-}
-
-{
-  "id": "nb6",
-  "resource-type": "notebook",
-  "title": "Accessing and utilizing IPUMS NHGIS Data using Python API",
-  "authors": ["Finn Roberts"],
-  "tags": ["IPUMS", "API"],
-  "contents": "This notebook demonstrates uses and functionality of the API interface provided by IPUMS for NHGIS to access and request data in a reproducible and documentable Python workflow.",
-  "related-datasets": ["Analysis-Ready Tables from International Censuses"],
-  "notebook-repo": "https://github.com/I-GUIDE/nhgis_api_workflow",
-  "notebook-file": "nhgis_api_workflow.ipynb",
-  "thumbnail-image": "/images/notebook_images/nb6.png"
-}
-
-{
-  "id": "nb7",
-  "resource-type": "notebook",
-  "title": "Social Media (Twitter) Data Visualization",
-  "authors": ["Fangzheng Lyu"],
-  "tags": ["Twitter", "Visualization", "Human Sentiments of Heat Exposure"],
-  "contents": "This notebook provides examples of visualization of social media data including where the location-based Twitter data were posted in the City of Chicago and across the world.",
-  "related-datasets": ["Twitter data", "Heat Dictionary", "County Level US Boundary Shapefile", "Census tract level Chicago Boundary Shapefile"],
-  "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
-  "notebook-file": "Visualization.ipynb",
-  "thumbnail-image": "/images/notebook_images/nb7.png"
-}
-
-{
-  "id": "nb8",
-  "resource-type": "notebook",
-  "title": "City-level Analysis at Chicago",
-  "authors": ["Fangzheng Lyu"],
-  "tags": ["City-level Analysis", "Twitter", "Human Sentiments of Heat Exposure"],
-  "contents": "This notebook shows both census tract level and 1 km spatial resolution analysis of human sentiments of heat exposure on 2021-09-25 and 2021-09-26.",
-  "related-datasets": ["Twitter data", "Heat Dictionary", "Census tract level Chicago Boundary Shapefile"],
-  "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
-  "notebook-file": "City-level Analysis.ipynb",
-  "thumbnail-image": "/images/notebook_images/nb8.png"
-}
-
-{
-  "id": "nb9",
-  "resource-type": "notebook",
-  "title": "Social Media Based Socioeconomic Analysis",
-  "authors": ["Fangzheng Lyu"],
-  "tags": ["Socioeconomic", "Twitter", "Human Sentiments of Heat Exposure"],
-  "contents": "This notebook combines Twitter data and socioeconomic data, and investigates the relationship between human sentiments of heat exposure and different socioeconomic indicators.",
-  "related-datasets": ["Intermediate Results for Human Sentiments of Heat Exposure"],
-  "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
-  "notebook-file": "Analysis.ipynb",
-  "thumbnail-image": "/images/notebook_images/nb9.png"
-}
-
-{
-  "id": "nb10",
-  "resource-type": "notebook",
-  "title": "Map Projections",
-  "authors": ["Fangzheng Lyu"],
-  "tags": ["NAD83", "WGS84", "Web Mercator", "Coordinate System"],
-  "contents": "Map projections are mathematical models used to transform the curved Earth's surface onto a flat, two-dimensional plane. They are necessary because representing a three-dimensional spherical shape on a flat surface inevitably introduces some form of distortion. Different map projections are designed to preserve or minimize distortion of specific properties like area, shape, distance, or direction, depending on the intended application and geographic region.",
-  "related-datasets": ["Twitter data"],
-  "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
-  "notebook-file": "Map Projection.ipynb",
-  "thumbnail-image": "/images/notebook_images/nb10.png"
-}
-
-{
-  "id": "nb11",
-  "resource-type": "notebook",
-  "title": "Modifiable Areal Unit Problem (MAUP)",
-  "authors": ["Fangzheng Lyu"],
-  "tags": ["MAUP", "Scale", "Spatial unit"],
-  "contents": "The Modifiable Areal Unit Problem (MAUP) is a well-known issue in spatial analysis and geography that arises when aggregating data into different geographic units or scales. It refers to the fact that the results of statistical analyses can vary significantly depending on how the geographic units (e.g., census tracts, zip codes, counties) are defined or delineated.",
-  "related-datasets": ["Twitter data", "Heat Dictionary", "Census tract level Chicago Boundary Shapefile"],
-  "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
-  "notebook-file": "MAUP.ipynb",
-  "thumbnail-image": "/images/notebook_images/nb11.png"
-}
-
-{
-  "id": "nb12",
-  "resource-type": "notebook",
-  "title": "GIS Data Types",
-  "authors": ["Fangzheng Lyu"],
-  "tags": ["Vector data", "Raster data"],
-  "contents": "In Geographic Information Science (GIS), data types refer to the different ways in which geographic data can be represented and stored. The two main data types in GIS are: Vector Data, which represents geographic features as points, lines, and polygons; and Raster Data, which represents geographic information as a grid of cells or pixels, where each cell contains a value.",
-  "related-datasets": ["Intermediate Results for Human Sentiments of Heat Exposure"],
-  "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
-  "notebook-file": "Data Type.ipynb",
-  "thumbnail-image": "/images/notebook_images/nb12.png"
-}
+[
+  {
+    "id": "nb1",
+    "resource-type": "notebook",
+    "title": "Data Collection",
+    "authors": ["Fangzheng Lyu"],
+    "tags": ["Twitter", "Census Shapefile", "ACS", "Data Collection"],
+    "contents": "This notebook includes the data collection process for three datasets including US Census Tract Shapefile data, American Community Survey (ACS) Data, and Twitter data.",
+    "related-datasets": [],
+    "html-notebook": "/html_notebooks/Data_Collection.html",
+    "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
+    "notebook-file": "Data Collection.ipynb",
+    "thumbnail-image": "/images/notebook_images/nb1.png"
+  },
+  {
+    "id": "nb2",
+    "resource-type": "notebook",
+    "title": "National-level Analysis using Twitter Data",
+    "authors": ["Fangzheng Lyu"],
+    "tags": ["National-level Analysis", "Human sentiments of heat exposure", "Twitter"],
+    "contents": "This notebook provides a workflow for national-scale analysis of human sentiments of heat exposure using location-based social media Twitter data.",
+    "related-datasets": ["Twitter data", "Heat Dictionary", "County Level US Boundary Shapefile"],
+    "html-notebook": "/html_notebooks/National_Level_Analysis.html",
+    "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
+    "notebook-file": "National-level Analysis.ipynb",
+    "thumbnail-image": "/images/notebook_images/nb2.png",
+    "featured": true
+  },
+  {
+    "id": "nb3",
+    "resource-type": "notebook",
+    "title": "Fine Granularity Analysis - Fine Granularity Human Sentiments of Heat Exposure",
+    "authors": ["Fangzheng Lyu"],
+    "tags": ["Fine Temporal Scale Analysis", "Human sentiments of heat exposure", "Twitter"],
+    "contents": "Evaluating Twitter-based heat exposure dynamics can be analyzed at a finer temporal resolution. This notebook looks into how the heat exposure changes on September 26, 2021 at fine temporal granularity.",
+    "related-datasets": ["Twitter data", "Heat Dictionary", "Census tract level Chicago Boundary Shapefile"],
+    "html-notebook": "/html_notebooks/Hourly_Analysis.html",
+    "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
+    "notebook-file": "Hourly Analysis.ipynb",
+    "thumbnail-image": "/images/notebook_images/nb3.png"
+  },
+  {
+    "id": "nb4",
+    "resource-type": "notebook",
+    "title": "Choropleth Maps - Data Classification and Visualization",
+    "authors": ["Fangzheng Lyu"],
+    "tags": ["Equal Interval", "Jenks natural breaks", "Quantile Classification", "Visualization"],
+    "contents": "Choropleth map visually depicts quantitative data through shaded or patterned areas representing different values or categories across geographical regions or areas.",
+    "related-datasets": ["Twitter data", "Heat Dictionary", "Census tract level Chicago Boundary Shapefile"],
+    "html-notebook": "/html_notebooks/Choropleth_Maps.html",
+    "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
+    "notebook-file": "Choropleth Maps.ipynb",
+    "thumbnail-image": "/images/notebook_images/nb4.png"
+  },
+  {
+    "id": "nb5",
+    "resource-type": "notebook",
+    "title": "Who is facing the risk of potential dam failures?",
+    "authors": ["Jinwoo Park"],
+    "tags": ["Aging-Dams", "Infrastructure"],
+    "contents": "This study proposes a framework employing spatial metrics (Bivariate Moran's I and LISA) to discover where and whether socially vulnerable populations are more exposed to flood inundation risks induced by dam failures. This notebook, in particular, demonstrates the socioeconomic characteristics of at-risk populations, focusing on 345 dams in the conterminous United States.",
+    "related-datasets": ["National Inventory of Dams", "Google News Articles - Aging Dams", "Analysis-Ready Tables from International Censuses"],
+    "notebook-repo": "https://github.com/I-GUIDE/population_vulnerable_to_dam_failure",
+    "notebook-file": "at-risk populations impacted by the aging dam.ipynb",
+    "thumbnail-image": "/images/notebook_images/nb5.png",
+    "featured": true
+  },
+  {
+    "id": "nb6",
+    "resource-type": "notebook",
+    "title": "Accessing and utilizing IPUMS NHGIS Data using Python API",
+    "authors": ["Finn Roberts"],
+    "tags": ["IPUMS", "API"],
+    "contents": "This notebook demonstrates uses and functionality of the API interface provided by IPUMS for NHGIS to access and request data in a reproducible and documentable Python workflow.",
+    "related-datasets": ["Analysis-Ready Tables from International Censuses"],
+    "notebook-repo": "https://github.com/I-GUIDE/nhgis_api_workflow",
+    "notebook-file": "nhgis_api_workflow.ipynb",
+    "thumbnail-image": "/images/notebook_images/nb6.png"
+  },
+  {
+    "id": "nb7",
+    "resource-type": "notebook",
+    "title": "Social Media (Twitter) Data Visualization",
+    "authors": ["Fangzheng Lyu"],
+    "tags": ["Twitter", "Visualization", "Human Sentiments of Heat Exposure"],
+    "contents": "This notebook provides examples of visualization of social media data including where the location-based Twitter data were posted in the City of Chicago and across the world.",
+    "related-datasets": ["Twitter data", "Heat Dictionary", "County Level US Boundary Shapefile", "Census tract level Chicago Boundary Shapefile"],
+    "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
+    "notebook-file": "Visualization.ipynb",
+    "thumbnail-image": "/images/notebook_images/nb7.png"
+  },
+  {
+    "id": "nb8",
+    "resource-type": "notebook",
+    "title": "City-level Analysis at Chicago",
+    "authors": ["Fangzheng Lyu"],
+    "tags": ["City-level Analysis", "Twitter", "Human Sentiments of Heat Exposure"],
+    "contents": "This notebook shows both census tract level and 1 km spatial resolution analysis of human sentiments of heat exposure on 2021-09-25 and 2021-09-26.",
+    "related-datasets": ["Twitter data", "Heat Dictionary", "Census tract level Chicago Boundary Shapefile"],
+    "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
+    "notebook-file": "City-level Analysis.ipynb",
+    "thumbnail-image": "/images/notebook_images/nb8.png"
+  },
+  {
+    "id": "nb9",
+    "resource-type": "notebook",
+    "title": "Social Media Based Socioeconomic Analysis",
+    "authors": ["Fangzheng Lyu"],
+    "tags": ["Socioeconomic", "Twitter", "Human Sentiments of Heat Exposure"],
+    "contents": "This notebook combines Twitter data and socioeconomic data, and investigates the relationship between human sentiments of heat exposure and different socioeconomic indicators.",
+    "related-datasets": ["Intermediate Results for Human Sentiments of Heat Exposure"],
+    "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
+    "notebook-file": "Analysis.ipynb",
+    "thumbnail-image": "/images/notebook_images/nb9.png"
+  },
+  {
+    "id": "nb10",
+    "resource-type": "notebook",
+    "title": "Map Projections",
+    "authors": ["Fangzheng Lyu"],
+    "tags": ["NAD83", "WGS84", "Web Mercator", "Coordinate System"],
+    "contents": "Map projections are mathematical models used to transform the curved Earth's surface onto a flat, two-dimensional plane. They are necessary because representing a three-dimensional spherical shape on a flat surface inevitably introduces some form of distortion. Different map projections are designed to preserve or minimize distortion of specific properties like area, shape, distance, or direction, depending on the intended application and geographic region.",
+    "related-datasets": ["Twitter data"],
+    "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
+    "notebook-file": "Map Projection.ipynb",
+    "thumbnail-image": "/images/notebook_images/nb10.png"
+  },
+  {
+    "id": "nb11",
+    "resource-type": "notebook",
+    "title": "Modifiable Areal Unit Problem (MAUP)",
+    "authors": ["Fangzheng Lyu"],
+    "tags": ["MAUP", "Scale", "Spatial unit"],
+    "contents": "The Modifiable Areal Unit Problem (MAUP) is a well-known issue in spatial analysis and geography that arises when aggregating data into different geographic units or scales. It refers to the fact that the results of statistical analyses can vary significantly depending on how the geographic units (e.g., census tracts, zip codes, counties) are defined or delineated.",
+    "related-datasets": ["Twitter data", "Heat Dictionary", "Census tract level Chicago Boundary Shapefile"],
+    "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
+    "notebook-file": "MAUP.ipynb",
+    "thumbnail-image": "/images/notebook_images/nb11.png"
+  },
+  {
+    "id": "nb12",
+    "resource-type": "notebook",
+    "title": "GIS Data Types",
+    "authors": ["Fangzheng Lyu"],
+    "tags": ["Vector data", "Raster data"],
+    "contents": "In Geographic Information Science (GIS), data types refer to the different ways in which geographic data can be represented and stored. The two main data types in GIS are: Vector Data, which represents geographic features as points, lines, and polygons; and Raster Data, which represents geographic information as a grid of cells or pixels, where each cell contains a value.",
+    "related-datasets": ["Intermediate Results for Human Sentiments of Heat Exposure"],
+    "notebook-repo": "https://github.com/I-GUIDE/data-with-notebooks-inventory",
+    "notebook-file": "Data Type.ipynb",
+    "thumbnail-image": "/images/notebook_images/nb12.png"
+  }
+]
