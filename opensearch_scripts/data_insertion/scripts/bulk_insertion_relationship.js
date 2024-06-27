@@ -4,7 +4,7 @@ import fs from 'fs';
 const url = 'http://localhost:5000/api/resources';
 
 // Read datasets.json file
-fs.readFile('datasets.json', 'utf8', async (err, data) => {
+fs.readFile('notebooks.json', 'utf8', async (err, data) => {
     if (err) {
         console.error('Error reading datasets.json file:', err);
         return;
