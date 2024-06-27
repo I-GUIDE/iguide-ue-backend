@@ -7,6 +7,10 @@ import path from 'path';
 import fs from 'fs';
 import { exec } from 'child_process';
 import fetch from 'node-fetch';
+import { S3Client } from '@aws-sdk/client-s3';
+import multerS3 from 'multer-s3';
+import https from 'https';
+import http from 'http';
 
 const app = express();
 app.use(cors());
@@ -17,6 +21,15 @@ const os_node = process.env.OPENSEARCH_NODE;
 const os_usr = process.env.OPENSEARCH_USERNAME;
 const os_pswd = process.env.OPENSEARCH_PASSWORD;
 
+app.get('/', (req, res) => {
+    res.send('Hello, secure world!');
+});
+
+const options = {
+    key: fs.readFileSync(process.env.SSL_KEY),
+    cert: fs.readFileSync(process.env.SSL_CERT)
+};
+
 const client = new Client({
   node: os_node, // OpenSearch endpoint
   auth: {
@@ -24,6 +37,7 @@ const client = new Client({
     password: os_pswd,
   },
   ssl: {
+    ca: fs.readFileSync(process.env.SSL_CERT),
     rejectUnauthorized: false, // Use this only if you encounter SSL certificate issues
   },
 });
@@ -270,6 +284,63 @@ app.post('/api/resource-count', async (req, res) => {
     res.status(500).send({ error: 'An error occurred while fetching the resource count' });
   }
 });
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+const upload = multer({
+  storage: multerS3({
+    s3: s3Client,
+    bucket: process.env.AWS_BUCKET_NAME,
+    acl: 'public-read',
+    key: function (req, file, cb) {
+      cb(null, file.originalname);
+    }
+  }),
+  fileFilter: function (req, file, cb) {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext !== '.csv' && ext !== '.zip') {
+      return cb(null, false, new Error('Only .csv and .zip files are allowed!'));
+    }
+    const allowedMimeTypes = ['text/csv', 'application/zip', 'application/x-zip-compressed'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      return cb(null, false, new Error('Invalid file type, only CSV and ZIP files are allowed!'));
+    }
+    cb(null, true);
+  }
+});
+
+app.post('/api/upload-dataset', upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      message: 'No file uploaded or invalid file type (.csv or .zip)!'
+    });
+  }
+  res.json({
+    message: 'File uploaded successfully',
+    url: req.file.location,
+    bucket: process.env.AWS_BUCKET_NAME,
+    key: req.file.key,
+  });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    // A Multer error occurred when uploading.
+    return res.status(400).json({ message: err.message });
+  } else if (err) {
+    // An unknown error occurred.
+    return res.status(400).json({ message: err.message });
+  }
+
+  // Forward to next middleware if no errors
+  next();
+});
 
 // Upload thumbnail
 app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => {
@@ -292,7 +363,7 @@ app.put('/api/resources', async (req, res) => {
     }
 
     await client.index({
-      index: 'resources_dev',
+      index: 'resources',
       body: data,
     });
 
@@ -303,36 +374,58 @@ app.put('/api/resources', async (req, res) => {
   }
 });
 
-// Endpoint to retrieve a resource by id
-app.get('/api/resource/:field/:value', async (req, res) => {
-  const { field, value } = req.params;
+// Endpoint to retrieve a resources by id
+app.get('/api/resources/:field/:values', async (req, res) => {
+  const { field, values } = req.params;
+  const valueArray = values.split(',');
 
   try {
     const resourceResponse = await client.search({
       index: 'resources',
       body: {
         query: {
-          term: {
-            [field]: value,
+          terms: {
+            [field]: valueArray,
+          },
+        },
+        sort: {
+          _script: {
+            type: 'number',
+            script: {
+              lang: 'painless',
+              source: `
+                int index = params.valueArray.indexOf(doc[params.field].value);
+                return index != -1 ? index : params.valueArray.length;
+              `,
+              params: {
+                valueArray: valueArray,
+                field: field,
+              },
+            },
+            order: 'asc',
           },
         },
       },
     });
 
     if (resourceResponse.body.hits.total.value === 0) {
-      res.status(404).json({ message: 'No resource found' });
+      res.status(404).json({ message: 'No resources found' });
       return;
     }
-    const resource = resourceResponse.body.hits.hits[0]._source;
-    res.json(resource);
+    const resources = resourceResponse.body.hits.hits.map(hit => hit._source);
+    res.json(resources);
   } catch (error) {
     console.error('Error querying OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+
+https.createServer(options, app).listen(3000, () => {
+    console.log('Server is running on https://backend.i-guide.io');
 });
+/*http.createServer((req, res) => {
+    res.writeHead(301, { "Location": "https://" + req.headers['host'] + req.url });
+    res.end();
+}).listen(5000);*/
 

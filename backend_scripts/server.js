@@ -342,7 +342,7 @@ app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => 
 // Endpoint to register a new resource, including converting notebook to HTML if provided
 app.put('/api/resources', async (req, res) => {
   const data = req.body;
-
+  console.log(data);
   try {
     // Check if the resource type is 'notebook' and contains the GitHub repo and notebook path
     if (data['resource-type'] === 'notebook' && data['notebook-repo'] && data['notebook-file']) {
