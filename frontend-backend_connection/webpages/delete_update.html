@@ -196,7 +196,7 @@
         }
       });
 
-      document.getElementById('resourceForm').addEventListener('submit', async (e) => {
+      /*document.getElementById('resourceForm').addEventListener('submit', async (e) => {
         e.preventDefault();
 
         const fileInput = document.getElementById('thumbnail-input');
@@ -243,6 +243,57 @@
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(data),
+        });
+
+        const result = await response.json();
+        console.log(result);
+      });*/
+      document.getElementById('resourceForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        resourceId = document.getElementById('resourceId').value;
+        deleteResource(resourceId);
+
+        const fileInput = document.getElementById('thumbnail-input');
+        const file = fileInput.files[0];
+
+        if (file) {
+          const formData = new FormData();
+          formData.append('file', file);
+
+          const response = await fetch('http://149.165.154.200:5001/api/upload-thumbnail', {
+            method: 'POST',
+            body: formData,
+          });
+
+          const result = await response.json();
+          document.getElementById('thumbnail-url').value = result.url;
+        }
+
+        const formData = new FormData(e.target);
+        const data = {};
+
+        formData.forEach((value, key) => {
+          if (key === 'authors' || key === 'tags') {
+            data[key] = value.split(',').map(item => item.trim());
+          } else {
+            data[key] = value;
+          }
+        });
+
+        const relatedResources = [];
+        document.querySelectorAll('.related-resource').forEach(div => {
+          const type = div.querySelector('select[name="related-resource-type"]').value;
+          const title = div.querySelector('input[name="related-resource-title"]').value;
+          relatedResources.push({ type, title });
+        });
+        data['related-resources'] = relatedResources;
+
+        const response = await fetch('http://149.165.154.200:5001/api/resources', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
         });
 
         const result = await response.json();
