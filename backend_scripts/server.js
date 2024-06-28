@@ -188,7 +188,7 @@ app.post('/api/search', async (req, res) => {
   let query = {
     multi_match: {
       query: keyword,
-      fields: ['title', 'contents', 'tags'],
+      fields: ['title', 'authors', 'contents', 'tags'],
     },
   };
 
@@ -196,7 +196,7 @@ app.post('/api/search', async (req, res) => {
     query = {
       bool: {
         must: [
-          { multi_match: { query: keyword, fields: ['title', 'contents', 'tags'] } },
+          { multi_match: { query: keyword, fields: ['title', 'authors', 'contents', 'tags'] } },
           { term: { 'resource-type': resource_type } },
         ],
       },
@@ -262,7 +262,7 @@ app.post('/api/resource-count', async (req, res) => {
     query.bool.must.push({
       multi_match: {
         query: keywords,
-        fields: ['title', 'contents','tags']
+        fields: ['title', 'authors', 'contents','tags']
       }
     });
   }

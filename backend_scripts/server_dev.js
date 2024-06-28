@@ -125,7 +125,10 @@ app.get('/api/resources', async (req, res) => {
       res.status(404).json({ message: 'No resource found' });
       return;
     }
-    const resources = resourceResponse.body.hits.hits.map((hit) => hit._source);
+    const resources = resourceResponse.body.hits.hits.map(hit => ({
+	  _id: hit._id,
+	  ...hit._source,
+	}));
     res.json(resources);
   } catch (error) {
     console.error('Error querying OpenSearch:', error);
@@ -174,7 +177,10 @@ app.get('/api/featured-resources', async (req, res) => {
       res.status(404).json({ message: 'No featured resource found' });
       return;
     }
-    const resources = featuredResponse.body.hits.hits.map((hit) => hit._source);
+    const resources = featuredResponse.body.hits.hits.map(hit => ({
+	  _id: hit._id,
+	  ...hit._source,
+	}));
     res.json(resources);
   } catch (error) {
     console.error('Error querying OpenSearch:', error);
@@ -188,7 +194,7 @@ app.post('/api/search', async (req, res) => {
   let query = {
     multi_match: {
       query: keyword,
-      fields: ['title', 'contents', 'tags'],
+      fields: ['title', 'authors', 'contents', 'tags'],
     },
   };
 
@@ -196,7 +202,7 @@ app.post('/api/search', async (req, res) => {
     query = {
       bool: {
         must: [
-          { multi_match: { query: keyword, fields: ['title', 'contents', 'tags'] } },
+          { multi_match: { query: keyword, fields: ['title', 'authors', 'contents', 'tags'] } },
           { term: { 'resource-type': resource_type } },
         ],
       },
@@ -228,7 +234,10 @@ app.post('/api/search', async (req, res) => {
       },
     });
 
-    const results = searchResponse.body.hits.hits.map((hit) => hit._source);
+    const results = searchResponse.body.hits.hits.map(hit => ({
+	  _id: hit._id,
+	  ...hit._source,
+	}));
     res.json(results);
   } catch (error) {
     console.error('Error querying OpenSearch:', error);
@@ -262,7 +271,7 @@ app.post('/api/resource-count', async (req, res) => {
     query.bool.must.push({
       multi_match: {
         query: keywords,
-        fields: ['title', 'contents','tags']
+        fields: ['title', 'authors', 'contents','tags']
       }
     });
   }
@@ -506,8 +515,9 @@ app.delete('/api/resources/:id', async (req, res) => {
       const relatedNotebooks = existingDoc._source['related-notebooks'] || [];
       const relatedDatasets = existingDoc._source['related-datasets'] || [];
       const relatedPublications = existingDoc._source['related-publications'] || [];
+      const relatedOers = existingDoc._source['related-oers'] || [];
 
-      const relatedIds = [...relatedNotebooks, ...relatedDatasets, ...relatedPublications];
+      const relatedIds = [...relatedNotebooks, ...relatedDatasets, ...relatedPublications, ...relatedOers];
       for (const relatedId of relatedIds) {
         const { body: relatedDoc } = await client.get({
           index: 'resources_dev',
@@ -543,8 +553,8 @@ app.delete('/api/resources/:id', async (req, res) => {
   }
 });
 
-// Endpoint to retrieve a resources by id
-app.get('/api/resources/:field/:values', async (req, res) => {
+// Endpoint to retrieve a resources by field and values for exact match
+/*app.get('/api/resources/:field/:values', async (req, res) => {
   const { field, values } = req.params;
   const valueArray = values.split(',');
 
@@ -587,8 +597,34 @@ app.get('/api/resources/:field/:values', async (req, res) => {
     console.error('Error querying OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
-});
+});*/
+// Endpoint to fetch resources by field and value
+app.get('/api/resources/:field/:value', async (req, res) => {
+  const { field, value } = req.params;
+  try {
+    const resourceResponse = await client.search({
+      index: 'resources_dev', // Replace with your index name
+      body: {
+        query: {
+          match: {
+            [field]: value,
+          },
+        },
+        //_source: true,
+      },
+    });
 
+    const resources = resourceResponse.body.hits.hits.map(hit => ({
+	  _id: hit._id,
+	  ...hit._source,
+	}));
+    console.log(resources)
+    res.json(resources);
+  } catch (error) {
+    console.error('Error querying OpenSearch:', error);
+    res.status(500).json({ message: 'Failed to fetch resources' });
+  }
+});
 
 const PORT = 5001;
 app.listen(PORT, () => {
