@@ -324,7 +324,7 @@
 
     async function fetchResourcesByField(field, values) {
       const valueString = values.join(',');
-      const response = await fetch(`http://149.165.154.200:5001/api/resources/${field}/${valueString}`);
+      const response = await fetch(`http://149.165.154.200:5001/api/resources_contains/${field}/${valueString}`);
       if (!response.ok) {
         throw new Error('Failed to fetch resources');
       }
@@ -349,7 +349,7 @@
             idCell.innerHTML = result._id;
             titleCell.innerHTML = result.title;
             typeCell.innerHTML = result['resource-type'];
-            actionsCell.innerHTML = `<button onclick="editResource('${result._id}')">Edit</button>`;
+            actionsCell.innerHTML = `<button onclick="editResource('${result._id}')">Edit</button> <button onclick="deleteResource('${result._id}')">Delete</button>`;
           });
         })
         .catch(error => {
@@ -357,43 +357,147 @@
         });
     }
 
+    function deleteResource(resourceId) {
+  fetch(`http://149.165.154.200:5001/api/resources/${resourceId}`, {
+    method: 'DELETE',
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Failed to delete resource');
+    }
+    return response.json(); // If you need to process response JSON, otherwise, you can remove this line
+  })
+  .then(data => {
+    const rowToDelete = document.querySelector(`#resultsTable tbody tr[data-id="${resourceId}"]`);
+    if (rowToDelete) {
+      rowToDelete.remove();
+    } else {
+      console.warn('Row not found in the table');
+    }
+  })
+  .catch(error => {
+    console.error('Error deleting resource:', error);
+  });
+}
+
     function editResource(resourceId) {
-      fetch(`http://149.165.154.200:5001/api/resources/${resourceId}`)
-        .then(response => response.json())
-        .then(data => {
-          document.getElementById('resourceId').value = data._id;
-          document.getElementById('resource-type').value = data['resource-type'];
-          M.FormSelect.init(document.querySelectorAll('select')); // Re-initialize materialize select
+  fetch(`http://149.165.154.200:5001/api/resources/_id/${resourceId}`)
+    .then(response => response.json())
+    .then(data => {
+      const documentToUpdate = data[0];
+      document.getElementById('resourceId').value = documentToUpdate._id;
+      document.getElementById('resource-type').value = documentToUpdate['resource-type'];
+      M.FormSelect.init(document.querySelectorAll('select')); // Re-initialize materialize select
 
-          document.getElementById('title').value = data.title;
-          document.getElementById('authors').value = data.authors.join(', ');
-          document.getElementById('tags').value = data.tags.join(', ');
-          document.getElementById('contents').value = data.contents;
+      document.getElementById('title').value = documentToUpdate.title;
+      document.getElementById('authors').value = documentToUpdate.authors.join(', ');
+      document.getElementById('tags').value = documentToUpdate.tags.join(', ');
+      document.getElementById('contents').value = documentToUpdate.contents;
 
-          if (data['resource-type'] === 'notebook') {
-            document.getElementById('notebookFields').classList.remove('hidden');
-            document.getElementById('notebook-repo').value = data['notebook-repo'];
-            document.getElementById('notebook-file').value = data['notebook-file'];
-          } else if (data['resource-type'] === 'dataset') {
-            document.getElementById('datasetFields').classList.remove('hidden');
-            document.getElementById('external-link').value = data['external-link'];
-            document.getElementById('direct-download-link').value = data['direct-download-link'];
-            document.getElementById('size').value = data['size'];
-          } else if (data['resource-type'] === 'publication') {
-            document.getElementById('publicationFields').classList.remove('hidden');
-            document.getElementById('external-link-publication').value = data['external-link-publication'];
-          } else if (data['resource-type'] === 'oer') {
-            document.getElementById('oerFields').classList.remove('hidden');
-            document.getElementById('external-link-oer').value = data['external-link-oer'];
-          }
+      // Show the corresponding fields based on resource type
+      showResourceFields(documentToUpdate['resource-type'], documentToUpdate);
 
-          // Initialize form labels
-          M.updateTextFields();
+      // Initialize form labels
+      M.updateTextFields();
+
+      // Fetch related resources and populate them in the form
+      fetchRelatedResources(documentToUpdate);
+    })
+    .catch(error => {
+      console.error('Error fetching resource:', error);
+    });
+}
+
+function showResourceFields(resourceType, documentToUpdate) {
+  // Hide all fields first
+  document.getElementById('notebookFields').classList.add('hidden');
+  document.getElementById('datasetFields').classList.add('hidden');
+  document.getElementById('publicationFields').classList.add('hidden');
+  document.getElementById('oerFields').classList.add('hidden');
+
+  // Show fields based on resource type
+  if (resourceType === 'notebook') {
+    document.getElementById('notebookFields').classList.remove('hidden');
+    document.getElementById('notebook-repo').value = documentToUpdate['notebook-repo'];
+    document.getElementById('notebook-file').value = documentToUpdate['notebook-file'];
+  } else if (resourceType === 'dataset') {
+    document.getElementById('datasetFields').classList.remove('hidden');
+    document.getElementById('external-link').value = documentToUpdate['external-link'];
+    document.getElementById('direct-download-link').value = documentToUpdate['direct-download-link'];
+    document.getElementById('size').value = documentToUpdate['size'];
+  } else if (resourceType === 'publication') {
+    document.getElementById('publicationFields').classList.remove('hidden');
+    document.getElementById('external-link-publication').value = documentToUpdate['external-link-publication'];
+  } else if (resourceType === 'oer') {
+    document.getElementById('oerFields').classList.remove('hidden');
+    document.getElementById('external-link-oer').value = documentToUpdate['external-link-oer'];
+  }
+}
+
+function fetchRelatedResources(documentToUpdate) {
+  const relatedResourceTypes = ['notebooks', 'datasets', 'publications', 'oers'];
+
+  // Iterate over each related resource type and fetch related resource titles if available
+  relatedResourceTypes.forEach(type => {
+    const relatedIds = documentToUpdate[`related-${type}`];
+    console.log(`related-${type}`, relatedIds);
+    if (relatedIds && relatedIds.length > 0) {
+      fetchRelatedResourceTitles('_id', relatedIds)
+        .then(relatedTitles => {
+          console.log(relatedTitles);
+          // Create and populate related resource div
+          const relatedResourceDiv = document.createElement('div');
+          relatedResourceDiv.classList.add('related-resource', 'input-field', 'col', 's12');
+
+          const resourceTypeSelect = document.createElement('select');
+          resourceTypeSelect.name = 'related-resource-type';
+          resourceTypeSelect.innerHTML = `
+            <option value="${type}">${type.charAt(0).toUpperCase() + type.slice(1)}</option>
+          `;
+
+          const resourceTypeLabel = document.createElement('label');
+          resourceTypeLabel.innerText = `${type.charAt(0).toUpperCase() + type.slice(1)}`;
+          relatedResourceDiv.appendChild(resourceTypeLabel);
+
+          relatedTitles.forEach(title => {
+            const option = document.createElement('div');
+            option.textContent = title;
+            option.addEventListener('click', function() {
+              const inputField = relatedResourceDiv.querySelector('input[name="related-resource-title"]');
+              inputField.value = title;
+              resourceDropdown.style.display = 'none';
+            });
+            relatedResourceDiv.appendChild(option);
+          });
+
+          document.getElementById('relatedResourcesSection').appendChild(relatedResourceDiv);
         })
         .catch(error => {
-          console.error('Error fetching resource:', error);
+          console.error(`Error fetching related ${type}:`, error);
         });
     }
+  });
+}
+
+
+function fetchRelatedResourceTitles(type, ids) {
+  const idString = ids.join(',');
+  return fetch(`http://149.165.154.200:5001/api/resources/${type}/${idString}`)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`Failed to fetch resources of type ${type}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      return data.map(resource => resource.title);
+    })
+    .catch(error => {
+      console.error('Error fetching related resources:', error);
+      return [];
+    });
+}
+
   </script>
 </body>
 </html>

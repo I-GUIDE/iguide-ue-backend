@@ -233,7 +233,7 @@ app.post('/api/search', async (req, res) => {
         ],
       },
     });
-
+    //console.log(searchResponse.body.hits.hits);
     const results = searchResponse.body.hits.hits.map(hit => ({
 	  _id: hit._id,
 	  ...hit._source,
@@ -554,7 +554,7 @@ app.delete('/api/resources/:id', async (req, res) => {
 });
 
 // Endpoint to retrieve a resources by field and values for exact match
-/*app.get('/api/resources/:field/:values', async (req, res) => {
+app.get('/api/resources/:field/:values', async (req, res) => {
   const { field, values } = req.params;
   const valueArray = values.split(',');
 
@@ -591,15 +591,18 @@ app.delete('/api/resources/:id', async (req, res) => {
       res.status(404).json({ message: 'No resources found' });
       return;
     }
-    const resources = resourceResponse.body.hits.hits.map(hit => hit._source);
+    const resources = resourceResponse.body.hits.hits.map(hit => ({
+	  _id: hit._id,
+	  ...hit._source,
+	}));
     res.json(resources);
   } catch (error) {
     console.error('Error querying OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
-});*/
-// Endpoint to fetch resources by field and value
-app.get('/api/resources/:field/:value', async (req, res) => {
+});
+// Endpoint to fetch resources by field and value. If the field contains the value.
+app.get('/api/resources_contains/:field/:value', async (req, res) => {
   const { field, value } = req.params;
   try {
     const resourceResponse = await client.search({
@@ -618,7 +621,6 @@ app.get('/api/resources/:field/:value', async (req, res) => {
 	  _id: hit._id,
 	  ...hit._source,
 	}));
-    console.log(resources)
     res.json(resources);
   } catch (error) {
     console.error('Error querying OpenSearch:', error);
