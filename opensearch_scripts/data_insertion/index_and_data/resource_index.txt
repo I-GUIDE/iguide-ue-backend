@@ -20,7 +20,7 @@ PUT /resources
           }
         }
       },
-      "tags": { "type": "keyword" },
+      "tags": { "type": "text" },
       "contents": { "type": "text" },
       "related-notebooks": { "type": "keyword" },
       "related-datasets": { "type": "keyword" },
