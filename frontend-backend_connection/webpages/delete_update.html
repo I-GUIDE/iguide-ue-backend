@@ -435,42 +435,94 @@ function showResourceFields(resourceType, documentToUpdate) {
 }
 
 function fetchRelatedResources(documentToUpdate) {
-  const relatedResourceTypes = ['notebooks', 'datasets', 'publications', 'oers'];
+  const relatedResourceTypes = ['notebook', 'dataset', 'publication', 'oer'];
 
   // Iterate over each related resource type and fetch related resource titles if available
   relatedResourceTypes.forEach(type => {
-    const relatedIds = documentToUpdate[`related-${type}`];
+    const relatedIds = documentToUpdate[`related-${type}s`];
     console.log(`related-${type}`, relatedIds);
     if (relatedIds && relatedIds.length > 0) {
       fetchRelatedResourceTitles('_id', relatedIds)
         .then(relatedTitles => {
           console.log(relatedTitles);
           // Create and populate related resource div
-          const relatedResourceDiv = document.createElement('div');
-          relatedResourceDiv.classList.add('related-resource', 'input-field', 'col', 's12');
-
-          const resourceTypeSelect = document.createElement('select');
-          resourceTypeSelect.name = 'related-resource-type';
-          resourceTypeSelect.innerHTML = `
-            <option value="${type}">${type.charAt(0).toUpperCase() + type.slice(1)}</option>
-          `;
-
-          const resourceTypeLabel = document.createElement('label');
-          resourceTypeLabel.innerText = `${type.charAt(0).toUpperCase() + type.slice(1)}`;
-          relatedResourceDiv.appendChild(resourceTypeLabel);
 
           relatedTitles.forEach(title => {
-            const option = document.createElement('div');
-            option.textContent = title;
-            option.addEventListener('click', function() {
-              const inputField = relatedResourceDiv.querySelector('input[name="related-resource-title"]');
-              inputField.value = title;
-              resourceDropdown.style.display = 'none';
-            });
-            relatedResourceDiv.appendChild(option);
-          });
+        const relatedResourceDiv = document.createElement('div');
+        relatedResourceDiv.classList.add('related-resource', 'input-field', 'col', 's12');
 
-          document.getElementById('relatedResourcesSection').appendChild(relatedResourceDiv);
+        const resourceTypeSelect = document.createElement('select');
+        resourceTypeSelect.name = 'related-resource-type';
+        const resourceTypes = [
+		    { value: 'notebook', label: 'Notebook' },
+		    { value: 'dataset', label: 'Dataset' },
+		    { value: 'publication', label: 'Publication' },
+		    { value: 'oer', label: 'Open Educational Resource' }
+		  ];
+
+		  resourceTypes.forEach(option => {
+		    const optionElement = document.createElement('option');
+		    optionElement.value = option.value;
+		    optionElement.textContent = option.label;
+		    if (option.value === type) {
+		      optionElement.setAttribute('selected', 'selected');
+		    }
+		    resourceTypeSelect.appendChild(optionElement);
+		  });
+
+        const resourceTypeLabel = document.createElement('label');
+        resourceTypeLabel.innerText = 'Resource Type';
+        relatedResourceDiv.appendChild(resourceTypeLabel);
+
+        const resourceTitleInput = document.createElement('input');
+        resourceTitleInput.type = 'text';
+        resourceTitleInput.name = 'related-resource-title';
+        //resourceTitleInput.placeholder = 'Search related resource...';
+        resourceTitleInput.value = title;
+
+        const resourceDropdown = document.createElement('div');
+        resourceDropdown.classList.add('related-resource-dropdown');
+
+        relatedResourceDiv.appendChild(resourceTypeSelect);
+        relatedResourceDiv.appendChild(resourceTitleInput);
+        relatedResourceDiv.appendChild(resourceDropdown);
+        document.getElementById('relatedResourcesSection').appendChild(relatedResourceDiv);
+
+        M.FormSelect.init(resourceTypeSelect);
+
+        resourceTitleInput.addEventListener('input', async function() {
+          const keyword = this.value;
+          const resourceType = resourceTypeSelect.value;
+          if (keyword.length > 2) {
+            const response = await fetch('http://149.165.154.200:5001/api/search', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                keyword: keyword,
+                resource_type: resourceType,
+              }),
+            });
+            const results = await response.json();
+            resourceDropdown.innerHTML = '';
+            results.forEach(result => {
+              const option = document.createElement('div');
+              option.textContent = result.title;
+              option.addEventListener('click', function() {
+                resourceTitleInput.value = result.title;
+                resourceDropdown.style.display = 'none';
+              });
+              resourceDropdown.appendChild(option);
+            });
+            resourceDropdown.style.display = 'block';
+          } else {
+            resourceDropdown.style.display = 'none';
+          }
+        });
+      });
+
+          //document.getElementById('relatedResourcesSection').appendChild(relatedResourceDiv);
         })
         .catch(error => {
           console.error(`Error fetching related ${type}:`, error);
