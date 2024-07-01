@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fetch User</title>
+  <script>
+    async function fetchUser() {
+      const openid = document.getElementById('fetch-openid').value;
+      const response = await fetch(`http://149.165.154.200:5001/api/users/${openid}`);
+      const result = await response.json();
+      document.getElementById('fetch-result').innerText = JSON.stringify(result, null, 2);
+    }
+  </script>
+</head>
+<body>
+  <h1>Fetch User</h1>
+  <form onsubmit="event.preventDefault(); fetchUser();">
+    <label for="fetch-openid">OpenID:</label>
+    <input type="text" id="fetch-openid" name="openid" required>
+    <button type="submit">Fetch User</button>
+  </form>
+  <pre id="fetch-result"></pre>
+</body>
+</html>
+

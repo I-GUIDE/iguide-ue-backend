@@ -112,7 +112,7 @@
         </div>
       </div>
       <img id="thumbnail-preview" class="thumbnail-preview hidden" src="" alt="Thumbnail Preview">
-      <input type="hidden" id="thumbnail-url" name="thumbnail-url">
+      <input type="hidden" id="thumbnail-image" name="thumbnail-image">
 
       <div id="relatedResourcesSection">
         <h5>Related Resources</h5>
@@ -187,7 +187,7 @@
           });
 
           const result = await response.json();
-          document.getElementById('thumbnail-url').value = result.url;
+          document.getElementById('thumbnail-image').value = result.url;
         }
 
         const formData = new FormData(e.target);

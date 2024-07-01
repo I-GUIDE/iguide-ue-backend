@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add User</title>
+  <script>
+    async function addUser() {
+      const user = {
+        openid: document.getElementById('add-openid').value,
+        first_name: document.getElementById('add-first-name').value,
+        last_name: document.getElementById('add-last-name').value,
+        email: document.getElementById('add-email').value,
+        affiliation: document.getElementById('add-affiliation').value,
+        bio: document.getElementById('add-bio').value
+      };
+
+      const response = await fetch('http://localhost:5001/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(user)
+      });
+
+      const result = await response.json();
+      document.getElementById('add-result').innerText = JSON.stringify(result, null, 2);
+    }
+  </script>
+</head>
+<body>
+  <h1>Add User</h1>
+  <form onsubmit="event.preventDefault(); addUser();">
+    <label for="add-openid">OpenID:</label>
+    <input type="text" id="add-openid" name="openid" required><br>
+    <label for="add-first-name">First Name:</label>
+    <input type="text" id="add-first-name" name="first_name" required><br>
+    <label for="add-last-name">Last Name:</label>
+    <input type="text" id="add-last-name" name="last_name" required><br>
+    <label for="add-email">Email:</label>
+    <input type="email" id="add-email" name="email" required><br>
+    <label for="add-affiliation">Affiliation:</label>
+    <input type="text" id="add-affiliation" name="affiliation"><br>
+    <label for="add-bio">Bio:</label>
+    <textarea id="add-bio" name="bio"></textarea><br>
+    <button type="submit">Add User</button>
+  </form>
+  <pre id="add-result"></pre>
+</body>
+</html>
+

@@ -628,6 +628,84 @@ app.get('/api/resources_contains/:field/:value', async (req, res) => {
   }
 });
 
+// Endpoint to return the user document given the openid
+app.get('/api/users/:openid', async (req, res) => {
+  const { openid } = req.params;
+
+  try {
+    const response = await client.get({
+      index: 'users',
+      id: openid
+    });
+
+    if (!response.body.found) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json(response.body._source);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ message: 'Error fetching the user' });
+  }
+});
+
+// Endpoint to add a new user document
+app.post('/api/users', async (req, res) => {
+  const user = req.body;
+
+  try {
+    const response = await client.index({
+      index: 'users',
+      id: user.openid,
+      body: user
+    });
+
+    res.status(201).json({ message: 'User added successfully', id: response.body._id });
+  } catch (error) {
+    console.error('Error adding user:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Endpoint to update the user document
+app.put('/api/users/:openid', async (req, res) => {
+  const { openid } = req.params;
+  const updates = req.body;
+
+  try {
+    const response = await client.update({
+      index: 'users',
+      id: openid,
+      body: {
+        doc: updates
+      }
+    });
+
+    res.json({ message: 'User updated successfully', result: response.body.result });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Endpoint to delete the user document
+app.delete('/api/users/:openid', async (req, res) => {
+  const { openid } = req.params;
+
+  try {
+    const response = await client.delete({
+      index: 'users',
+      id: openid
+    });
+
+    res.json({ message: 'User deleted successfully', result: response.body.result });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+
 const PORT = 5001;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

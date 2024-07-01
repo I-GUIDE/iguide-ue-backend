@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delete User</title>
+  <script>
+    async function deleteUser() {
+      const openid = document.getElementById('delete-openid').value;
+      const response = await fetch(`http://localhost:5001/api/users/${openid}`, {
+        method: 'DELETE'
+      });
+
+      const result = await response.json();
+      document.getElementById('delete-result').innerText = JSON.stringify(result, null, 2);
+    }
+  </script>
+</head>
+<body>
+  <h1>Delete User</h1>
+  <form onsubmit="event.preventDefault(); deleteUser();">
+    <label for="delete-openid">OpenID:</label>
+    <input type="text" id="delete-openid" name="openid" required>
+    <button type="submit">Delete User</button>
+  </form>
+  <pre id="delete-result"></pre>
+</body>
+</html>
+
