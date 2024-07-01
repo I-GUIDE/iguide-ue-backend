@@ -28,7 +28,7 @@ PUT /resources
       "related-oer": { "type": "keyword" },
       "view-count": { "type": "integer" },
       "creation-date": { "type": "date" },
-      "update-date": {"type": "date"},
+      "update-date": { "type": "date" },
       "featured": { "type": "boolean" },
       "external-links": { "type": "text" },
       "direct-download-link": { "type": "text" },
@@ -37,8 +37,12 @@ PUT /resources
       "html-notebook": { "type": "text" },
       "notebook-repo": { "type": "text" },
       "notebook-file": { "type": "text" },
-      "license": {"type": "text"}
+      "license": { "type": "text" },
+      "metadata": {
+        "properties": {
+          "created_by": { "type": "keyword" }
+        }
+      }
     }
   }
 }
-
