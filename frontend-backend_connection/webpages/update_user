@@ -8,8 +8,10 @@
     async function updateUser() {
       const openid = document.getElementById('update-openid').value;
       const updates = {
+      	//Send the fields to be updated. Omit the fields that remains unchanged.
         first_name: document.getElementById('update-first-name').value,
         last_name: document.getElementById('update-last-name').value,
+        email: document.getElementById('update-email').value,
         affiliation: document.getElementById('update-affiliation').value,
         bio: document.getElementById('update-bio').value
       };
@@ -36,6 +38,8 @@
     <input type="text" id="update-first-name" name="first_name"><br>
     <label for="update-last-name">Last Name:</label>
     <input type="text" id="update-last-name" name="last_name"><br>
+    <label for="update-email">Email:</label>
+    <input type="email" id="update-email" name="email"><br>
     <label for="update-affiliation">Affiliation:</label>
     <input type="text" id="update-affiliation" name="affiliation"><br>
     <label for="update-bio">Bio:</label>
