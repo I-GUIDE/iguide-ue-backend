@@ -11,7 +11,7 @@ import fetch from 'node-fetch'
  */
 async function fetchResourcesByField(field, values) {
   const valueString = values.join(',');
-  const response = await fetch(`http://149.165.154.200:5001/api/resources/${field}/${valueString}`);
+  const response = await fetch(`http://149.165.154.200:5001/api/resources_contains/${field}/${valueString}`);
   if (!response.ok) {
     throw new Error('Failed to fetch resources');
   }
@@ -19,7 +19,7 @@ async function fetchResourcesByField(field, values) {
 }
 
 // Example usage: retrieve resources by field and array of values
-fetchResourcesByField('metadata.created_by', ['openid_yunfan'])
+fetchResourcesByField('_id', ['y0mwb5ABQn4vdKPaC-iW'])
   .then(resources => console.log(resources))
   .catch(error => console.error(error));
 

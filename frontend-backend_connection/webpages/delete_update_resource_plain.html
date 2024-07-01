@@ -4,8 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>I-GUIDE Knowledge Sharing</title>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet">
   <style>
     .hidden { display: none; }
     .related-resource { margin-bottom: 10px; }
@@ -20,6 +18,57 @@
       margin-top: 10px;
       max-width: 200px;
     }
+    .container {
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      margin: 0 -10px;
+    }
+    .input-field {
+      padding: 10px;
+      flex: 1 1 50%;
+    }
+    .btn {
+      background-color: #2196f3;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+    .btn.red {
+      background-color: #f44336;
+    }
+    select, input[type="text"], input[type="file"], textarea {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      margin-bottom: 20px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    textarea {
+      resize: vertical;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
   </style>
 </head>
 <body>
@@ -28,17 +77,17 @@
 
     <!-- Search Form -->
     <div class="row">
-      <div class="input-field col s6">
+      <div class="input-field">
         <label for="searchValues">Search by openid.stub</label>
         <input type="text" id="searchValues" placeholder="Search by openid.stub (comma-separated)">
       </div>
-      <div class="input-field col s6">
+      <div class="input-field">
         <button class="btn" onclick="searchResources()">Search</button>
       </div>
     </div>
 
     <!-- Search Results Table -->
-    <table id="resultsTable" class="highlight">
+    <table id="resultsTable">
       <thead>
         <tr>
           <th>ID</th>
@@ -51,21 +100,16 @@
     </table>
 
     <!-- Resource Form -->
-    <form id="resourceForm" class="col s12" novalidate>
-      <div class="input-field col s12">
-        <p>Featured Resource</p>
-        <div class="switch">
-          <label>
-            Off
-            <input type="checkbox" id="featured-switch">
-            <span class="lever"></span>
-            On
-          </label>
-        </div>
+    <form id="resourceForm" novalidate>
+      <div class="input-field">
+        <label>
+          Featured Resource
+          <input type="checkbox" id="featured-switch">
+        </label>
       </div>
 
       <input type="hidden" id="resourceId" name="resourceId">
-      <div class="input-field col s12">
+      <div class="input-field">
         <label for="resource-type">Resource Type</label>
         <select id="resource-type" name="resource-type" required>
           <option value="" disabled selected>Choose your option</option>
@@ -76,76 +120,73 @@
         </select>
       </div>
 
-      <div class="input-field col s12">
+      <div class="input-field">
         <label for="title">Title</label>
         <input type="text" id="title" name="title" required>
       </div>
 
-      <div class="input-field col s12">
+      <div class="input-field">
         <label for="authors">Authors (comma-separated)</label>
         <input type="text" id="authors" name="authors" required>
       </div>
 
-      <div class="input-field col s12">
+      <div class="input-field">
         <label for="tags">Tags (comma-separated)</label>
         <input type="text" id="tags" name="tags" required>
       </div>
 
-      <div class="input-field col s12">
+      <div class="input-field">
         <label for="contents">Contents</label>
-        <textarea id="contents" name="contents" class="materialize-textarea" required></textarea>
+        <textarea id="contents" name="contents" required></textarea>
       </div>
 
       <div id="notebookFields" class="hidden">
-        <div class="input-field col s12">
+        <div class="input-field">
           <label for="notebook-repo">Notebook Repo</label>
           <input type="text" id="notebook-repo" name="notebook-repo">
         </div>
 
-        <div class="input-field col s12">
+        <div class="input-field">
           <label for="notebook-file">Notebook File</label>
           <input type="text" id="notebook-file" name="notebook-file">
         </div>
       </div>
 
       <div id="datasetFields" class="hidden">
-        <div class="input-field col s12">
+        <div class="input-field">
           <label for="external-link">External Link</label>
           <input type="text" id="external-link" name="external-link">
         </div>
 
-        <div class="input-field col s12">
+        <div class="input-field">
           <label for="direct-download-link">Direct Download Link</label>
           <input type="text" id="direct-download-link" name="direct-download-link">
         </div>
 
-        <div class="input-field col s12">
+        <div class="input-field">
           <label for="size">Size</label>
           <input type="text" id="size" name="size">
         </div>
       </div>
 
       <div id="publicationFields" class="hidden">
-        <div class="input-field col s12">
+        <div class="input-field">
           <label for="external-link-publication">External Link</label>
           <input type="text" id="external-link-publication" name="external-link-publication">
         </div>
       </div>
 
       <div id="oerFields" class="hidden">
-        <div class="input-field col s12">
+        <div class="input-field">
           <label for="external-link-oer">External Link</label>
           <input type="text" id="external-link-oer" name="external-link-oer">
         </div>
       </div>
 
-      <div class="file-field input-field col s12">
-        <div class="btn">
-          <span>Upload Thumbnail</span>
+      <div class="input-field">
+        <div class="file-field">
+          <!-- <label for="thumbnail-input" class="btn">Upload Thumbnail</label> -->
           <input type="file" name="thumbnail" id="thumbnail-input" accept="image/*">
-        </div>
-        <div class="file-path-wrapper">
-          <input class="file-path validate" type="text">
         </div>
       </div>
       <img id="thumbnail-preview" class="thumbnail-preview hidden" src="" alt="Thumbnail Preview">
@@ -161,12 +202,8 @@
     </form>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      const elems = document.querySelectorAll('select');
-      M.FormSelect.init(elems);
-
       document.getElementById('resource-type').addEventListener('change', function() {
         const resourceType = this.value;
         document.getElementById('notebookFields').classList.add('hidden');
@@ -212,7 +249,7 @@
         e.preventDefault();
         
         const resourceId = document.getElementById('resourceId').value;
-        deleteResource(resourceId);
+        deleteResource(resourceId)
 
         const fileInput = document.getElementById('thumbnail-input');
         const file = fileInput.files[0];
@@ -238,17 +275,17 @@
           if (key === 'authors' || key === 'tags') {
             data[key] = value.split(',').map(item => item.trim());
           } else if (key === 'resourceId') {
-            return;
+            //continue;
           } else {
             data[key] = value;
           }
         });
 
         data['thumbnail-image'] = thumbnailUrl;
-        data.metadata = {
-          created_by: document.getElementById('searchValues').value
-        };
-
+	//data['metadata.created_by'] = document.getElementById('searchValues').value;
+	data.metadata = {
+    		created_by: document.getElementById('searchValues').value
+ 	};
         const relatedResources = [];
         document.querySelectorAll('.related-resource').forEach(div => {
           const type = div.querySelector('select[name="related-resource-type"]').value;
@@ -271,7 +308,7 @@
 
       document.getElementById('addRelatedResource').addEventListener('click', function() {
         const relatedResourceDiv = document.createElement('div');
-        relatedResourceDiv.classList.add('related-resource', 'input-field', 'col', 's12');
+        relatedResourceDiv.classList.add('related-resource', 'input-field');
 
         const resourceTypeSelect = document.createElement('select');
         resourceTypeSelect.name = 'related-resource-type';
@@ -298,8 +335,6 @@
         relatedResourceDiv.appendChild(resourceTitleInput);
         relatedResourceDiv.appendChild(resourceDropdown);
         document.getElementById('relatedResourcesSection').appendChild(relatedResourceDiv);
-
-        M.FormSelect.init(resourceTypeSelect);
 
         resourceTitleInput.addEventListener('input', async function() {
           const keyword = this.value;
@@ -409,8 +444,6 @@
           document.getElementById('resource-type').value = documentToUpdate['resource-type'];
           document.getElementById('featured-switch').checked = documentToUpdate['featured'] || false;
 
-          M.FormSelect.init(document.querySelectorAll('select'));
-
           document.getElementById('title').value = documentToUpdate.title;
           document.getElementById('authors').value = documentToUpdate.authors.join(', ');
           document.getElementById('tags').value = documentToUpdate.tags.join(', ');
@@ -424,6 +457,7 @@
           }
 
           showResourceFields(documentToUpdate['resource-type'], documentToUpdate);
+
           fetchRelatedResources(documentToUpdate);
         })
         .catch(error => {
@@ -465,7 +499,7 @@
             .then(relatedTitles => {
               relatedTitles.forEach(title => {
                 const relatedResourceDiv = document.createElement('div');
-                relatedResourceDiv.classList.add('related-resource', 'input-field', 'col', 's12');
+                relatedResourceDiv.classList.add('related-resource', 'input-field', 'col');
 
                 const resourceTypeSelect = document.createElement('select');
                 resourceTypeSelect.name = 'related-resource-type';
@@ -502,8 +536,6 @@
                 relatedResourceDiv.appendChild(resourceTitleInput);
                 relatedResourceDiv.appendChild(resourceDropdown);
                 document.getElementById('relatedResourcesSection').appendChild(relatedResourceDiv);
-
-                M.FormSelect.init(resourceTypeSelect);
 
                 resourceTitleInput.addEventListener('input', async function() {
                   const keyword = this.value;
