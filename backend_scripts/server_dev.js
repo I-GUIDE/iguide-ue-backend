@@ -656,19 +656,26 @@ app.get('/api/resources_contains/:field/:value', async (req, res) => {
 
 // Endpoint to return the user document given the openid
 app.get('/api/users/:openid', async (req, res) => {
-  const { openid } = req.params;
+  const openid = decodeURIComponent(req.params.openid);
 
   try {
-    const response = await client.get({
+    const response = await client.search({
       index: 'users',
-      id: openid
+      body: {
+        query: {
+          term: {
+            openid: openid
+          }
+        }
+      }
     });
 
-    if (!response.body.found) {
+    if (response.body.hits.total.value === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json(response.body._source);
+    const user = response.body.hits.hits[0]._source;
+    res.json(user);
   } catch (error) {
     console.error('Error fetching user:', error);
     res.status(500).json({ message: 'Error fetching the user' });
@@ -693,9 +700,10 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
+
 // Endpoint to update the user document
 app.put('/api/users/:openid', async (req, res) => {
-  const { openid } = req.params;
+  const openid = decodeURIComponent(req.params.openid);
   const updates = req.body;
 
   try {
@@ -714,9 +722,10 @@ app.put('/api/users/:openid', async (req, res) => {
   }
 });
 
+
 // Endpoint to delete the user document
 app.delete('/api/users/:openid', async (req, res) => {
-  const { openid } = req.params;
+  const openid = decodeURIComponent(req.params.openid);
 
   try {
     const response = await client.delete({
@@ -730,6 +739,7 @@ app.delete('/api/users/:openid', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
 
 const PORT = 5001;
 app.listen(PORT, () => {

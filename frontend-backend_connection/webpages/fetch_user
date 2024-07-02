@@ -6,10 +6,14 @@
   <title>Fetch User</title>
   <script>
     async function fetchUser() {
-      const openid = document.getElementById('fetch-openid').value;
+      const openid = encodeURIComponent(document.getElementById('fetch-openid').value);
       const response = await fetch(`http://149.165.154.200:5001/api/users/${openid}`);
-      const result = await response.json();
-      document.getElementById('fetch-result').innerText = JSON.stringify(result, null, 2);
+      if (response.ok) {
+        const result = await response.json();
+        document.getElementById('fetch-result').innerText = JSON.stringify(result, null, 2);
+      } else {
+        document.getElementById('fetch-result').innerText = `Error: ${response.statusText}`;
+      }
     }
   </script>
 </head>
