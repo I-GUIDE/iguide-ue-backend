@@ -1,4 +1,5 @@
-import fetch from 'node-fetch'
+import fetch from 'node-fetch';
+
 /**
  * Fetches resources by a specified field and array of values from the backend.
  *
@@ -10,8 +11,8 @@ import fetch from 'node-fetch'
  * @throws {Error} Throws an error if the fetch operation fails.
  */
 async function fetchResourcesByField(field, values) {
-  const valueString = values.join(',');
-  const response = await fetch(`http://149.165.154.200:5001/api/resources_contains/${field}/${valueString}`);
+  const encodedValues = values.map(value => encodeURIComponent(value)).join(',');
+  const response = await fetch(`http://149.165.154.200:5001/api/resources_contains/${field}/${encodedValues}`);
   if (!response.ok) {
     throw new Error('Failed to fetch resources');
   }
@@ -19,7 +20,7 @@ async function fetchResourcesByField(field, values) {
 }
 
 // Example usage: retrieve resources by field and array of values
-fetchResourcesByField('_id', ['y0mwb5ABQn4vdKPaC-iW'])
+fetchResourcesByField('_id', ['http://cilogon.org/serverE/users/201337'])
   .then(resources => console.log(resources))
   .catch(error => console.error(error));
 

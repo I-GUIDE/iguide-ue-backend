@@ -343,13 +343,13 @@
     });
 
     async function fetchResourcesByField(field, values) {
-      const valueString = values.join(',');
-      const response = await fetch(`http://149.165.154.200:5001/api/resources/${field}/${valueString}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch resources');
-      }
-      return response.json();
-    }
+  const encodedValues = values.map(value => encodeURIComponent(value)).join(',');
+  const response = await fetch(`http://149.165.154.200:5001/api/resources_contains/${field}/${encodedValues}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch resources');
+  }
+  return response.json();
+}
 
     function searchResources() {
       const field = 'metadata.created_by';
