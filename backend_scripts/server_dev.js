@@ -681,6 +681,34 @@ app.get('/api/users/:openid', async (req, res) => {
     res.status(500).json({ message: 'Error fetching the user' });
   }
 });
+app.get('/api/check_users/:openid', async (req, res) => {
+  const openid = decodeURIComponent(req.params.openid);
+
+  try {
+    const response = await client.search({
+      index: 'users',
+      body: {
+        query: {
+          term: {
+            openid: openid
+          }
+        }
+      }
+    });
+
+    if (response.body.hits.total.value === 0) {
+      return res.json(false);
+    }
+
+    res.json(true);
+  } catch (error) {
+    console.error('Error checking user:', error);
+    res.status(500).json({ message: 'Error checking the user' });
+  }
+});
+
+
+
 
 // Endpoint to add a new user document
 app.post('/api/users', async (req, res) => {
