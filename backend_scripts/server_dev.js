@@ -629,7 +629,7 @@ app.get('/api/resources/:field/:values', async (req, res) => {
 });
 
 
-
+/*
 // Endpoint to fetch resources by field and value. If the field contains the value.
 app.get('/api/resources_contains/:field/:value', async (req, res) => {
   const { field, value } = req.params;
@@ -656,7 +656,7 @@ app.get('/api/resources_contains/:field/:value', async (req, res) => {
     console.error('Error querying OpenSearch:', error);
     res.status(500).json({ message: 'Failed to fetch resources' });
   }
-});
+});*/
 
 // Endpoint to return the user document given the openid
 app.get('/api/users/:openid', async (req, res) => {

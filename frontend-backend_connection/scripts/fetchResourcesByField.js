@@ -10,8 +10,8 @@ import fetch from 'node-fetch'
  * @throws {Error} Throws an error if the fetch operation fails.
  */
 async function fetchResourcesByField(field, values) {
-  const valueString = values.join(',');
-  const response = await fetch(`http://149.165.154.200:5001/api/resources/${field}/${valueString}`);
+  const encodedValues = values.map(value => encodeURIComponent(value)).join(',');
+  const response = await fetch(`http://149.165.154.200:5001/api/resources/${field}/${encodedValues}`);
   if (!response.ok) {
     throw new Error('Failed to fetch resources');
   }
@@ -19,7 +19,9 @@ async function fetchResourcesByField(field, values) {
 }
 
 // Example usage: retrieve resources by field and array of values
-fetchResourcesByField('metadata.created_by', ['openid_yunfan'])
+fetchResourcesByField('metadata.created_by', ['http://cilogon.org/serverE/users/201337'])
   .then(resources => console.log(resources))
   .catch(error => console.error(error));
+  
+//console.log(fetchResourcesByField('metadata.created_by', ['http://cilogon.org/serverE/users/201337']));
 

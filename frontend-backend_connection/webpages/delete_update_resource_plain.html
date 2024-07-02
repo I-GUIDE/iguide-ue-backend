@@ -379,7 +379,7 @@
 
     async function fetchResourcesByField(field, values) {
   const encodedValues = values.map(value => encodeURIComponent(value)).join(',');
-  const response = await fetch(`http://149.165.154.200:5001/api/resources_contains/${field}/${encodedValues}`);
+  const response = await fetch(`http://149.165.154.200:5001/api/resources/${field}/${encodedValues}`);
   if (!response.ok) {
     throw new Error('Failed to fetch resources');
   }
