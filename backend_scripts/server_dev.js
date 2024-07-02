@@ -521,7 +521,8 @@ app.delete('/api/resources/:id', async (req, res) => {
         }
       }
 
-      // Delete the thumbnail image file if it exists
+      // Delete the thumbnail image file if it exists (Reneable when "update" is in place)
+      /*
       if (existingDoc._source['thumbnail-image']) {
         const thumbnailPath = path.join(process.env.UPLOAD_FOLDER, existingDoc._source['thumbnail-image'].replace('https://backend.i-guide.io:5000/user-uploads/', ''));
         if (fs.existsSync(thumbnailPath)) {
@@ -530,7 +531,7 @@ app.delete('/api/resources/:id', async (req, res) => {
         } else {
           console.log(`Thumbnail image file not found: ${thumbnailPath}`);
         }
-      }
+      }*/
     }
 
     // Delete the resource
@@ -547,13 +548,8 @@ app.delete('/api/resources/:id', async (req, res) => {
 });
 
 // Endpoint to retrieve resources by field and values for exact match
-const express = require('express');
-const app = express();
-const { Client } = require('@opensearch-project/opensearch');
 
-const client = new Client({ node: 'http://localhost:9200' });
-
-app.get('/api/resources_contains/:field/:values', async (req, res) => {
+app.get('/api/resources/:field/:values', async (req, res) => {
   const { field, values } = req.params;
   const valueArray = values.split(',').map(value => decodeURIComponent(value)); //Decompose to handle openid as url
 
@@ -632,9 +628,6 @@ app.get('/api/resources_contains/:field/:values', async (req, res) => {
   }
 });
 
-app.listen(5001, () => {
-  console.log('Server is running on port 5001');
-});
 
 
 // Endpoint to fetch resources by field and value. If the field contains the value.
