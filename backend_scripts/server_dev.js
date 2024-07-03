@@ -40,23 +40,47 @@ const client = new Client({
 // Ensure thumbnails and notebook_html directories exist
 const thumbnailDir = path.join(process.env.UPLOAD_FOLDER, 'thumbnails');
 const notebookHtmlDir = path.join(process.env.UPLOAD_FOLDER, 'notebook_html');
+const avatarDir = path.join(process.env.UPLOAD_FOLDER, 'avatars');
 fs.mkdirSync(thumbnailDir, { recursive: true });
 fs.mkdirSync(notebookHtmlDir, { recursive: true });
 
 // Serve static files from the thumbnails directory
 app.use('/user-uploads/thumbnails', express.static(thumbnailDir));
 app.use('/user-uploads/notebook_html', express.static(notebookHtmlDir));
+app.use('/user-uploads/avatars', express.static(avatarDir));
 
 // Configure storage for thumbnails
-const storage = multer.diskStorage({
+const thumbNailStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, thumbnailDir);
   },
   filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
+    // It's a good practice to sanitize the original file name
+    const sanitizedFilename = file.originalname.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
+    cb(null, `${Date.now()}-${sanitizedFilename}`);
   }
 });
-const uploadThumbnail = multer({ storage });
+const uploadThumbnail = multer({ thumbNailStorage });
+
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, avatarDir);
+  },
+  filename: (req, file, cb) => {
+    // It's a good practice to sanitize the original file name
+    const sanitizedFilename = file.originalname.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
+    cb(null, `${Date.now()}-${sanitizedFilename}`);
+  }
+});
+const uploadAvatar = multer({ avatarStorage });
+// Upload avatar
+app.post('/api/upload-avatar', uploadAvatar.single('file'), (req, res) => {
+  const filePath = `https://backend.i-guide.io:5000/user-uploads/avatars/${req.file.filename}`;
+  res.json({
+    message: 'File uploaded successfully',
+    url: filePath,
+  });
+});
 
 // Function to convert notebook to HTML
 async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
