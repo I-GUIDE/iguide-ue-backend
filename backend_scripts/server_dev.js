@@ -50,7 +50,7 @@ app.use('/user-uploads/notebook_html', express.static(notebookHtmlDir));
 app.use('/user-uploads/avatars', express.static(avatarDir));
 
 // Configure storage for thumbnails
-const thumbNailStorage = multer.diskStorage({
+const thumbnailStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, thumbnailDir);
   },
@@ -60,8 +60,9 @@ const thumbNailStorage = multer.diskStorage({
     cb(null, `${Date.now()}-${sanitizedFilename}`);
   }
 });
-const uploadThumbnail = multer({ thumbNailStorage });
+const uploadThumbnail = multer({ storage: thumbnailStorage });
 
+// Configure storage for avatars
 const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, avatarDir);
@@ -72,14 +73,78 @@ const avatarStorage = multer.diskStorage({
     cb(null, `${Date.now()}-${sanitizedFilename}`);
   }
 });
-const uploadAvatar = multer({ avatarStorage });
+const uploadAvatar = multer({ storage: avatarStorage });
+
 // Upload avatar
 app.post('/api/upload-avatar', uploadAvatar.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
+  }
+
   const filePath = `https://backend.i-guide.io:5000/user-uploads/avatars/${req.file.filename}`;
   res.json({
-    message: 'File uploaded successfully',
+    message: 'Avatar uploaded successfully',
     url: filePath,
   });
+});
+
+// Update avatar
+app.post('/api/update-avatar', uploadAvatar.single('file'), async (req, res) => {
+  try {
+    const { openid } = req.body;
+    const newAvatarFile = req.file;
+
+    if (!openid || !newAvatarFile) {
+      return res.status(400).json({ message: 'OpenID and new avatar file are required' });
+    }
+
+    // Fetch user by openid from OpenSearch
+    const { body: searchResponse } = await client.search({
+      index: 'users',
+      body: {
+        query: {
+          match: { openid }
+        }
+      }
+    });
+
+    if (searchResponse.hits.total.value === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const user = searchResponse.hits.hits[0]._source;
+    const userId = searchResponse.hits.hits[0]._id;
+    const oldAvatarUrl = user.avatar_url;
+
+    if (oldAvatarUrl) {
+      // Delete the old avatar file
+      const oldAvatarFilePath = path.join(avatarDir, path.basename(oldAvatarUrl));
+      if (fs.existsSync(oldAvatarFilePath)) {
+        fs.unlinkSync(oldAvatarFilePath);
+      }
+    }
+
+    // Update the user's avatar URL with the new file URL
+    const newAvatarUrl = `https://backend.i-guide.io:5000/user-uploads/avatars/${newAvatarFile.filename}`;
+    user.avatar_url = newAvatarUrl;
+
+    // Update the user document in OpenSearch
+    await client.update({
+      index: 'users',
+      id: userId,
+      body: {
+        doc: { avatar_url: newAvatarUrl }
+      }
+    });
+
+    res.json({
+      message: 'Avatar updated successfully',
+      url: newAvatarUrl,
+    });
+  } catch (error) {
+    console.error('Error updating avatar:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 });
 
 // Function to convert notebook to HTML
@@ -352,7 +417,7 @@ app.post('/api/upload-dataset', upload.single('file'), (req, res) => {
     });
   }
   res.json({
-    message: 'File uploaded successfully',
+    message: 'Dataset uploaded successfully',
     url: req.file.location,
     bucket: process.env.AWS_BUCKET_NAME,
     key: req.file.key,
@@ -375,9 +440,12 @@ app.use((err, req, res, next) => {
 
 // Upload thumbnail
 app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
+  }
   const filePath = `https://backend.i-guide.io:5000/user-uploads/thumbnails/${req.file.filename}`;
   res.json({
-    message: 'File uploaded successfully',
+    message: 'Thumbnail uploaded successfully',
     url: filePath,
   });
 });

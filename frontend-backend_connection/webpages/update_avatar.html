@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Update Avatar</title>
+  <script>
+    async function updateAvatar() {
+      const openid = document.getElementById('update-openid').value;
+      const avatarFile = document.getElementById('update-avatar-file').files[0];
+      
+      if (!openid || !avatarFile) {
+        document.getElementById('update-result').innerText = 'OpenID and new avatar file are required';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('openid', openid);
+      formData.append('file', avatarFile);
+
+      const response = await fetch('http://149.165.154.200:5001/api/update-avatar', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        document.getElementById('update-result').innerHTML = `<p>${data.message}</p><p>URL: <a href="${data.url}" target="_blank">${data.url}</a></p>`;
+      } else {
+        const error = await response.json();
+        document.getElementById('update-result').innerText = `Error: ${response.status} ${error.message}`;
+      }
+    }
+
+    function previewNewAvatar() {
+      const file = document.getElementById('update-avatar-file').files[0];
+      const preview = document.getElementById('new-avatar-preview');
+      const reader = new FileReader();
+
+      reader.onloadend = function () {
+        preview.src = reader.result;
+        preview.style.display = 'block';
+      };
+
+      if (file) {
+        reader.readAsDataURL(file);
+      } else {
+        preview.src = '';
+        preview.style.display = 'none';
+      }
+    }
+  </script>
+</head>
+<body>
+  <h2>Update Avatar</h2>
+  <form onsubmit="event.preventDefault(); updateAvatar();">
+    <label for="update-openid">OpenID:</label><br>
+    <input type="text" id="update-openid" name="openid" required><br><br>
+    <label for="update-avatar-file">New Avatar:</label><br>
+    <input type="file" id="update-avatar-file" name="file" accept="image/*" required onchange="previewNewAvatar()"><br><br>
+    <img id="new-avatar-preview" src="" alt="New Avatar Preview" style="display: none; width: 100px; height: 100px;"><br><br>
+    <button type="submit">Update Avatar</button>
+  </form>
+  <pre id="update-result"></pre>
+</body>
+</html>
+
