@@ -30,6 +30,7 @@ PUT /resources
       "creation-date": { "type": "date" },
       "update-date": { "type": "date" },
       "featured": { "type": "boolean" },
+      "external-link-tags": { "type": "text" },
       "external-links": { "type": "text" },
       "direct-download-link": { "type": "text" },
       "size": { "type": "text" },
