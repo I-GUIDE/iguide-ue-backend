@@ -7,7 +7,7 @@
   <style>
     .hidden { display: none; }
     .related-resource { margin-bottom: 10px; }
-    .related-resource-dropdown {
+    .related-resource-dropdown, .external-link-dropdown {
       position: absolute;
       z-index: 1000;
       background-color: #fff;
@@ -77,6 +77,7 @@
       margin-right: 10px;
     }
   </style>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -173,6 +174,12 @@
         <button type="button" id="addRelatedResource" class="btn">+</button>
         <button type="button" id="removeRelatedResource" class="btn red">-</button>
       </div>
+	<!-- New: external link section -->
+      <div id="externalLinksSection">
+        <h5>External Links</h5>
+        <button type="button" id="addExternalLink" class="btn">+</button>
+        <button type="button" id="removeExternalLink" class="btn red">-</button>
+      </div>
 
       <button type="submit" class="btn">Submit</button>
     </form>
@@ -220,62 +227,81 @@
           reader.readAsDataURL(file);
         }
       });
-
+	//Edited: Save the external-link-tags, external-link-titles, and external-links to the database
       document.getElementById('resourceForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
+  e.preventDefault();
 
-        const fileInput = document.getElementById('thumbnail-input');
-        const file = fileInput.files[0];
+  const fileInput = document.getElementById('thumbnail-input');
+  const file = fileInput.files[0];
 
-        if (file) {
-          const formData = new FormData();
-          formData.append('file', file);
+  if (file) {
+    const formData = new FormData();
+    formData.append('file', file);
 
-          const response = await fetch('http://149.165.154.200:5001/api/upload-thumbnail', {
-            method: 'POST',
-            body: formData,
-          });
+    const response = await fetch('http://149.165.154.200:5001/api/upload-thumbnail', {
+      method: 'POST',
+      body: formData,
+    });
 
-          const result = await response.json();
-          document.getElementById('thumbnail-image').value = result.url;
-        }
+    const result = await response.json();
+    document.getElementById('thumbnail-image').value = result.url;
+  }
 
-        const formData = new FormData(e.target);
-        const data = {};
+  const formData = new FormData(e.target);
+  const data = {};
 
-        formData.forEach((value, key) => {
-          if (key === 'authors' || key === 'tags') {
-            data[key] = value.split(',').map(item => item.trim());
-          } else if (key === 'created_by') {
-            if (!data.metadata) {
-              data.metadata = {};
-            }
-            data.metadata.created_by = value;
-          } else {
-            data[key] = value;
-          }
-        });
+  formData.forEach((value, key) => {
+    if (key === 'authors' || key === 'tags') {
+      data[key] = value.split(',').map(item => item.trim());
+    } else if (key === 'created_by') {
+      if (!data.metadata) {
+        data.metadata = {};
+      }
+      data.metadata.created_by = value;
+    } else {
+      data[key] = value;
+    }
+  });
 
-        const relatedResources = [];
-        document.querySelectorAll('.related-resource').forEach(div => {
-          const type = div.querySelector('select[name="related-resource-type"]').value;
-          const title = div.querySelector('input[name="related-resource-title"]').value;
-          relatedResources.push({ type, title });
-        });
-        data['related-resources'] = relatedResources;
+  const relatedResources = [];
+  document.querySelectorAll('.related-resource').forEach(div => {
+    const type = div.querySelector('select[name="related-resource-type"]').value;
+    const title = div.querySelector('input[name="related-resource-title"]').value;
+    relatedResources.push({ type, title });
+  });
+  data['related-resources'] = relatedResources;
 
-        const response = await fetch('http://149.165.154.200:5001/api/resources', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(data)
-        });
+  const externalLinks = [];
+  const externalLinkTags = [];
+  const externalLinkTitles = [];
+  document.querySelectorAll('.external-link').forEach(div => {
+    const tagSelect = div.querySelector('select[name="external-link-tag"]');
+    let tag = tagSelect.value;
+    const newTagInput = div.querySelector('input[name="new-tag"]');
+    if (tag === 'Add new' && newTagInput) {
+      tag = newTagInput.value.trim();
+    }
+    const url = div.querySelector('input[name="external-link-url"]').value;
+    const title = div.querySelector('input[name="external-link-title"]').value;
+    externalLinks.push(url);
+    externalLinkTags.push(tag);
+    externalLinkTitles.push(title);
+  });
+  data['external-links'] = externalLinks;
+  data['external-link-tags'] = externalLinkTags;
+  data['external-link-titles'] = externalLinkTitles;
 
-        const result = await response.json();
-        console.log(result);
-      });
+  const response = await fetch('http://149.165.154.200:5001/api/resources', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(data)
+  });
 
+  const result = await response.json();
+  console.log(result);
+});
       document.getElementById('addRelatedResource').addEventListener('click', function() {
         const relatedResourceDiv = document.createElement('div');
         relatedResourceDiv.classList.add('related-resource', 'input-field');
@@ -343,6 +369,103 @@
         if (relatedResources.length > 0) {
           const lastRelatedResource = relatedResources[relatedResources.length - 1];
           lastRelatedResource.remove();
+        }
+      });
+	//New: Add and remove external link
+      document.getElementById('addExternalLink').addEventListener('click', function() {
+        const externalLinkDiv = document.createElement('div');
+        externalLinkDiv.classList.add('external-link', 'input-field');
+
+        const tagContainerDiv = document.createElement('div');
+        tagContainerDiv.classList.add('tag-container');
+
+        const tagSelect = document.createElement('select');
+        tagSelect.name = 'external-link-tag';
+        tagSelect.innerHTML = `
+          <option value="Slides">Slides</option>
+          <option value="Body of Knowledge">Body of Knowledge</option>
+          <option value="Open Educational Resources">Open Educational Resources</option>
+          <option value="Course">Courses</option>
+          <option value="Webpage">Courses</option>
+          <option value="Add new">Add new</option>
+        `;
+
+        const newTagInput = document.createElement('input');
+        newTagInput.type = 'text';
+        newTagInput.name = 'new-tag';
+        newTagInput.placeholder = 'Please input the tag';
+        newTagInput.style.display = 'none';
+
+        tagSelect.addEventListener('change', function() {
+          if (this.value === 'Add new') {
+            newTagInput.style.display = 'inline-block';
+          } else {
+            newTagInput.style.display = 'none';
+          }
+        });
+
+        tagContainerDiv.appendChild(tagSelect);
+        tagContainerDiv.appendChild(newTagInput);
+
+        const urlInput = document.createElement('input');
+        urlInput.type = 'text';
+        urlInput.name = 'external-link-url';
+        urlInput.placeholder = 'URL';
+        
+        const retrieveTitleButton = document.createElement('button');
+        retrieveTitleButton.type = 'button';
+        retrieveTitleButton.classList.add('btn');
+        retrieveTitleButton.textContent = 'Retrieve title';
+        retrieveTitleButton.addEventListener('click', function() {
+          const url = urlInput.value;
+          if (url) {
+            $.ajax({
+              url: `http://149.165.154.200:5001/api/retrieve-title?url=${encodeURIComponent(url)}`,
+              async: true,
+              success: function(data) {
+                if (data.title) {
+                  titleInput.value = data.title;
+                } else {
+                  alert('Title not found');
+                }
+              },
+              error: function() {
+                alert('Failed to retrieve title');
+              }
+            });
+          }
+        });
+
+        const titleInput = document.createElement('input');
+        titleInput.type = 'text';
+        titleInput.name = 'external-link-title';
+        titleInput.placeholder = 'Title';
+
+        
+
+        const tagLabel = document.createElement('label');
+        tagLabel.innerText = 'Tag';
+        const urlLabel = document.createElement('label');
+        urlLabel.innerText = 'URL';
+        const titleLabel = document.createElement('label');
+        titleLabel.innerText = 'Title';
+
+        externalLinkDiv.appendChild(tagLabel);
+        externalLinkDiv.appendChild(tagContainerDiv);
+        externalLinkDiv.appendChild(urlLabel);
+        externalLinkDiv.appendChild(urlInput);
+        externalLinkDiv.appendChild(titleLabel);
+        externalLinkDiv.appendChild(titleInput);
+        externalLinkDiv.appendChild(retrieveTitleButton);
+
+        document.getElementById('externalLinksSection').appendChild(externalLinkDiv);
+      });
+
+      document.getElementById('removeExternalLink').addEventListener('click', function() {
+        const externalLinks = document.querySelectorAll('.external-link');
+        if (externalLinks.length > 0) {
+          const lastExternalLink = externalLinks[externalLinks.length - 1];
+          lastExternalLink.remove();
         }
       });
     });

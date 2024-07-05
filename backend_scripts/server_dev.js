@@ -11,6 +11,7 @@ import { S3Client } from '@aws-sdk/client-s3';
 import multerS3 from 'multer-s3';
 import https from 'https';
 import http from 'http';
+import axios from 'axios';
 
 const app = express();
 app.use(cors());
@@ -478,10 +479,10 @@ app.put('/api/resources', async (req, res) => {
   const resource = req.body;
 
   try {
-    if (resource['resource-type'] === 'notebook' && resource['notebook-repo'] && resource['notebook-file']) {
+    /*if (resource['resource-type'] === 'notebook' && resource['notebook-repo'] && resource['notebook-file']) {
       const htmlNotebookPath = await convertNotebookToHtml(resource['notebook-repo'], resource['notebook-file'], notebookHtmlDir);
       resource['html-notebook'] = `https://backend.i-guide.io:5000/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
-    }
+    }*/
 
     // Retrieve and update related document IDs
     const relatedNotebooks = [];
@@ -863,7 +864,22 @@ app.delete('/api/users/:openid', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-
+//Retrieve the title of the url
+app.get('/api/retrieve-title', async (req, res) => {
+  const url = req.query.url;
+  try {
+    const response = await axios.get(url);
+    const matches = response.data.match(/<title>(.*?)<\/title>/);
+    if (matches) {
+      res.json({ title: matches[1] });
+    } else {
+      res.status(404).json({ error: 'Title not found' });
+    }
+  } catch (error) {
+  	console.log(error);
+    res.status(500).json({ error: 'Failed to retrieve title' });
+  }
+});
 
 const PORT = 5001;
 app.listen(PORT, () => {
