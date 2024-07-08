@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Update User</title>
+  <script>
+    async function updateUser() {
+      const openid = encodeURIComponent(document.getElementById('update-openid').value);
+      const updates = {};
+
+      // Populate updates object with non-empty fields
+      if (document.getElementById('update-first-name').value) {
+        updates.first_name = document.getElementById('update-first-name').value;
+      }
+      if (document.getElementById('update-last-name').value) {
+        updates.last_name = document.getElementById('update-last-name').value;
+      }
+      if (document.getElementById('update-email').value) {
+        updates.email = document.getElementById('update-email').value;
+      }
+      if (document.getElementById('update-affiliation').value) {
+        updates.affiliation = document.getElementById('update-affiliation').value;
+      }
+      if (document.getElementById('update-bio').value) {
+        updates.bio = document.getElementById('update-bio').value;
+      }
+
+      const response = await fetch(`http://149.165.154.200:5001/api/users/${openid}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updates)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        document.getElementById('update-result').innerText = JSON.stringify(result, null, 2);
+      } else {
+        const error = await response.json();
+        document.getElementById('update-result').innerText = `Error: ${response.status} ${error.message}`;
+      }
+    }
+  </script>
+</head>
+<body>
+  <h1>Update User</h1>
+  <form onsubmit="event.preventDefault(); updateUser();">
+    <label for="update-openid">OpenID:</label>
+    <input type="text" id="update-openid" name="openid" required><br>
+    <label for="update-first-name">First Name:</label>
+    <input type="text" id="update-first-name" name="first_name"><br>
+    <label for="update-last-name">Last Name:</label>
+    <input type="text" id="update-last-name" name="last_name"><br>
+    <label for="update-email">Email:</label>
+    <input type="email" id="update-email" name="email"><br>
+    <label for="update-affiliation">Affiliation:</label>
+    <input type="text" id="update-affiliation" name="affiliation"><br>
+    <label for="update-bio">Bio:</label>
+    <textarea id="update-bio" name="bio"></textarea><br>
+    <button type="submit">Update User</button>
+  </form>
+  <pre id="update-result"></pre>
+</body>
+</html>
+

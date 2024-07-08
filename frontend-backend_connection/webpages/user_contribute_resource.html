@@ -27,6 +27,10 @@
     <h1>I-GUIDE Knowledge Sharing</h1>
     <form id="resourceForm" class="col s12" novalidate>
       <div class="input-field col s12">
+        <input type="text" id="created_by" name="created_by" required>
+        <label for="created_by">Created By</label>
+      </div>
+      <div class="input-field col s12">
         <select id="resource-type" name="resource-type" required>
           <option value="" disabled selected>Choose your option</option>
           <option value="notebook">Notebook</option>
@@ -36,6 +40,8 @@
         </select>
         <label for="resource-type">Resource Type</label>
       </div>
+
+      
 
       <div class="input-field col s12">
         <input type="text" id="title" name="title" required>
@@ -58,7 +64,6 @@
       </div>
 
       <div id="notebookFields" class="hidden">
-        
         <div class="input-field col s12">
           <input type="text" id="notebook-repo" name="notebook-repo">
           <label for="notebook-repo">Notebook Repo</label>
@@ -95,7 +100,6 @@
       </div>
 
       <div id="oerFields" class="hidden">
-       
         <div class="input-field col s12">
           <input type="text" id="external-link-oer" name="external-link-oer">
           <label for="external-link-oer">External Link</label>
@@ -112,7 +116,7 @@
         </div>
       </div>
       <img id="thumbnail-preview" class="thumbnail-preview hidden" src="" alt="Thumbnail Preview">
-      <input type="hidden" id="thumbnail-url" name="thumbnail-url">
+      <input type="hidden" id="thumbnail-image" name="thumbnail-image">
 
       <div id="relatedResourcesSection">
         <h5>Related Resources</h5>
@@ -187,7 +191,7 @@
           });
 
           const result = await response.json();
-          document.getElementById('thumbnail-url').value = result.url;
+          document.getElementById('thumbnail-image').value = result.url;
         }
 
         const formData = new FormData(e.target);
@@ -196,6 +200,12 @@
         formData.forEach((value, key) => {
           if (key === 'authors' || key === 'tags') {
             data[key] = value.split(',').map(item => item.trim());
+          } else if (key === 'created_by') {
+            // Include created_by in metadata
+            if (!data.metadata) {
+              data.metadata = {};
+            }
+            data.metadata.created_by = value;
           } else {
             data[key] = value;
           }

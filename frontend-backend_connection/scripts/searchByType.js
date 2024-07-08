@@ -12,6 +12,7 @@
  * @returns {Promise<Object>} A promise that resolves to the JSON response containing the search results.
  * @throws {Error} Throws an error if the search operation fails.
  */
+ import fetch from 'node-fetch'
 async function searchResources(keyword, resourceType = null, sortBy = '_score', order = 'desc', from = 0, size = 15) {
   const body = {
     keyword,

@@ -11,6 +11,7 @@ import { S3Client } from '@aws-sdk/client-s3';
 import multerS3 from 'multer-s3';
 import https from 'https';
 import http from 'http';
+import axios from 'axios';
 
 const app = express();
 app.use(cors());
@@ -40,49 +41,163 @@ const client = new Client({
 // Ensure thumbnails and notebook_html directories exist
 const thumbnailDir = path.join(process.env.UPLOAD_FOLDER, 'thumbnails');
 const notebookHtmlDir = path.join(process.env.UPLOAD_FOLDER, 'notebook_html');
+const avatarDir = path.join(process.env.UPLOAD_FOLDER, 'avatars');
 fs.mkdirSync(thumbnailDir, { recursive: true });
 fs.mkdirSync(notebookHtmlDir, { recursive: true });
 
 // Serve static files from the thumbnails directory
 app.use('/user-uploads/thumbnails', express.static(thumbnailDir));
 app.use('/user-uploads/notebook_html', express.static(notebookHtmlDir));
+app.use('/user-uploads/avatars', express.static(avatarDir));
 
 // Configure storage for thumbnails
-const storage = multer.diskStorage({
+const thumbnailStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, thumbnailDir);
   },
   filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
+    // It's a good practice to sanitize the original file name
+    const sanitizedFilename = file.originalname.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
+    cb(null, `${Date.now()}-${sanitizedFilename}`);
   }
 });
-const uploadThumbnail = multer({ storage });
+const uploadThumbnail = multer({ storage: thumbnailStorage });
+
+// Configure storage for avatars
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, avatarDir);
+  },
+  filename: (req, file, cb) => {
+    // It's a good practice to sanitize the original file name
+    const sanitizedFilename = file.originalname.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
+    cb(null, `${Date.now()}-${sanitizedFilename}`);
+  }
+});
+const uploadAvatar = multer({ storage: avatarStorage });
+
+// Upload avatar
+app.post('/api/upload-avatar', uploadAvatar.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
+  }
+
+  const filePath = `https://backend.i-guide.io:5000/user-uploads/avatars/${req.file.filename}`;
+  res.json({
+    message: 'Avatar uploaded successfully',
+    url: filePath,
+  });
+});
+
+// Update avatar
+app.post('/api/update-avatar', uploadAvatar.single('file'), async (req, res) => {
+  try {
+    const { openid } = req.body;
+    const newAvatarFile = req.file;
+
+    if (!openid || !newAvatarFile) {
+      return res.status(400).json({ message: 'OpenID and new avatar file are required' });
+    }
+
+    // Fetch user by openid from OpenSearch
+    const { body: searchResponse } = await client.search({
+      index: 'users',
+      body: {
+        query: {
+          match: { openid }
+        }
+      }
+    });
+
+    if (searchResponse.hits.total.value === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const user = searchResponse.hits.hits[0]._source;
+    const userId = searchResponse.hits.hits[0]._id;
+    const oldAvatarUrl = user.avatar_url;
+
+    if (oldAvatarUrl) {
+      // Delete the old avatar file
+      const oldAvatarFilePath = path.join(avatarDir, path.basename(oldAvatarUrl));
+      if (fs.existsSync(oldAvatarFilePath)) {
+        fs.unlinkSync(oldAvatarFilePath);
+      }
+    }
+
+    // Update the user's avatar URL with the new file URL
+    const newAvatarUrl = `https://backend.i-guide.io:5000/user-uploads/avatars/${newAvatarFile.filename}`;
+    user.avatar_url = newAvatarUrl;
+
+    // Update the user document in OpenSearch
+    await client.update({
+      index: 'users',
+      id: userId,
+      body: {
+        doc: { avatar_url: newAvatarUrl }
+      }
+    });
+
+    res.json({
+      message: 'Avatar updated successfully',
+      url: newAvatarUrl,
+    });
+  } catch (error) {
+    console.error('Error updating avatar:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
 
 // Function to convert notebook to HTML
+
+async function fetchNotebookContent(url) {
+  const response = await fetch(url);
+  if (response.ok) {
+    return await response.text();
+  }
+  throw new Error('Failed to fetch the notebook');
+}
 async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
-  const notebookUrl = `${githubRepo}/raw/main/${notebookPath}`;
   const notebookName = path.basename(notebookPath, '.ipynb');
   const timestamp = Date.now();
   const htmlOutputPath = path.join(outputDir, `${timestamp}-${notebookName}.html`);
-  
-  const response = await fetch(notebookUrl);
-  if (!response.ok) {
-    throw new Error('Failed to fetch the notebook from GitHub');
+  const branches = ['main', 'master'];
+
+  let notebookContent;
+
+  for (const branch of branches) {
+    try {
+      const notebookUrl = `${githubRepo}/raw/${branch}/${notebookPath}`;
+      notebookContent = await fetchNotebookContent(notebookUrl);
+      break;
+    } catch (error) {
+      console.log(`Failed to fetch from ${branch} branch. Trying next branch...`);
+    }
   }
 
-  const notebookContent = await response.text();
+  if (!notebookContent) {
+    console.log('Failed to fetch the notebook from both main and master branches');
+    return null;
+  }
+
   const notebookFilePath = path.join(outputDir, `${timestamp}-${notebookName}.ipynb`);
   fs.writeFileSync(notebookFilePath, notebookContent);
 
-  return new Promise((resolve, reject) => {
-    exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${htmlOutputPath}"`, (error, stdout, stderr) => {
-      if (error) {
-        reject(`Error converting notebook: ${stderr}`);
-      } else {
-        resolve(htmlOutputPath);
-      }
+  try {
+    await new Promise((resolve, reject) => {
+      exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${htmlOutputPath}"`, (error, stdout, stderr) => {
+        if (error) {
+          reject(`Error converting notebook: ${stderr}`);
+        } else {
+          resolve();
+        }
+      });
     });
-  });
+    return htmlOutputPath;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
 }
 
 // Endpoint to fetch documents by resource-type
@@ -125,15 +240,17 @@ app.get('/api/resources', async (req, res) => {
       res.status(404).json({ message: 'No resource found' });
       return;
     }
-    const resources = resourceResponse.body.hits.hits.map((hit) => hit._source);
+    const resources = resourceResponse.body.hits.hits.map(hit => {
+      const { _id, _source } = hit;
+      const { metadata, ...rest } = _source; // Remove metadata
+      return { _id, ...rest };
+    });
     res.json(resources);
   } catch (error) {
     console.error('Error querying OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-
-
 
 // Endpoint to fetch all featured documents
 app.get('/api/featured-resources', async (req, res) => {
@@ -174,7 +291,11 @@ app.get('/api/featured-resources', async (req, res) => {
       res.status(404).json({ message: 'No featured resource found' });
       return;
     }
-    const resources = featuredResponse.body.hits.hits.map((hit) => hit._source);
+    const resources = featuredResponse.body.hits.hits.map(hit => {
+      const { _id, _source } = hit;
+      const { metadata, ...rest } = _source; // Remove metadata
+      return { _id, ...rest };
+    });
     res.json(resources);
   } catch (error) {
     console.error('Error querying OpenSearch:', error);
@@ -188,7 +309,12 @@ app.post('/api/search', async (req, res) => {
   let query = {
     multi_match: {
       query: keyword,
-      fields: ['title', 'contents', 'tags'],
+      fields: [
+        'title^3',    // Boost title matches
+        'authors^3',  // Boost author matches
+        'tags^2',     // Slightly boost tag matches
+        'contents'    // Normal weight for content matches
+      ],
     },
   };
 
@@ -196,7 +322,17 @@ app.post('/api/search', async (req, res) => {
     query = {
       bool: {
         must: [
-          { multi_match: { query: keyword, fields: ['title', 'contents', 'tags'] } },
+          {
+            multi_match: {
+              query: keyword,
+              fields: [
+                'title^3',
+                'authors^3',
+                'tags^2',
+                'contents'
+              ],
+            },
+          },
           { term: { 'resource-type': resource_type } },
         ],
       },
@@ -212,29 +348,40 @@ app.post('/api/search', async (req, res) => {
   }
 
   try {
-    const searchResponse = await client.search({
+    const searchParams = {
       index: 'resources_dev',
       body: {
         from: from,
         size: size,
         query: query,
-        sort: [
-          {
-            [sortBy]: {
-              order: order,
-            },
-          },
-        ],
       },
-    });
+    };
 
-    const results = searchResponse.body.hits.hits.map((hit) => hit._source);
+    // Add sorting unless sort_by is "prioritize_title_author"
+    if (sort_by !== 'prioritize_title_author') {
+      searchParams.body.sort = [
+        {
+          [sortBy]: {
+            order: order,
+          },
+        },
+      ];
+    }
+
+    const searchResponse = await client.search(searchParams);
+    const results = searchResponse.body.hits.hits.map(hit => {
+      const { _id, _source } = hit;
+      const { metadata, ...rest } = _source; // Remove metadata
+      return { _id, ...rest };
+    });
     res.json(results);
   } catch (error) {
     console.error('Error querying OpenSearch:', error);
     res.status(500).json({ error: 'Error querying OpenSearch' });
   }
 });
+
+
 
 // Endpoint to get the count of documents by resource-type or search keywords
 app.post('/api/resource-count', async (req, res) => {
@@ -262,7 +409,7 @@ app.post('/api/resource-count', async (req, res) => {
     query.bool.must.push({
       multi_match: {
         query: keywords,
-        fields: ['title', 'contents','tags']
+        fields: ['title', 'authors', 'contents','tags']
       }
     });
   }
@@ -281,6 +428,7 @@ app.post('/api/resource-count', async (req, res) => {
     res.status(500).send({ error: 'An error occurred while fetching the resource count' });
   }
 });
+
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
   credentials: {
@@ -318,7 +466,7 @@ app.post('/api/upload-dataset', upload.single('file'), (req, res) => {
     });
   }
   res.json({
-    message: 'File uploaded successfully',
+    message: 'Dataset uploaded successfully',
     url: req.file.location,
     bucket: process.env.AWS_BUCKET_NAME,
     key: req.file.key,
@@ -341,35 +489,16 @@ app.use((err, req, res, next) => {
 
 // Upload thumbnail
 app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
+  }
   const filePath = `https://backend.i-guide.io:5000/user-uploads/thumbnails/${req.file.filename}`;
   res.json({
-    message: 'File uploaded successfully',
+    message: 'Thumbnail uploaded successfully',
     url: filePath,
   });
 });
 
-// Endpoint to register a new resource, including converting notebook to HTML if provided
-/*app.put('/api/resources', async (req, res) => {
-  const data = req.body;
-  //console.log(data);
-  try {
-    // Check if the resource type is 'notebook' and contains the GitHub repo and notebook path
-    if (data['resource-type'] === 'notebook' && data['notebook-repo'] && data['notebook-file']) {
-      const htmlNotebookPath = await convertNotebookToHtml(data['notebook-repo'], data['notebook-file'], notebookHtmlDir);
-      data['html-notebook'] = `/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
-    }
-
-    await client.index({
-      index: 'resources_dev',
-      body: data,
-    });
-
-    res.status(200).json({ message: 'Resource registered successfully' });
-  } catch (error) {
-    console.error('Error indexing resource in OpenSearch:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});*/
 // Function to update related documents
 const updateRelatedDocuments = async (resourceId, relatedIds, relatedField) => {
   for (const relatedId of relatedIds) {
@@ -392,17 +521,19 @@ const updateRelatedDocuments = async (resourceId, relatedIds, relatedField) => {
     }
   }
 };
+
 // Endpoint to register a resource
 app.put('/api/resources', async (req, res) => {
   const resource = req.body;
-  //console.log(resource)
-  //resource.id = uuidv4(); // Generate a unique ID
 
   try {
-  if (resource['resource-type'] === 'notebook' && resource['notebook-repo'] && resource['notebook-file']) {
+    if (resource['resource-type'] === 'notebook' && resource['notebook-repo'] && resource['notebook-file']) {
       const htmlNotebookPath = await convertNotebookToHtml(resource['notebook-repo'], resource['notebook-file'], notebookHtmlDir);
-      resource['html-notebook'] = `https://backend.i-guide.io:5000/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+      if (htmlNotebookPath) {
+        resource['html-notebook'] = `https://backend.i-guide.io:5000/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+      }
     }
+
     // Retrieve and update related document IDs
     const relatedNotebooks = [];
     const relatedDatasets = [];
@@ -429,7 +560,6 @@ app.put('/api/resources', async (req, res) => {
 
       if (body.hits.hits.length > 0) {
         const relatedId = body.hits.hits[0]._id;
-	//console.log(relatedId)
         if (type === 'notebook') {
           relatedNotebooks.push(relatedId);
         } else if (type === 'dataset') {
@@ -437,8 +567,6 @@ app.put('/api/resources', async (req, res) => {
         } else if (type === 'publication') {
           relatedPublications.push(relatedId);
         }
-
-        //await updateRelatedDocuments(resource.id, [relatedId], `related-${type}s`);
       }
     }
 
@@ -452,11 +580,8 @@ app.put('/api/resources', async (req, res) => {
     // Index the new resource
     const response = await client.index({
       index: 'resources_dev',
-      //id: resource.id,
       body: resource
     });
-    //console.log(response)
-    //console.log(response.body._id)
 
     for (const relatedResource of relatedResources) {
       const { type, title } = relatedResource;
@@ -478,9 +603,6 @@ app.put('/api/resources', async (req, res) => {
 
       if (body.hits.hits.length > 0) {
         const relatedId = body.hits.hits[0]._id;
-	//console.log(relatedId)
-
-
         await updateRelatedDocuments(response.body._id, [relatedId], `related-${resource['resource-type']}s`);
       }
     }
@@ -506,8 +628,9 @@ app.delete('/api/resources/:id', async (req, res) => {
       const relatedNotebooks = existingDoc._source['related-notebooks'] || [];
       const relatedDatasets = existingDoc._source['related-datasets'] || [];
       const relatedPublications = existingDoc._source['related-publications'] || [];
+      const relatedOers = existingDoc._source['related-oers'] || [];
 
-      const relatedIds = [...relatedNotebooks, ...relatedDatasets, ...relatedPublications];
+      const relatedIds = [...relatedNotebooks, ...relatedDatasets, ...relatedPublications, ...relatedOers];
       for (const relatedId of relatedIds) {
         const { body: relatedDoc } = await client.get({
           index: 'resources_dev',
@@ -529,6 +652,29 @@ app.delete('/api/resources/:id', async (req, res) => {
           });
         }
       }
+
+      // Delete the HTML notebook file if it exists
+      if (existingDoc._source['html-notebook']) {
+        const notebookPath = path.join(process.env.UPLOAD_FOLDER, existingDoc._source['html-notebook'].replace('https://backend.i-guide.io:5000/user-uploads/', ''));
+        if (fs.existsSync(notebookPath)) {
+          fs.unlinkSync(notebookPath);
+          console.log(`Deleted notebook file: ${notebookPath}`);
+        } else {
+          console.log(`Notebook file not found: ${notebookPath}`);
+        }
+      }
+
+      // Delete the thumbnail image file if it exists (Reneable when "update" is in place)
+      /*
+      if (existingDoc._source['thumbnail-image']) {
+        const thumbnailPath = path.join(process.env.UPLOAD_FOLDER, existingDoc._source['thumbnail-image'].replace('https://backend.i-guide.io:5000/user-uploads/', ''));
+        if (fs.existsSync(thumbnailPath)) {
+          fs.unlinkSync(thumbnailPath);
+          console.log(`Deleted thumbnail image file: ${thumbnailPath}`);
+        } else {
+          console.log(`Thumbnail image file not found: ${thumbnailPath}`);
+        }
+      }*/
     }
 
     // Delete the resource
@@ -539,18 +685,22 @@ app.delete('/api/resources/:id', async (req, res) => {
 
     res.status(200).json(response);
   } catch (error) {
+    console.error('Error deleting resource:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Endpoint to retrieve a resources by id
+// Endpoint to retrieve resources by field and values for exact match
+
 app.get('/api/resources/:field/:values', async (req, res) => {
   const { field, values } = req.params;
-  const valueArray = values.split(',');
+  const valueArray = values.split(',').map(value => decodeURIComponent(value)); //Decompose to handle openid as url
 
   try {
-    const resourceResponse = await client.search({
+    // Initial search request to initialize the scroll context
+    const initialResponse = await client.search({
       index: 'resources_dev',
+      scroll: '1m', // Set the scroll timeout
       body: {
         query: {
           terms: {
@@ -574,20 +724,352 @@ app.get('/api/resources/:field/:values', async (req, res) => {
             order: 'asc',
           },
         },
+        size: 1000, // Set an initial batch size
       },
     });
 
-    if (resourceResponse.body.hits.total.value === 0) {
+    let allHits = initialResponse.body.hits.hits;
+    let scrollId = initialResponse.body._scroll_id;
+
+    // Use the scroll ID to fetch subsequent batches of documents
+    while (true) {
+      const scrollResponse = await client.scroll({
+        scroll_id: scrollId,
+        scroll: '1m',
+      });
+
+      if (scrollResponse.body.hits.hits.length === 0) {
+        break;
+      }
+
+      allHits = allHits.concat(scrollResponse.body.hits.hits);
+      scrollId = scrollResponse.body._scroll_id;
+    }
+
+    // Clear the scroll context
+    await client.clearScroll({
+      body: {
+        scroll_id: scrollId,
+      },
+    });
+
+    if (allHits.length === 0) {
       res.status(404).json({ message: 'No resources found' });
       return;
     }
-    const resources = resourceResponse.body.hits.hits.map(hit => hit._source);
+
+    const resources = allHits.map(hit => {
+      const { _id, _source } = hit;
+      const { metadata, ...rest } = _source; // Remove metadata
+      return { _id, ...rest };
+    });
+
     res.json(resources);
   } catch (error) {
     console.error('Error querying OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+//Return the number of hits by field and id
+app.get('/api/resources/count/:field/:values', async (req, res) => {
+  const { field, values } = req.params;
+  const valueArray = values.split(',').map(value => decodeURIComponent(value)); // Decompose to handle openid as URL
+
+  try {
+    // Count request to get the number of hits
+    const countResponse = await client.count({
+      index: 'resources_dev',
+      body: {
+        query: {
+          terms: {
+            [field]: valueArray,
+          },
+        },
+      },
+    });
+
+    const count = countResponse.body.count;
+
+    res.json({ count });
+  } catch (error) {
+    console.error('Error querying OpenSearch:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+
+
+/*
+// Endpoint to fetch resources by field and value. If the field contains the value.
+app.get('/api/resources_contains/:field/:value', async (req, res) => {
+  const { field, value } = req.params;
+  try {
+    const resourceResponse = await client.search({
+      index: 'resources_dev', // Replace with your index name
+      body: {
+        query: {
+          match: {
+            [field]: value,
+          },
+        },
+      },
+    });
+
+    const resources = resourceResponse.body.hits.hits.map(hit => {
+      const { _id, _source } = hit;
+      const { metadata, ...rest } = _source; // Remove metadata
+      return { _id, ...rest };
+    });
+
+    res.json(resources);
+  } catch (error) {
+    console.error('Error querying OpenSearch:', error);
+    res.status(500).json({ message: 'Failed to fetch resources' });
+  }
+});*/
+
+// Endpoint to return the user document given the openid
+app.get('/api/users/:openid', async (req, res) => {
+  const openid = decodeURIComponent(req.params.openid);
+
+  try {
+    const response = await client.search({
+      index: 'users',
+      body: {
+        query: {
+          term: {
+            openid: openid
+          }
+        }
+      }
+    });
+
+    if (response.body.hits.total.value === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const user = response.body.hits.hits[0]._source;
+    res.json(user);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ message: 'Error fetching the user' });
+  }
+});
+app.get('/api/check_users/:openid', async (req, res) => {
+  const openid = decodeURIComponent(req.params.openid);
+
+  try {
+    const response = await client.search({
+      index: 'users',
+      body: {
+        query: {
+          term: {
+            openid: openid
+          }
+        }
+      }
+    });
+
+    if (response.body.hits.total.value === 0) {
+      return res.json(false);
+    }
+
+    res.json(true);
+  } catch (error) {
+    console.error('Error checking user:', error);
+    res.status(500).json({ message: 'Error checking the user' });
+  }
+});
+
+
+
+
+// Endpoint to add a new user document
+app.post('/api/users', async (req, res) => {
+  const user = req.body;
+  console.log(user);
+
+  try {
+    const response = await client.index({
+      index: 'users',
+      id: user.openid,
+      body: user
+    });
+
+    res.status(201).json({ message: 'User added successfully', id: response.body._id });
+  } catch (error) {
+    console.error('Error adding user:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+
+// Endpoint to update the user document
+app.put('/api/users/:openid', async (req, res) => {
+  const openid = decodeURIComponent(req.params.openid);
+  const updates = req.body;
+
+  try {
+    const response = await client.update({
+      index: 'users',
+      id: openid,
+      body: {
+        doc: updates
+      }
+    });
+
+    res.json({ message: 'User updated successfully', result: response.body.result });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+
+// Endpoint to delete the user document
+app.delete('/api/users/:openid', async (req, res) => {
+  const openid = decodeURIComponent(req.params.openid);
+
+  try {
+    const response = await client.delete({
+      index: 'users',
+      id: openid
+    });
+
+    res.json({ message: 'User deleted successfully', result: response.body.result });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+//Retrieve the title of the url
+app.get('/api/retrieve-title', async (req, res) => {
+  const url = req.query.url;
+  try {
+    const response = await axios.get(url);
+    const matches = response.data.match(/<title>(.*?)<\/title>/);
+    if (matches) {
+      res.json({ title: matches[1] });
+    } else {
+      res.status(404).json({ error: 'Title not found' });
+    }
+  } catch (error) {
+  	console.log(error);
+    res.status(500).json({ error: 'Failed to retrieve title' });
+  }
+});
+
+app.post('/api/searchByCreator', async (req, res) => {
+  const { openid, sort_by = '_score', order = 'desc', from = 0, size = 15 } = req.body;
+
+  if (!openid) {
+    return res.status(400).json({ error: 'openid is required' });
+  }
+
+  let query = {
+    term: { 'metadata.created_by': openid },
+  };
+
+  // Replace title and authors with their keyword sub-fields for sorting
+  let sortBy = sort_by;
+  if (sortBy === 'title') {
+    sortBy = 'title.keyword';
+  } else if (sortBy === 'authors') {
+    sortBy = 'authors.keyword';
+  }
+
+  try {
+    const searchResponse = await client.search({
+      index: 'resources_dev',
+      body: {
+        from: from,
+        size: size,
+        query: query,
+        sort: [
+          {
+            [sortBy]: {
+              order: order,
+            },
+          },
+        ],
+      },
+    });
+    const results = searchResponse.body.hits.hits.map(hit => {
+      const { _id, _source } = hit;
+      const { metadata, ...rest } = _source; // Remove metadata
+      return { _id, ...rest };
+    });
+    res.json(results);
+  } catch (error) {
+    console.error('Error querying OpenSearch:', error);
+    res.status(500).json({ error: 'Error querying OpenSearch' });
+  }
+});
+app.post('/api/elements/retrieve', async (req, res) => {
+  const { field_name, match_value, element_type, sort_by = '_score', order = 'desc', from = '0', size = '10', count_only = false } = req.body;
+
+  // Check if match_value or element_type is an empty array
+  if (Array.isArray(match_value) && match_value.length === 0) {
+    return res.json(count_only ? 0 : []);
+  }
+  if (Array.isArray(element_type) && element_type.length === 0) {
+    return res.json(count_only ? 0 : []);
+  }
+  let sortBy = sort_by;
+  if (sortBy === 'title') {
+    sortBy = 'title.keyword';
+  } else if (sortBy === 'authors') {
+    sortBy = 'authors.keyword';
+  }
+
+  // Build the query
+  const query = {
+    from: parseInt(from, 10),
+    size: parseInt(size, 10),
+    sort: [{ [sortBy]: { order: order } }],
+    query: {
+      bool: {
+        must: [],
+        filter: [],
+      },
+    },
+  };
+
+  // Add match_value condition to the query
+  if (match_value !== null) {
+    query.query.bool.must.push({
+      terms: { [field_name]: match_value },
+    });
+  }
+
+  // Add element_type condition to the query
+  if (element_type !== null) {
+    query.query.bool.filter.push({
+      terms: { 'resource-type': element_type },
+    });
+  }
+
+  try {
+    if (count_only) {
+      const countResponse = await client.count({
+        index: 'resources_dev',
+        body: { query: query.query },
+      });
+      res.json(countResponse.body.count);
+    } else {
+      const searchResponse = await client.search({
+        index: 'resources_dev',
+        body: query,
+      });
+      const elements = searchResponse.body.hits.hits.map(hit => hit._source);
+      res.json(elements);
+    }
+  } catch (error) {
+    console.error('Error retrieving elements:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 
 
 const PORT = 5001;
@@ -596,6 +1078,6 @@ app.listen(PORT, () => {
 });
 
 https.createServer(options, app).listen(5000, () => {
-    console.log('Server is running on https://backend.i-guide.io:5000');
+  console.log('Server is running on https://backend.i-guide.io:5000');
 });
 

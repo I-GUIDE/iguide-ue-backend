@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>I-GUIDE Knowledge Sharing</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet">
+  <style>
+    .hidden { display: none; }
+    .related-resource { margin-bottom: 10px; }
+    .related-resource-dropdown {
+      position: absolute;
+      z-index: 1000;
+      background-color: #fff;
+      border: 1px solid #ccc;
+      display: none;
+    }
+    .thumbnail-preview {
+      margin-top: 10px;
+      max-width: 200px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>I-GUIDE Knowledge Sharing</h1>
+
+    <!-- Search Form -->
+    <div class="row">
+      <div class="input-field col s6">
+        <label for="searchValues">Search by openid.stub</label>
+        <input type="text" id="searchValues" placeholder="Search by openid.stub (comma-separated)">
+      </div>
+      <div class="input-field col s6">
+        <button class="btn" onclick="searchResources()">Search</button>
+      </div>
+    </div>
+
+    <!-- Search Results Table -->
+    <table id="resultsTable" class="highlight">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Title</th>
+          <th>Type</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <!-- Resource Form -->
+    <form id="resourceForm" class="col s12" novalidate>
+      <div class="input-field col s12">
+        <p>Featured Resource</p>
+        <div class="switch">
+          <label>
+            Off
+            <input type="checkbox" id="featured-switch">
+            <span class="lever"></span>
+            On
+          </label>
+        </div>
+      </div>
+
+      <input type="hidden" id="resourceId" name="resourceId">
+      <div class="input-field col s12">
+        <label for="resource-type">Resource Type</label>
+        <select id="resource-type" name="resource-type" required>
+          <option value="" disabled selected>Choose your option</option>
+          <option value="notebook">Notebook</option>
+          <option value="dataset">Dataset</option>
+          <option value="publication">Publication</option>
+          <option value="oer">Open Educational Resource</option>
+        </select>
+      </div>
+
+      <div class="input-field col s12">
+        <label for="title">Title</label>
+        <input type="text" id="title" name="title" required>
+      </div>
+
+      <div class="input-field col s12">
+        <label for="authors">Authors (comma-separated)</label>
+        <input type="text" id="authors" name="authors" required>
+      </div>
+
+      <div class="input-field col s12">
+        <label for="tags">Tags (comma-separated)</label>
+        <input type="text" id="tags" name="tags" required>
+      </div>
+
+      <div class="input-field col s12">
+        <label for="contents">Contents</label>
+        <textarea id="contents" name="contents" class="materialize-textarea" required></textarea>
+      </div>
+
+      <div id="notebookFields" class="hidden">
+        <div class="input-field col s12">
+          <label for="notebook-repo">Notebook Repo</label>
+          <input type="text" id="notebook-repo" name="notebook-repo">
+        </div>
+
+        <div class="input-field col s12">
+          <label for="notebook-file">Notebook File</label>
+          <input type="text" id="notebook-file" name="notebook-file">
+        </div>
+      </div>
+
+      <div id="datasetFields" class="hidden">
+        <div class="input-field col s12">
+          <label for="external-link">External Link</label>
+          <input type="text" id="external-link" name="external-link">
+        </div>
+
+        <div class="input-field col s12">
+          <label for="direct-download-link">Direct Download Link</label>
+          <input type="text" id="direct-download-link" name="direct-download-link">
+        </div>
+
+        <div class="input-field col s12">
+          <label for="size">Size</label>
+          <input type="text" id="size" name="size">
+        </div>
+      </div>
+
+      <div id="publicationFields" class="hidden">
+        <div class="input-field col s12">
+          <label for="external-link-publication">External Link</label>
+          <input type="text" id="external-link-publication" name="external-link-publication">
+        </div>
+      </div>
+
+      <div id="oerFields" class="hidden">
+        <div class="input-field col s12">
+          <label for="external-link-oer">External Link</label>
+          <input type="text" id="external-link-oer" name="external-link-oer">
+        </div>
+      </div>
+
+      <div class="file-field input-field col s12">
+        <div class="btn">
+          <span>Upload Thumbnail</span>
+          <input type="file" name="thumbnail" id="thumbnail-input" accept="image/*">
+        </div>
+        <div class="file-path-wrapper">
+          <input class="file-path validate" type="text">
+        </div>
+      </div>
+      <img id="thumbnail-preview" class="thumbnail-preview hidden" src="" alt="Thumbnail Preview">
+      <input type="hidden" id="thumbnail-image" name="thumbnail-image">
+
+      <div id="relatedResourcesSection">
+        <h5>Related Resources</h5>
+        <button type="button" id="addRelatedResource" class="btn">+</button>
+        <button type="button" id="removeRelatedResource" class="btn red">-</button>
+      </div>
+
+      <button type="submit" class="btn">Submit</button>
+    </form>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const elems = document.querySelectorAll('select');
+      M.FormSelect.init(elems);
+
+      document.getElementById('resource-type').addEventListener('change', function() {
+        const resourceType = this.value;
+        document.getElementById('notebookFields').classList.add('hidden');
+        document.getElementById('datasetFields').classList.add('hidden');
+        document.getElementById('publicationFields').classList.add('hidden');
+        document.getElementById('oerFields').classList.add('hidden');
+
+        if (resourceType === 'notebook') {
+          document.getElementById('notebookFields').classList.remove('hidden');
+        } else if (resourceType === 'dataset') {
+          document.getElementById('datasetFields').classList.remove('hidden');
+        } else if (resourceType === 'publication') {
+          document.getElementById('publicationFields').classList.remove('hidden');
+        } else if (resourceType === 'oer') {
+          document.getElementById('oerFields').classList.remove('hidden');
+        }
+      });
+
+      document.getElementById('thumbnail-input').addEventListener('change', function() {
+        const fileInput = document.getElementById('thumbnail-input');
+        const file = fileInput.files[0];
+        const preview = document.getElementById('thumbnail-preview');
+
+        if (file) {
+          if (!file.type.startsWith('image/')) {
+            alert('Please select a valid image file.');
+            fileInput.value = '';
+            preview.src = '';
+            preview.classList.add('hidden');
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            preview.src = e.target.result;
+            preview.classList.remove('hidden');
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+
+      document.getElementById('resourceForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const resourceId = document.getElementById('resourceId').value;
+        deleteResource(resourceId);
+
+        const fileInput = document.getElementById('thumbnail-input');
+        const file = fileInput.files[0];
+        let thumbnailUrl = document.getElementById('thumbnail-image').value;
+
+        if (file) {
+          const formData = new FormData();
+          formData.append('file', file);
+
+          const response = await fetch('http://149.165.154.200:5001/api/upload-thumbnail', {
+            method: 'POST',
+            body: formData,
+          });
+
+          const result = await response.json();
+          thumbnailUrl = result.url;
+        }
+
+        const formData = new FormData(e.target);
+        const data = {};
+
+        formData.forEach((value, key) => {
+          if (key === 'authors' || key === 'tags') {
+            data[key] = value.split(',').map(item => item.trim());
+          } else if (key === 'resourceId') {
+            return;
+          } else {
+            data[key] = value;
+          }
+        });
+
+        data['thumbnail-image'] = thumbnailUrl;
+        data.metadata = {
+          created_by: document.getElementById('searchValues').value
+        };
+
+        const relatedResources = [];
+        document.querySelectorAll('.related-resource').forEach(div => {
+          const type = div.querySelector('select[name="related-resource-type"]').value;
+          const title = div.querySelector('input[name="related-resource-title"]').value;
+          relatedResources.push({ type, title });
+        });
+        data['related-resources'] = relatedResources;
+
+        const response = await fetch('http://149.165.154.200:5001/api/resources', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        console.log(result);
+      });
+
+      document.getElementById('addRelatedResource').addEventListener('click', function() {
+        const relatedResourceDiv = document.createElement('div');
+        relatedResourceDiv.classList.add('related-resource', 'input-field', 'col', 's12');
+
+        const resourceTypeSelect = document.createElement('select');
+        resourceTypeSelect.name = 'related-resource-type';
+        resourceTypeSelect.innerHTML = `
+          <option value="notebook">Notebook</option>
+          <option value="dataset">Dataset</option>
+          <option value="publication">Publication</option>
+          <option value="oer">Open Educational Resource</option>
+        `;
+
+        const resourceTypeLabel = document.createElement('label');
+        resourceTypeLabel.innerText = 'Resource Type';
+        relatedResourceDiv.appendChild(resourceTypeLabel);
+
+        const resourceTitleInput = document.createElement('input');
+        resourceTitleInput.type = 'text';
+        resourceTitleInput.name = 'related-resource-title';
+        resourceTitleInput.placeholder = 'Search related resource...';
+
+        const resourceDropdown = document.createElement('div');
+        resourceDropdown.classList.add('related-resource-dropdown');
+
+        relatedResourceDiv.appendChild(resourceTypeSelect);
+        relatedResourceDiv.appendChild(resourceTitleInput);
+        relatedResourceDiv.appendChild(resourceDropdown);
+        document.getElementById('relatedResourcesSection').appendChild(relatedResourceDiv);
+
+        M.FormSelect.init(resourceTypeSelect);
+
+        resourceTitleInput.addEventListener('input', async function() {
+          const keyword = this.value;
+          const resourceType = resourceTypeSelect.value;
+          if (keyword.length > 2) {
+            const response = await fetch('http://149.165.154.200:5001/api/search', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                keyword: keyword,
+                resource_type: resourceType
+              })
+            });
+            const results = await response.json();
+            resourceDropdown.innerHTML = '';
+            results.forEach(result => {
+              const option = document.createElement('div');
+              option.textContent = result.title;
+              option.addEventListener('click', function() {
+                resourceTitleInput.value = result.title;
+                resourceDropdown.style.display = 'none';
+              });
+              resourceDropdown.appendChild(option);
+            });
+            resourceDropdown.style.display = 'block';
+          } else {
+            resourceDropdown.style.display = 'none';
+          }
+        });
+      });
+
+      document.getElementById('removeRelatedResource').addEventListener('click', function() {
+        const relatedResources = document.querySelectorAll('.related-resource');
+        if (relatedResources.length > 0) {
+          const lastRelatedResource = relatedResources[relatedResources.length - 1];
+          lastRelatedResource.remove();
+        }
+      });
+    });
+
+    async function fetchResourcesByField(field, values) {
+  const encodedValues = values.map(value => encodeURIComponent(value)).join(',');
+  const response = await fetch(`http://149.165.154.200:5001/api/resources/${field}/${encodedValues}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch resources');
+  }
+  return response.json();
+}
+
+    function searchResources() {
+      const field = 'metadata.created_by';
+      const values = document.getElementById('searchValues').value.split(',').map(val => val.trim());
+
+      fetchResourcesByField(field, values)
+        .then(data => {
+          const resultsTable = document.getElementById('resultsTable').getElementsByTagName('tbody')[0];
+          resultsTable.innerHTML = ''; // Clear previous results
+          data.forEach(result => {
+            const row = resultsTable.insertRow();
+            const idCell = row.insertCell(0);
+            const titleCell = row.insertCell(1);
+            const typeCell = row.insertCell(2);
+            const actionsCell = row.insertCell(3);
+
+            idCell.innerHTML = result._id;
+            titleCell.innerHTML = result.title;
+            typeCell.innerHTML = result['resource-type'];
+            actionsCell.innerHTML = `<button onclick="editResource('${result._id}')">Edit</button> <button onclick="deleteResource('${result._id}')">Delete</button>`;
+          });
+        })
+        .catch(error => {
+          console.error('No record found:', error);
+        });
+    }
+
+    function deleteResource(resourceId) {
+      fetch(`http://149.165.154.200:5001/api/resources/${resourceId}`, {
+        method: 'DELETE',
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Failed to delete resource');
+        }
+        return response.json();
+      })
+      .then(data => {
+        const rowToDelete = document.querySelector(`#resultsTable tbody tr[data-id="${resourceId}"]`);
+        if (rowToDelete) {
+          rowToDelete.remove();
+        } else {
+          console.warn('Row not found in the table');
+        }
+      })
+      .catch(error => {
+        console.error('Error deleting resource:', error);
+      });
+    }
+
+    function editResource(resourceId) {
+      fetch(`http://149.165.154.200:5001/api/resources/_id/${resourceId}`)
+        .then(response => response.json())
+        .then(data => {
+          const documentToUpdate = data[0];
+          document.getElementById('resourceId').value = documentToUpdate._id;
+          document.getElementById('resource-type').value = documentToUpdate['resource-type'];
+          document.getElementById('featured-switch').checked = documentToUpdate['featured'] || false;
+
+          M.FormSelect.init(document.querySelectorAll('select'));
+
+          document.getElementById('title').value = documentToUpdate.title;
+          document.getElementById('authors').value = documentToUpdate.authors.join(', ');
+          document.getElementById('tags').value = documentToUpdate.tags.join(', ');
+          document.getElementById('contents').value = documentToUpdate.contents;
+          document.getElementById('thumbnail-image').value = documentToUpdate['thumbnail-image'];
+
+          if (documentToUpdate['thumbnail-image']) {
+            const preview = document.getElementById('thumbnail-preview');
+            preview.src = documentToUpdate['thumbnail-image'];
+            preview.classList.remove('hidden');
+          }
+
+          showResourceFields(documentToUpdate['resource-type'], documentToUpdate);
+          fetchRelatedResources(documentToUpdate);
+        })
+        .catch(error => {
+          console.error('Error fetching resource:', error);
+        });
+    }
+
+    function showResourceFields(resourceType, documentToUpdate) {
+      document.getElementById('notebookFields').classList.add('hidden');
+      document.getElementById('datasetFields').classList.add('hidden');
+      document.getElementById('publicationFields').classList.add('hidden');
+      document.getElementById('oerFields').classList.add('hidden');
+
+      if (resourceType === 'notebook') {
+        document.getElementById('notebookFields').classList.remove('hidden');
+        document.getElementById('notebook-repo').value = documentToUpdate['notebook-repo'];
+        document.getElementById('notebook-file').value = documentToUpdate['notebook-file'];
+      } else if (resourceType === 'dataset') {
+        document.getElementById('datasetFields').classList.remove('hidden');
+        document.getElementById('external-link').value = documentToUpdate['external-link'];
+        document.getElementById('direct-download-link').value = documentToUpdate['direct-download-link'];
+        document.getElementById('size').value = documentToUpdate['size'];
+      } else if (resourceType === 'publication') {
+        document.getElementById('publicationFields').classList.remove('hidden');
+        document.getElementById('external-link-publication').value = documentToUpdate['external-link-publication'];
+      } else if (resourceType === 'oer') {
+        document.getElementById('oerFields').classList.remove('hidden');
+        document.getElementById('external-link-oer').value = documentToUpdate['external-link-oer'];
+      }
+    }
+
+    function fetchRelatedResources(documentToUpdate) {
+      const relatedResourceTypes = ['notebook', 'dataset', 'publication', 'oer'];
+
+      relatedResourceTypes.forEach(type => {
+        const relatedIds = documentToUpdate[`related-${type}s`];
+        if (relatedIds && relatedIds.length > 0) {
+          fetchRelatedResourceTitles('_id', relatedIds)
+            .then(relatedTitles => {
+              relatedTitles.forEach(title => {
+                const relatedResourceDiv = document.createElement('div');
+                relatedResourceDiv.classList.add('related-resource', 'input-field', 'col', 's12');
+
+                const resourceTypeSelect = document.createElement('select');
+                resourceTypeSelect.name = 'related-resource-type';
+                const resourceTypes = [
+                  { value: 'notebook', label: 'Notebook' },
+                  { value: 'dataset', label: 'Dataset' },
+                  { value: 'publication', label: 'Publication' },
+                  { value: 'oer', label: 'Open Educational Resource' }
+                ];
+
+                resourceTypes.forEach(option => {
+                  const optionElement = document.createElement('option');
+                  optionElement.value = option.value;
+                  optionElement.textContent = option.label;
+                  if (option.value === type) {
+                    optionElement.setAttribute('selected', 'selected');
+                  }
+                  resourceTypeSelect.appendChild(optionElement);
+                });
+
+                const resourceTypeLabel = document.createElement('label');
+                resourceTypeLabel.innerText = 'Resource Type';
+                relatedResourceDiv.appendChild(resourceTypeLabel);
+
+                const resourceTitleInput = document.createElement('input');
+                resourceTitleInput.type = 'text';
+                resourceTitleInput.name = 'related-resource-title';
+                resourceTitleInput.value = title;
+
+                const resourceDropdown = document.createElement('div');
+                resourceDropdown.classList.add('related-resource-dropdown');
+
+                relatedResourceDiv.appendChild(resourceTypeSelect);
+                relatedResourceDiv.appendChild(resourceTitleInput);
+                relatedResourceDiv.appendChild(resourceDropdown);
+                document.getElementById('relatedResourcesSection').appendChild(relatedResourceDiv);
+
+                M.FormSelect.init(resourceTypeSelect);
+
+                resourceTitleInput.addEventListener('input', async function() {
+                  const keyword = this.value;
+                  const resourceType = resourceTypeSelect.value;
+                  if (keyword.length > 2) {
+                    const response = await fetch('http://149.165.154.200:5001/api/search', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        keyword: keyword,
+                        resource_type: resourceType,
+                      }),
+                    });
+                    const results = await response.json();
+                    resourceDropdown.innerHTML = '';
+                    results.forEach(result => {
+                      const option = document.createElement('div');
+                      option.textContent = result.title;
+                      option.addEventListener('click', function() {
+                        resourceTitleInput.value = result.title;
+                        resourceDropdown.style.display = 'none';
+                      });
+                      resourceDropdown.appendChild(option);
+                    });
+                    resourceDropdown.style.display = 'block';
+                  } else {
+                    resourceDropdown.style.display = 'none';
+                  }
+                });
+              });
+            })
+            .catch(error => {
+              console.error(`Error fetching related ${type}:`, error);
+            });
+        }
+      });
+    }
+
+    function fetchRelatedResourceTitles(type, ids) {
+      const idString = ids.join(',');
+      return fetch(`http://149.165.154.200:5001/api/resources/${type}/${idString}`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Failed to fetch resources of type ${type}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          return data.map(resource => resource.title);
+        })
+        .catch(error => {
+          console.error('Error fetching related resources:', error);
+          return [];
+        });
+    }
+  </script>
+</body>
+</html>
+
