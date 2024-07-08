@@ -22,7 +22,7 @@ async function fetchResourceCountByField(field, values) {
 
 
 // Example usage: retrieve resource count by field and array of values
-fetchResourceCountByField('metadata.created_by', ['http://cilogon.org/serverE/users/201337'])
+fetchResourceCountByField('metadata.created_by', ['http://cilogon.org/serverA/users/11826461'])
   .then(count => console.log(`Count of resources: ${count}`))
   .catch(error => console.error(error));
 

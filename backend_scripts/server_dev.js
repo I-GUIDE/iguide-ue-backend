@@ -1005,6 +1005,70 @@ app.post('/api/searchByCreator', async (req, res) => {
     res.status(500).json({ error: 'Error querying OpenSearch' });
   }
 });
+app.post('/api/elements/retrieve', async (req, res) => {
+  const { field_name, match_value, element_type, sort_by = '_score', order = 'desc', from = '0', size = '10', count_only = false } = req.body;
+
+  // Check if match_value or element_type is an empty array
+  if (Array.isArray(match_value) && match_value.length === 0) {
+    return res.json(count_only ? 0 : []);
+  }
+  if (Array.isArray(element_type) && element_type.length === 0) {
+    return res.json(count_only ? 0 : []);
+  }
+  let sortBy = sort_by;
+  if (sortBy === 'title') {
+    sortBy = 'title.keyword';
+  } else if (sortBy === 'authors') {
+    sortBy = 'authors.keyword';
+  }
+
+  // Build the query
+  const query = {
+    from: parseInt(from, 10),
+    size: parseInt(size, 10),
+    sort: [{ [sortBy]: { order: order } }],
+    query: {
+      bool: {
+        must: [],
+        filter: [],
+      },
+    },
+  };
+
+  // Add match_value condition to the query
+  if (match_value !== null) {
+    query.query.bool.must.push({
+      terms: { [field_name]: match_value },
+    });
+  }
+
+  // Add element_type condition to the query
+  if (element_type !== null) {
+    query.query.bool.filter.push({
+      terms: { 'resource-type': element_type },
+    });
+  }
+
+  try {
+    if (count_only) {
+      const countResponse = await client.count({
+        index: 'resources_dev',
+        body: { query: query.query },
+      });
+      res.json(countResponse.body.count);
+    } else {
+      const searchResponse = await client.search({
+        index: 'resources_dev',
+        body: query,
+      });
+      const elements = searchResponse.body.hits.hits.map(hit => hit._source);
+      res.json(elements);
+    }
+  } catch (error) {
+    console.error('Error retrieving elements:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
 
 
 
