@@ -149,30 +149,55 @@ app.post('/api/update-avatar', uploadAvatar.single('file'), async (req, res) => 
 });
 
 // Function to convert notebook to HTML
+
+async function fetchNotebookContent(url) {
+  const response = await fetch(url);
+  if (response.ok) {
+    return await response.text();
+  }
+  throw new Error('Failed to fetch the notebook');
+}
 async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
-  const notebookUrl = `${githubRepo}/raw/main/${notebookPath}`;
   const notebookName = path.basename(notebookPath, '.ipynb');
   const timestamp = Date.now();
   const htmlOutputPath = path.join(outputDir, `${timestamp}-${notebookName}.html`);
-  
-  const response = await fetch(notebookUrl);
-  if (!response.ok) {
-    throw new Error('Failed to fetch the notebook from GitHub');
+  const branches = ['main', 'master'];
+
+  let notebookContent;
+
+  for (const branch of branches) {
+    try {
+      const notebookUrl = `${githubRepo}/raw/${branch}/${notebookPath}`;
+      notebookContent = await fetchNotebookContent(notebookUrl);
+      break;
+    } catch (error) {
+      console.log(`Failed to fetch from ${branch} branch. Trying next branch...`);
+    }
   }
 
-  const notebookContent = await response.text();
+  if (!notebookContent) {
+    console.log('Failed to fetch the notebook from both main and master branches');
+    return null;
+  }
+
   const notebookFilePath = path.join(outputDir, `${timestamp}-${notebookName}.ipynb`);
   fs.writeFileSync(notebookFilePath, notebookContent);
 
-  return new Promise((resolve, reject) => {
-    exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${htmlOutputPath}"`, (error, stdout, stderr) => {
-      if (error) {
-        reject(`Error converting notebook: ${stderr}`);
-      } else {
-        resolve(htmlOutputPath);
-      }
+  try {
+    await new Promise((resolve, reject) => {
+      exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${htmlOutputPath}"`, (error, stdout, stderr) => {
+        if (error) {
+          reject(`Error converting notebook: ${stderr}`);
+        } else {
+          resolve();
+        }
+      });
     });
-  });
+    return htmlOutputPath;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
 }
 
 // Endpoint to fetch documents by resource-type
@@ -284,7 +309,12 @@ app.post('/api/search', async (req, res) => {
   let query = {
     multi_match: {
       query: keyword,
-      fields: ['title', 'authors', 'contents', 'tags'],
+      fields: [
+        'title^3',    // Boost title matches
+        'authors^3',  // Boost author matches
+        'tags^2',     // Slightly boost tag matches
+        'contents'    // Normal weight for content matches
+      ],
     },
   };
 
@@ -292,7 +322,17 @@ app.post('/api/search', async (req, res) => {
     query = {
       bool: {
         must: [
-          { multi_match: { query: keyword, fields: ['title', 'authors', 'contents', 'tags'] } },
+          {
+            multi_match: {
+              query: keyword,
+              fields: [
+                'title^3',
+                'authors^3',
+                'tags^2',
+                'contents'
+              ],
+            },
+          },
           { term: { 'resource-type': resource_type } },
         ],
       },
@@ -308,21 +348,27 @@ app.post('/api/search', async (req, res) => {
   }
 
   try {
-    const searchResponse = await client.search({
+    const searchParams = {
       index: 'resources_dev',
       body: {
         from: from,
         size: size,
         query: query,
-        sort: [
-          {
-            [sortBy]: {
-              order: order,
-            },
-          },
-        ],
       },
-    });
+    };
+
+    // Add sorting unless sort_by is "prioritize_title_author"
+    if (sort_by !== 'prioritize_title_author') {
+      searchParams.body.sort = [
+        {
+          [sortBy]: {
+            order: order,
+          },
+        },
+      ];
+    }
+
+    const searchResponse = await client.search(searchParams);
     const results = searchResponse.body.hits.hits.map(hit => {
       const { _id, _source } = hit;
       const { metadata, ...rest } = _source; // Remove metadata
@@ -334,6 +380,8 @@ app.post('/api/search', async (req, res) => {
     res.status(500).json({ error: 'Error querying OpenSearch' });
   }
 });
+
+
 
 // Endpoint to get the count of documents by resource-type or search keywords
 app.post('/api/resource-count', async (req, res) => {
@@ -479,10 +527,12 @@ app.put('/api/resources', async (req, res) => {
   const resource = req.body;
 
   try {
-    /*if (resource['resource-type'] === 'notebook' && resource['notebook-repo'] && resource['notebook-file']) {
+    if (resource['resource-type'] === 'notebook' && resource['notebook-repo'] && resource['notebook-file']) {
       const htmlNotebookPath = await convertNotebookToHtml(resource['notebook-repo'], resource['notebook-file'], notebookHtmlDir);
-      resource['html-notebook'] = `https://backend.i-guide.io:5000/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
-    }*/
+      if (htmlNotebookPath) {
+        resource['html-notebook'] = `https://backend.i-guide.io:5000/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+      }
+    }
 
     // Retrieve and update related document IDs
     const relatedNotebooks = [];
@@ -720,6 +770,33 @@ app.get('/api/resources/:field/:values', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+//Return the number of hits by field and id
+app.get('/api/resources/count/:field/:values', async (req, res) => {
+  const { field, values } = req.params;
+  const valueArray = values.split(',').map(value => decodeURIComponent(value)); // Decompose to handle openid as URL
+
+  try {
+    // Count request to get the number of hits
+    const countResponse = await client.count({
+      index: 'resources_dev',
+      body: {
+        query: {
+          terms: {
+            [field]: valueArray,
+          },
+        },
+      },
+    });
+
+    const count = countResponse.body.count;
+
+    res.json({ count });
+  } catch (error) {
+    console.error('Error querying OpenSearch:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 
 
 /*
@@ -810,6 +887,7 @@ app.get('/api/check_users/:openid', async (req, res) => {
 // Endpoint to add a new user document
 app.post('/api/users', async (req, res) => {
   const user = req.body;
+  console.log(user);
 
   try {
     const response = await client.index({
@@ -880,6 +958,55 @@ app.get('/api/retrieve-title', async (req, res) => {
     res.status(500).json({ error: 'Failed to retrieve title' });
   }
 });
+
+app.post('/api/searchByCreator', async (req, res) => {
+  const { openid, sort_by = '_score', order = 'desc', from = 0, size = 15 } = req.body;
+
+  if (!openid) {
+    return res.status(400).json({ error: 'openid is required' });
+  }
+
+  let query = {
+    term: { 'metadata.created_by': openid },
+  };
+
+  // Replace title and authors with their keyword sub-fields for sorting
+  let sortBy = sort_by;
+  if (sortBy === 'title') {
+    sortBy = 'title.keyword';
+  } else if (sortBy === 'authors') {
+    sortBy = 'authors.keyword';
+  }
+
+  try {
+    const searchResponse = await client.search({
+      index: 'resources_dev',
+      body: {
+        from: from,
+        size: size,
+        query: query,
+        sort: [
+          {
+            [sortBy]: {
+              order: order,
+            },
+          },
+        ],
+      },
+    });
+    const results = searchResponse.body.hits.hits.map(hit => {
+      const { _id, _source } = hit;
+      const { metadata, ...rest } = _source; // Remove metadata
+      return { _id, ...rest };
+    });
+    res.json(results);
+  } catch (error) {
+    console.error('Error querying OpenSearch:', error);
+    res.status(500).json({ error: 'Error querying OpenSearch' });
+  }
+});
+
+
 
 const PORT = 5001;
 app.listen(PORT, () => {

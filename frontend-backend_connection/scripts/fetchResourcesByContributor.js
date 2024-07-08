@@ -35,7 +35,7 @@ async function fetchResourcesByContributor(openid, sortBy = '_score', order = 'd
 }
 
 // Example usage: retrieve resources created by a specific contributor
-fetchResourcesByContributor('http://cilogon.org/serverA/users/3310164', 'title', 'asc', 0, 4)
+fetchResourcesByContributor('http%3A%2F%2Fcilogon.org%2FserverE%2Fusers%2F201338', 'title', 'asc', 0, 4)
   .then(data => console.log(data))
   .catch(error => console.error(error));
 
