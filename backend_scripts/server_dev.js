@@ -665,7 +665,7 @@ app.delete('/api/resources/:id', async (req, res) => {
         }
       }
 
-      // Delete the thumbnail image file if it exists (Reneable when "update" is in place)
+      // Delete the thumbnail image file if it exists (Re-enable when "update" is in place)
       /*
       if (existingDoc._source['thumbnail-image']) {
         const thumbnailPath = path.join(process.env.UPLOAD_FOLDER, existingDoc._source['thumbnail-image'].replace('https://backend.i-guide.io:5000/user-uploads/', ''));
@@ -679,12 +679,31 @@ app.delete('/api/resources/:id', async (req, res) => {
     }
 
     // Delete the resource
-    const response = await client.delete({
+    await client.delete({
       index: os_index,
       id: resourceId
     });
 
-    res.status(200).json(response);
+    // Force a refresh
+    await client.indices.refresh({ index: os_index });
+
+    // Verify deletion
+    const { body: searchResults } = await client.search({
+      index: os_index,
+      body: {
+        query: {
+          term: {
+            _id: resourceId
+          }
+        }
+      }
+    });
+
+    if (searchResults.hits.total.value === 0) {
+      res.status(200).json({ message: 'Resource deleted successfully' });
+    } else {
+      res.status(500).json({ error: 'Resource still exists after deletion' });
+    }
   } catch (error) {
     console.error('Error deleting resource:', error.message);
     res.status(500).json({ error: error.message });
