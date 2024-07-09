@@ -1,4 +1,4 @@
-<img src="[public/images/Logo.png](https://github.com/I-GUIDE/iguide-ue-frontend/blob/master/public/images/Logo.png)" alt="I-GUIDE Logo" width="40%"/>
+<img src="[https://github.com/I-GUIDE/iguide-ue-frontend/blob/master/public/images/Logo.png]" alt="I-GUIDE Logo" width="40%"/>
 
 # I-GUIDE User Experience Backend
 
