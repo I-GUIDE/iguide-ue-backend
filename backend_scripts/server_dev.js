@@ -21,6 +21,7 @@ dotenv.config();
 const os_node = process.env.OPENSEARCH_NODE;
 const os_usr = process.env.OPENSEARCH_USERNAME;
 const os_pswd = process.env.OPENSEARCH_PASSWORD;
+const os_index = process.env.OPENSEARCH_INDEX;
 
 const options = {
     key: fs.readFileSync(process.env.SSL_KEY),
@@ -217,7 +218,7 @@ app.get('/api/resources', async (req, res) => {
 
   try {
     const resourceResponse = await client.search({
-      index: 'resources_dev',
+      index: os_index,
       body: {
         from: from,
         size: size,
@@ -268,7 +269,7 @@ app.get('/api/featured-resources', async (req, res) => {
 
   try {
     const featuredResponse = await client.search({
-      index: 'resources_dev',
+      index: os_index,
       body: {
         from: from,
         size: size,
@@ -349,7 +350,7 @@ app.post('/api/search', async (req, res) => {
 
   try {
     const searchParams = {
-      index: 'resources_dev',
+      index: os_index,
       body: {
         from: from,
         size: size,
@@ -416,7 +417,7 @@ app.post('/api/resource-count', async (req, res) => {
 
   try {
     const response = await client.count({
-      index: 'resources_dev',
+      index: os_index,
       body: {
         query: query
       }
@@ -503,7 +504,7 @@ app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => 
 const updateRelatedDocuments = async (resourceId, relatedIds, relatedField) => {
   for (const relatedId of relatedIds) {
     const { body: existingDoc } = await client.get({
-      index: 'resources_dev',
+      index: os_index,
       id: relatedId
     });
 
@@ -514,7 +515,7 @@ const updateRelatedDocuments = async (resourceId, relatedIds, relatedField) => {
       }
 
       await client.index({
-        index: 'resources_dev',
+        index: os_index,
         id: relatedId,
         body: existingDoc._source
       });
@@ -544,7 +545,7 @@ app.put('/api/resources', async (req, res) => {
       const { type, title } = relatedResource;
 
       const { body } = await client.search({
-        index: 'resources_dev',
+        index: os_index,
         body: {
           query: {
             bool: {
@@ -579,7 +580,7 @@ app.put('/api/resources', async (req, res) => {
 
     // Index the new resource
     const response = await client.index({
-      index: 'resources_dev',
+      index: os_index,
       body: resource
     });
 
@@ -587,7 +588,7 @@ app.put('/api/resources', async (req, res) => {
       const { type, title } = relatedResource;
 
       const { body } = await client.search({
-        index: 'resources_dev',
+        index: os_index,
         body: {
           query: {
             bool: {
@@ -619,7 +620,7 @@ app.delete('/api/resources/:id', async (req, res) => {
 
   try {
     const { body: existingDoc } = await client.get({
-      index: 'resources_dev',
+      index: os_index,
       id: resourceId
     });
 
@@ -633,7 +634,7 @@ app.delete('/api/resources/:id', async (req, res) => {
       const relatedIds = [...relatedNotebooks, ...relatedDatasets, ...relatedPublications, ...relatedOers];
       for (const relatedId of relatedIds) {
         const { body: relatedDoc } = await client.get({
-          index: 'resources_dev',
+          index: os_index,
           id: relatedId
         });
 
@@ -646,7 +647,7 @@ app.delete('/api/resources/:id', async (req, res) => {
           }
 
           await client.index({
-            index: 'resources_dev',
+            index: os_index,
             id: relatedId,
             body: relatedDoc._source
           });
@@ -664,7 +665,7 @@ app.delete('/api/resources/:id', async (req, res) => {
         }
       }
 
-      // Delete the thumbnail image file if it exists (Reneable when "update" is in place)
+      // Delete the thumbnail image file if it exists (Re-enable when "update" is in place)
       /*
       if (existingDoc._source['thumbnail-image']) {
         const thumbnailPath = path.join(process.env.UPLOAD_FOLDER, existingDoc._source['thumbnail-image'].replace('https://backend.i-guide.io:5000/user-uploads/', ''));
@@ -678,12 +679,31 @@ app.delete('/api/resources/:id', async (req, res) => {
     }
 
     // Delete the resource
-    const response = await client.delete({
-      index: 'resources_dev',
+    await client.delete({
+      index: os_index,
       id: resourceId
     });
 
-    res.status(200).json(response);
+    // Force a refresh
+    await client.indices.refresh({ index: os_index });
+
+    // Verify deletion
+    const { body: searchResults } = await client.search({
+      index: os_index,
+      body: {
+        query: {
+          term: {
+            _id: resourceId
+          }
+        }
+      }
+    });
+
+    if (searchResults.hits.total.value === 0) {
+      res.status(200).json({ message: 'Resource deleted successfully' });
+    } else {
+      res.status(500).json({ error: 'Resource still exists after deletion' });
+    }
   } catch (error) {
     console.error('Error deleting resource:', error.message);
     res.status(500).json({ error: error.message });
@@ -699,7 +719,7 @@ app.get('/api/resources/:field/:values', async (req, res) => {
   try {
     // Initial search request to initialize the scroll context
     const initialResponse = await client.search({
-      index: 'resources_dev',
+      index: os_index,
       scroll: '1m', // Set the scroll timeout
       body: {
         query: {
@@ -778,7 +798,7 @@ app.get('/api/resources/count/:field/:values', async (req, res) => {
   try {
     // Count request to get the number of hits
     const countResponse = await client.count({
-      index: 'resources_dev',
+      index: os_index,
       body: {
         query: {
           terms: {
@@ -805,7 +825,7 @@ app.get('/api/resources_contains/:field/:value', async (req, res) => {
   const { field, value } = req.params;
   try {
     const resourceResponse = await client.search({
-      index: 'resources_dev', // Replace with your index name
+      index: os_index, // Replace with your index name
       body: {
         query: {
           match: {
@@ -980,7 +1000,7 @@ app.post('/api/searchByCreator', async (req, res) => {
 
   try {
     const searchResponse = await client.search({
-      index: 'resources_dev',
+      index: os_index,
       body: {
         from: from,
         size: size,
@@ -1052,13 +1072,13 @@ app.post('/api/elements/retrieve', async (req, res) => {
   try {
     if (count_only) {
       const countResponse = await client.count({
-        index: 'resources_dev',
+        index: os_index,
         body: { query: query.query },
       });
       res.json(countResponse.body.count);
     } else {
       const searchResponse = await client.search({
-        index: 'resources_dev',
+        index: os_index,
         body: query,
       });
       const elements = searchResponse.body.hits.hits.map(hit => hit._source);
