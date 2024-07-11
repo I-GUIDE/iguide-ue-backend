@@ -11,7 +11,7 @@ import fetch from 'node-fetch'
  */
 async function fetchResourcesByField(field, values) {
   const encodedValues = values.map(value => encodeURIComponent(value)).join(',');
-  const response = await fetch(`http://149.165.154.200:5001/api/resources/${field}/${encodedValues}`);
+  const response = await fetch(`https://backend-dev.i-guide.io:5000/api/resources/${field}/${encodedValues}`);
   if (!response.ok) {
     throw new Error('Failed to fetch resources');
   }
@@ -19,7 +19,7 @@ async function fetchResourcesByField(field, values) {
 }
 
 // Example usage: retrieve resources by field and array of values
-fetchResourcesByField('metadata.created_by', ['http://cilogon.org/serverE/users/201337'])
+fetchResourcesByField('id', ['nb1'])
   .then(resources => console.log(resources))
   .catch(error => console.error(error));
   

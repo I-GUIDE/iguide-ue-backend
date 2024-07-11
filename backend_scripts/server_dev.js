@@ -574,10 +574,10 @@ app.put('/api/resources', async (req, res) => {
       }
     }
 
-    resource['related-notebooks'] = relatedNotebooks;
-    resource['related-datasets'] = relatedDatasets;
-    resource['related-publications'] = relatedPublications;
-    resource['related-oers'] = relatedOERs;
+    resource['related-notebooks'] = [...new Set(relatedNotebooks)];
+    resource['related-datasets'] = [...new Set(relatedDatasets)];
+    resource['related-publications'] = [...new Set(relatedPublications)];
+    resource['related-oers'] = [...new Set(relatedOERs)];
 
     // Remove temporary related-resources field
     delete resource['related-resources'];
@@ -633,28 +633,36 @@ app.delete('/api/resources/:id', async (req, res) => {
       const relatedNotebooks = existingDoc._source['related-notebooks'] || [];
       const relatedDatasets = existingDoc._source['related-datasets'] || [];
       const relatedPublications = existingDoc._source['related-publications'] || [];
-      const relatedOers = existingDoc._source['related-oers'] || [];
+      const relatedOERs = existingDoc._source['related-oers'] || [];
 
-      const relatedIds = [...relatedNotebooks, ...relatedDatasets, ...relatedPublications, ...relatedOers];
+      const relatedIds = [...new Set([...relatedNotebooks, ...relatedDatasets, ...relatedPublications, ...relatedOERs])];
       for (const relatedId of relatedIds) {
-        const { body: relatedDoc } = await client.get({
-          index: os_index,
-          id: relatedId
-        });
-
-        if (relatedDoc._source) {
-          const relatedField = `related-${existingDoc._source['resource-type']}s`;
-          relatedDoc._source[relatedField] = relatedDoc._source[relatedField] || [];
-          const index = relatedDoc._source[relatedField].indexOf(resourceId);
-          if (index > -1) {
-            relatedDoc._source[relatedField].splice(index, 1);
-          }
-
-          await client.index({
+        try {
+          const { body: relatedDoc } = await client.get({
             index: os_index,
-            id: relatedId,
-            body: relatedDoc._source
+            id: relatedId
           });
+
+          if (relatedDoc._source) {
+            const relatedField = `related-${existingDoc._source['resource-type']}s`;
+            relatedDoc._source[relatedField] = relatedDoc._source[relatedField] || [];
+            const index = relatedDoc._source[relatedField].indexOf(resourceId);
+            if (index > -1) {
+              relatedDoc._source[relatedField].splice(index, 1);
+            }
+
+            await client.index({
+              index: os_index,
+              id: relatedId,
+              body: relatedDoc._source
+            });
+          }
+        } catch (relatedError) {
+          if (relatedError.meta.statusCode === 404) {
+            console.log(`Related document with ID ${relatedId} not found.`);
+          } else {
+            throw relatedError;
+          }
         }
       }
 
@@ -713,6 +721,7 @@ app.delete('/api/resources/:id', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Endpoint to retrieve resources by field and values for exact match
 
@@ -1102,6 +1111,6 @@ app.listen(PORT, () => {
 });
 
 https.createServer(options, app).listen(5000, () => {
-  console.log('Server is running on https://backend.i-guide.io:5000');
+  console.log('HTTPS server is running on 5000');
 });
 
