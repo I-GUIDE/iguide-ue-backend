@@ -83,7 +83,7 @@ app.post('/api/upload-avatar', uploadAvatar.single('file'), (req, res) => {
     return res.status(400).json({ message: 'No file uploaded' });
   }
 
-  const filePath = `https://backend.i-guide.io:5000/user-uploads/avatars/${req.file.filename}`;
+  const filePath = `https://${process.env.DOMAIN}:5000/user-uploads/avatars/${req.file.filename}`;
   res.json({
     message: 'Avatar uploaded successfully',
     url: filePath,
@@ -127,7 +127,7 @@ app.post('/api/update-avatar', uploadAvatar.single('file'), async (req, res) => 
     }
 
     // Update the user's avatar URL with the new file URL
-    const newAvatarUrl = `https://backend.i-guide.io:5000/user-uploads/avatars/${newAvatarFile.filename}`;
+    const newAvatarUrl = `https://${process.env.DOMAIN}:5000/user-uploads/avatars/${newAvatarFile.filename}`;
     user.avatar_url = newAvatarUrl;
 
     // Update the user document in OpenSearch
@@ -493,7 +493,7 @@ app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => 
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
   }
-  const filePath = `https://backend.i-guide.io:5000/user-uploads/thumbnails/${req.file.filename}`;
+  const filePath = `https://${process.env.DOMAIN}.io:5000/user-uploads/thumbnails/${req.file.filename}`;
   res.json({
     message: 'Thumbnail uploaded successfully',
     url: filePath,
@@ -531,7 +531,7 @@ app.put('/api/resources', async (req, res) => {
     if (resource['resource-type'] === 'notebook' && resource['notebook-repo'] && resource['notebook-file']) {
       const htmlNotebookPath = await convertNotebookToHtml(resource['notebook-repo'], resource['notebook-file'], notebookHtmlDir);
       if (htmlNotebookPath) {
-        resource['html-notebook'] = `https://backend.i-guide.io:5000/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+        resource['html-notebook'] = `https://${process.env.DOMAIN}:5000/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
       }
     }
 
@@ -668,7 +668,7 @@ app.delete('/api/resources/:id', async (req, res) => {
 
       // Delete the HTML notebook file if it exists
       if (existingDoc._source['html-notebook']) {
-        const notebookPath = path.join(process.env.UPLOAD_FOLDER, existingDoc._source['html-notebook'].replace('https://backend.i-guide.io:5000/user-uploads/', ''));
+        const notebookPath = path.join(process.env.UPLOAD_FOLDER, existingDoc._source['html-notebook'].replace(`https://${process.env.DOMAIN}:5000/user-uploads/`, ''));
         if (fs.existsSync(notebookPath)) {
           fs.unlinkSync(notebookPath);
           console.log(`Deleted notebook file: ${notebookPath}`);
@@ -1095,7 +1095,7 @@ app.post('/api/elements/retrieve', async (req, res) => {
         body: query,
       });
       const elements = searchResponse.body.hits.hits.map(hit => hit._source);
-      res.json(elements);
+  res.json(elements);
     }
   } catch (error) {
     console.error('Error retrieving elements:', error);
