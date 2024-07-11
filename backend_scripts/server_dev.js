@@ -539,6 +539,7 @@ app.put('/api/resources', async (req, res) => {
     const relatedNotebooks = [];
     const relatedDatasets = [];
     const relatedPublications = [];
+    const relatedOERs = [];
 
     const relatedResources = resource['related-resources'] || [];
     for (const relatedResource of relatedResources) {
@@ -567,13 +568,16 @@ app.put('/api/resources', async (req, res) => {
           relatedDatasets.push(relatedId);
         } else if (type === 'publication') {
           relatedPublications.push(relatedId);
-        }
+        } else if (type === 'oer') {
+          relatedOERs.push(relatedId);
+         }
       }
     }
 
     resource['related-notebooks'] = relatedNotebooks;
     resource['related-datasets'] = relatedDatasets;
     resource['related-publications'] = relatedPublications;
+    resource['related-oers'] = relatedOERs;
 
     // Remove temporary related-resources field
     delete resource['related-resources'];

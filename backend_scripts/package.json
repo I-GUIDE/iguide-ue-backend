@@ -16,6 +16,7 @@
     "@opensearch-project/opensearch": "^2.9.0",
     "aws-sdk": "^2.1640.0",
     "axios": "^1.7.2",
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
