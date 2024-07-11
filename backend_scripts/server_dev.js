@@ -493,7 +493,7 @@ app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => 
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
   }
-  const filePath = `https://${process.env.DOMAIN}.io:5000/user-uploads/thumbnails/${req.file.filename}`;
+  const filePath = `https://${process.env.DOMAIN}:5000/user-uploads/thumbnails/${req.file.filename}`;
   res.json({
     message: 'Thumbnail uploaded successfully',
     url: filePath,
@@ -1103,7 +1103,7 @@ app.post('/api/elements/retrieve', async (req, res) => {
   }
 });
 
-
+console.log(`${process.env.SERV_TAG} server is up`);
 
 const PORT = 5001;
 app.listen(PORT, () => {
