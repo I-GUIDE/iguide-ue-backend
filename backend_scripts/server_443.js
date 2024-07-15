@@ -1105,11 +1105,11 @@ app.post('/api/elements/retrieve', async (req, res) => {
 
 console.log(`${process.env.SERV_TAG} server is up`);
 
-const PORT = 5001;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+
+https.createServer(options, app).listen(443, () => {
+  console.log('HTTPS server is running on 443');
+});
+https.createServer(options, app).listen(8443, () => {
+  console.log('HTTPS server is running on 8443');
 });
 
-https.createServer(options, app).listen(5000, () => {
-  console.log('HTTPS server is running on 5000');
-});
