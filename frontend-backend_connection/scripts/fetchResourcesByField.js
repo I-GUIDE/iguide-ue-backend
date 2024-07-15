@@ -18,10 +18,14 @@ async function fetchResourcesByField(field, values) {
   return response.json();
 }
 
+let ids = ['nb1', 'nb2', 'nb3'];
 // Example usage: retrieve resources by field and array of values
-fetchResourcesByField('id', ['nb1'])
-  .then(resources => console.log(resources))
-  .catch(error => console.error(error));
+for(let i = 0; i < ids.length; i++){
+	fetchResourcesByField('id', [ids[i]])
+	  .then(resources => console.log(resources))
+	  .catch(error => console.error(error));
+}
+
   
 //console.log(fetchResourcesByField('metadata.created_by', ['http://cilogon.org/serverE/users/201337']));
 

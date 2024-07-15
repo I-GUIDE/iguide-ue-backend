@@ -252,6 +252,62 @@ app.get('/api/resources', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+// Endpoint to fetch all titles of a given type of elements
+app.get('/api/elements/titles', async (req, res) => {
+  const elementType = req.query.element_type;
+  const scrollTimeout = '1m'; // Scroll timeout
+
+  if (!elementType) {
+    res.status(400).json({ message: 'element_type query parameter is required' });
+    return;
+  }
+
+  try {
+    // Initial search request with scrolling
+    const initialSearchResponse = await client.search({
+      index: os_index,
+      scroll: scrollTimeout,
+      body: {
+        size: 100, // Number of results to fetch per scroll request
+        query: {
+          term: {
+            'resource-type': elementType,
+          },
+        },
+        _source: ['title'], // Only fetch the title field
+      },
+    });
+
+    let scrollId = initialSearchResponse.body._scroll_id;
+    let allTitles = initialSearchResponse.body.hits.hits.map(hit => hit._source.title);
+
+    // Function to handle scrolling
+    const fetchAllTitles = async (scrollId) => {
+      while (true) {
+        const scrollResponse = await client.scroll({
+          scroll_id: scrollId,
+          scroll: scrollTimeout,
+        });
+
+        const hits = scrollResponse.body.hits.hits;
+        if (hits.length === 0) {
+          break; // Exit loop when no more results are returned
+        }
+
+        allTitles = allTitles.concat(hits.map(hit => hit._source.title));
+        scrollId = scrollResponse.body._scroll_id; // Update scrollId for the next scroll request
+      }
+      return allTitles;
+    };
+
+    const titles = await fetchAllTitles(scrollId);
+
+    res.json(titles);
+  } catch (error) {
+    console.error('Error querying OpenSearch:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
 
 // Endpoint to fetch all featured documents
 app.get('/api/featured-resources', async (req, res) => {
