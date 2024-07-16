@@ -17,8 +17,8 @@ COPY . .
 EXPOSE 5000
 
 # Define environment variable
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 
 # Run the application when the container launches
-CMD ["node", "server.js"]
+CMD ["node", "server_dev.js"]
 
