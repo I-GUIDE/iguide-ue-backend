@@ -12,7 +12,9 @@ This directory contains scripts, settings and initial data to setup graph databa
 3. neo4j dashboard shoud be accessible at `http://localhost:7474/`
 4. Another container `node` will also be running. Launch the container using `docker exec -it node sh`. Run following commands inside the container 
     - `node server_os_2_neo4j.test.js` (This will load sample data into neo4j with all elements and relations)
-    - Confirm data is in neo4j by logging in to the neo4j dashbboard and running `MATCH(n) RETURN n` query
+    - Confirm data is in neo4j by logging in to the neo4j dashbboard and running `MATCH(n) RETURN n` query. The sample data has 24 Contributors, 12 Notebooks, 8 Datasets, 1 Publication, 1 Open Education Resource (OER) and 57 relations i.e. 35 RELATED (e.g. Dataset RELATED Notebook etc.) and 22 CONTRIBUTED (e.g. Contributor CONTRIBUTED Dataset).
+
+![Sample Graph](./images/sample-graph.png "Sample Graph")
 
 <!---
 5. [Deprecared] Copy commands from `scripts/batch_insert_csv.cypher` to dashboard console to insert data
