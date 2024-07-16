@@ -2,11 +2,22 @@
 This directory contains scripts, settings and initial data to setup graph database (neo4j) backend for the I-GUIDE UX
 
 ## Getting Started
-1. `cd docker && sh docker_run.sh`
-2. neo4j dashboard shoud be accessible at `http://localhost:7474/`
-3. Copy commands from `scripts/batch_insert_csv.cypher` to dashboard console to insert data
-4. Copy commands from `scripts/relations.cypher` (one by one) to dashboard console to create connections
+1. Update `docker/config.env`
+    - `NEO4J_PASSWORD`: Default password for working with Neo4j DB and dashboard
+    - `NEO4J_DATA_DIR`: Local directory path to persist neo4j data
+    - `NEO4J_IMPORT_DIR`: Local directory path mapped to container volume from where neo4j can import data
+    - `NODE_CODE_DIR`: Path for code files. Should point to `backend_scripts` directory
+    - `config.env` includes other optional configurations as well
+2. `cd docker && sh run.sh`
+3. neo4j dashboard shoud be accessible at `http://localhost:7474/`
+4. Another container `node` will also be running. Launch the container using `docker exec -it node sh`. Run following commands inside the container 
+    - `node server_os_2_neo4j.test.js` (This will load sample data into neo4j with all elements and relations)
+    - Confirm data is in neo4j by logging in to the neo4j dashbboard and running `MATCH(n) RETURN n` query
 
+<!---
+5. [Deprecared] Copy commands from `scripts/batch_insert_csv.cypher` to dashboard console to insert data
+6. Copy commands from `scripts/relations.cypher` (one by one) to dashboard console to create connections
+-->
 
 ## Work in Progress
 - [ ] Connect neo4j to OpenSearch

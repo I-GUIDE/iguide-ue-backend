@@ -1,0 +1,295 @@
+[
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/201337",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/201337",
+            "first_name": "First",
+            "last_name": "Last",
+            "email": "email@e.m",
+            "affiliation": "Affiliation",
+            "bio": "Bio",
+            "avatar_url": "https://backend.i-guide.io:5000/user-uploads/avatars/1720025091017-pb1.png"
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "12",
+        "_score": 1,
+        "_source": {
+            "openid": "12",
+            "first_name": "Erick",
+            "last_name": "Li",
+            "email": "zhiyuan5@illinois.edu",
+            "affiliation": "",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http%3A%2F%2Fcilogon.org%2FserverE%2Fusers%2F201338",
+        "_score": 1,
+        "_source": {
+            "openid": "http%3A%2F%2Fcilogon.org%2FserverE%2Fusers%2F201338",
+            "first_name": "Erick",
+            "last_name": "Li",
+            "email": "zhiyuan5@illinois.edu",
+            "affiliation": "",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "123456789",
+        "_score": 1,
+        "_source": {
+            "openid": "123456789",
+            "first_name": "Erick",
+            "last_name": "Li",
+            "email": "zhiyuan5@illinois.edu",
+            "affiliation": "",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverA/users/33101641",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverA/users/33101641",
+            "email": "michels9@illinois.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverB/users/47466092",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverB/users/47466092",
+            "email": "shaowen@illinois.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverA/users/809101",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverA/users/809101",
+            "email": "zhiyuan5@illinois.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverA/users/10128",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverA/users/10128",
+            "email": "apadmana@illinois.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverA/users/11826461",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverA/users/11826461",
+            "email": "rcv3@illinois.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverB/users/39382202",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverB/users/39382202",
+            "email": "nj7@illinois.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/137206",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/137206",
+            "email": "yfkang@illinois.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/201338",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/201338",
+            "email": null,
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/204631",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/204631",
+            "email": "alexandercm4297@gmail.com",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/204636",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/204636",
+            "email": "km2505@columbia.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/204623",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/204623",
+            "email": "wseefel@clemson.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/204626",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/204626",
+            "email": "MHASINOFF@WISC.EDU",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/177985",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/177985",
+            "email": "fbowlick@umass.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/8927",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/8927",
+            "email": "weih9@illinois.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/26909",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/26909",
+            "email": "yi.qi@usc.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/204637",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/204637",
+            "email": null,
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/204622",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/204622",
+            "email": null,
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/204630",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/204630",
+            "email": null,
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/204625",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/204625",
+            "email": "dbvanber@umich.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/204621",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/204621",
+            "email": null,
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/204627",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/204627",
+            "email": "antonio.medrano@tamucc.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/204634",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/204634",
+            "email": "sjost044@umn.edu",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/204664",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/204664",
+            "email": "chariotkang@gmail.com",
+            "bio": ""
+        }
+    },
+    {
+        "_index": "users",
+        "_id": "http://cilogon.org/serverE/users/164360",
+        "_score": 1,
+        "_source": {
+            "openid": "http://cilogon.org/serverE/users/164360",
+            "email": "kvavramu@umn.edu",
+            "bio": ""
+        }
+    }
+]
