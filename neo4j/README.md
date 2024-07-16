@@ -27,12 +27,13 @@ This directory contains scripts, settings and initial data to setup graph databa
 
 ## Directory Structure
 - `data`: Contains initial data to populate the database.
-- `docker`: Docker scripts to setup and launch a `neo4j` container. Please make sure to modify following in `docker_run.sh`
+- `docker`: Docker scripts to setup and launch a `neo4j` container. Please make sure to modify configurations `config.env` as mentioned above
+<!---
   - `LOCAL_DATA_PATH`: To persist database upon restarts
   - `LOCAL_IMPORT_PATH`: Should point to `data` directory containing initial data to batch load into the database
   - `LOCAL_CONF_PATH`: To modify neo4j configurations
-
-- `scripts`
+-->
+- [**Deprecated**] `scripts`
   - `batch_insert_csv.cypher`: To load data into database. Can be copied directly to neo4j web console
   - `insert.cypher`: Individual queries corresponding to various tasks
   - `relations.cypher`: To create relations among data inserted
