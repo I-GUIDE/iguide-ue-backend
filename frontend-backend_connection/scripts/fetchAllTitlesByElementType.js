@@ -1,24 +1,29 @@
 import fetch from 'node-fetch';
 
 /**
- * Fetches all titles of elements of a specified type from the backend.
- *
+ * Fetches the featured documents from the backend API.
+ * 
  * @async
- * @function fetchAllTitlesByElementType
- * @param {string} elementType - The type of resources to fetch titles for.
- * @returns {Promise<Array<string>>} A promise that resolves to an array of all titles.
- * @throws {Error} Throws an error if the fetch operation fails.
+ * @function fetchFeaturedDocuments
+ * @returns {Promise<Object[]>} A promise that resolves to an array of featured documents.
+ * @throws {Error} If there is an error fetching the data.
  */
-async function fetchAllTitlesByElementType(elementType) {
-  const response = await fetch(`http://149.165.154.200:5001/api/elements/titles?element_type=${elementType}`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch titles');
-  }
-  return response.json();
+async function fetchFeaturedDocuments() {
+    const response = await fetch(`https://backend.i-guide.io:5000/api/featured-resources`);
+    if (!response.ok) {
+        throw new Error(`Error fetching featured documents: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return data;
 }
 
-// Example usage: retrieve all notebook titles
-fetchAllTitlesByElementType('dataset')
-  .then(titles => console.log(titles))
-  .catch(error => console.error(error));
-
+/**
+ * Calls fetchFeaturedDocuments and handles the response or any errors.
+ */
+fetchFeaturedDocuments()
+  .then(response => {
+    console.log('Featured Documents:', response);
+  })
+  .catch(error => {
+    console.error('Error fetching featured documents:', error);
+  });
