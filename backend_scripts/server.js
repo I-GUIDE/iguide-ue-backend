@@ -12,6 +12,8 @@ import multerS3 from 'multer-s3';
 import https from 'https';
 import http from 'http';
 import axios from 'axios';
+import swaggerUi from'swagger-ui-express';
+import { specs } from './swagger.js';
 
 const app = express();
 app.use(cors());
@@ -24,8 +26,8 @@ const os_pswd = process.env.OPENSEARCH_PASSWORD;
 const os_index = process.env.OPENSEARCH_INDEX;
 
 const options = {
-    key: fs.readFileSync(process.env.SSL_KEY),
-    cert: fs.readFileSync(process.env.SSL_CERT)
+  key: fs.readFileSync(process.env.SSL_KEY),
+  cert: fs.readFileSync(process.env.SSL_CERT)
 };
 
 const client = new Client({
@@ -77,7 +79,24 @@ const avatarStorage = multer.diskStorage({
 });
 const uploadAvatar = multer({ storage: avatarStorage });
 
-// Upload avatar
+/**
+ * @swagger
+ * /api/upload-avatar:
+ *   post:
+ *     summary: Upload an avatar image for the user profile
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: formData
+ *         name: file
+ *         type: file
+ *         description: The avatar file to upload
+ *     responses:
+ *       200:
+ *         description: Avatar uploaded successfully
+ *       400:
+ *         description: No file uploaded
+ */
 app.post('/api/upload-avatar', uploadAvatar.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
@@ -90,7 +109,38 @@ app.post('/api/upload-avatar', uploadAvatar.single('file'), (req, res) => {
   });
 });
 
-// Update avatar
+/**
+ * @swagger
+ * /api/update-avatar:
+ *   post:
+ *     summary: Update the user's avatar
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: formData
+ *         name: file
+ *         type: file
+ *         description: The new avatar file to upload
+ *       - in: body
+ *         name: openid
+ *         description: The OpenID of the user
+ *         schema:
+ *           type: object
+ *           required:
+ *             - openid
+ *           properties:
+ *             openid:
+ *               type: string
+ *     responses:
+ *       200:
+ *         description: Avatar updated successfully
+ *       400:
+ *         description: OpenID and new avatar file are required
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
 app.post('/api/update-avatar', uploadAvatar.single('file'), async (req, res) => {
   try {
     const { openid } = req.body;
@@ -201,7 +251,51 @@ async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
   }
 }
 
-// Endpoint to fetch documents by resource-type
+/**
+ * @swagger
+ * /api/resources:
+ *   get:
+ *     summary: Fetch documents by resource type
+ *     parameters:
+ *       - in: query
+ *         name: data_name
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The type of resource to fetch
+ *       - in: query
+ *         name: sort_by
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: The field to sort by
+ *       - in: query
+ *         name: order
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *         description: The sort order
+ *       - in: query
+ *         name: from
+ *         required: false
+ *         schema:
+ *           type: integer
+ *         description: The starting index of the results
+ *       - in: query
+ *         name: size
+ *         required: false
+ *         schema:
+ *           type: integer
+ *         description: The number of results to fetch
+ *     responses:
+ *       200:
+ *         description: A list of resources
+ *       404:
+ *         description: No resource found
+ *       500:
+ *         description: Internal server error
+ */
 app.get('/api/resources', async (req, res) => {
   const type = req.query.data_name;
   let sortBy = req.query.sort_by || '_score'; // Default to '_score' for relevance sorting
@@ -253,7 +347,121 @@ app.get('/api/resources', async (req, res) => {
   }
 });
 
-// Endpoint to fetch all featured documents
+/**
+ * @swagger
+ * /api/elements/titles:
+ *   get:
+ *     summary: Fetch all titles of a given type of elements
+ *     parameters:
+ *       - in: query
+ *         name: element_type
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The type of element to fetch titles for
+ *     responses:
+ *       200:
+ *         description: A list of titles
+ *       400:
+ *         description: element_type query parameter is required
+ *       500:
+ *         description: Internal server error
+ */
+app.get('/api/elements/titles', async (req, res) => {
+  const elementType = req.query.element_type;
+  const scrollTimeout = '1m'; // Scroll timeout
+
+  if (!elementType) {
+    res.status(400).json({ message: 'element_type query parameter is required' });
+    return;
+  }
+
+  try {
+    // Initial search request with scrolling
+    const initialSearchResponse = await client.search({
+      index: os_index,
+      scroll: scrollTimeout,
+      body: {
+        size: 100, // Number of results to fetch per scroll request
+        query: {
+          term: {
+            'resource-type': elementType,
+          },
+        },
+        _source: ['title'], // Only fetch the title field
+      },
+    });
+
+    let scrollId = initialSearchResponse.body._scroll_id;
+    let allTitles = initialSearchResponse.body.hits.hits.map(hit => hit._source.title);
+
+    // Function to handle scrolling
+    const fetchAllTitles = async (scrollId) => {
+      while (true) {
+        const scrollResponse = await client.scroll({
+          scroll_id: scrollId,
+          scroll: scrollTimeout,
+        });
+
+        const hits = scrollResponse.body.hits.hits;
+        if (hits.length === 0) {
+          break; // Exit loop when no more results are returned
+        }
+
+        allTitles = allTitles.concat(hits.map(hit => hit._source.title));
+        scrollId = scrollResponse.body._scroll_id; // Update scrollId for the next scroll request
+      }
+      return allTitles;
+    };
+
+    const titles = await fetchAllTitles(scrollId);
+
+    res.json(titles);
+  } catch (error) {
+    console.error('Error querying OpenSearch:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/featured-resources:
+ *   get:
+ *     summary: Fetch all featured documents
+ *     parameters:
+ *       - in: query
+ *         name: sort_by
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: The field to sort by
+ *       - in: query
+ *         name: order
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *         description: The sort order
+ *       - in: query
+ *         name: from
+ *         required: false
+ *         schema:
+ *           type: integer
+ *         description: The starting index of the results
+ *       - in: query
+ *         name: size
+ *         required: false
+ *         schema:
+ *           type: integer
+ *         description: The number of results to fetch
+ *     responses:
+ *       200:
+ *         description: A list of featured resources
+ *       404:
+ *         description: No featured resource found
+ *       500:
+ *         description: Internal server error
+ */
 app.get('/api/featured-resources', async (req, res) => {
   let sortBy = req.query.sort_by || '_score';
   const order = req.query.order || 'desc';
@@ -304,6 +512,37 @@ app.get('/api/featured-resources', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/search:
+ *   post:
+ *     summary: Search for resources
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               keyword:
+ *                 type: string
+ *               resource_type:
+ *                 type: string
+ *               sort_by:
+ *                 type: string
+ *               order:
+ *                 type: string
+ *                 enum: [asc, desc]
+ *               from:
+ *                 type: integer
+ *               size:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: A list of search results
+ *       500:
+ *         description: Error querying OpenSearch
+ */
 app.post('/api/search', async (req, res) => {
   const { keyword, resource_type, sort_by = '_score', order = 'desc', from = 0, size = 15 } = req.body;
 
@@ -383,8 +622,30 @@ app.post('/api/search', async (req, res) => {
 });
 
 
-
-// Endpoint to get the count of documents by resource-type or search keywords
+/**
+ * @swagger
+ * /api/resource-count:
+ *   post:
+ *     summary: Get the count of documents by resource-type or search keywords
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               resourceType:
+ *                 type: string
+ *               keywords:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: The count of documents
+ *       400:
+ *         description: Either resourceType or keywords are required
+ *       500:
+ *         description: Internal server error
+ */
 app.post('/api/resource-count', async (req, res) => {
   const { resourceType, keywords } = req.body;
 
@@ -460,6 +721,24 @@ const upload = multer({
   }
 });
 
+/**
+ * @swagger
+ * /api/upload-dataset:
+ *   post:
+ *     summary: Upload a dataset (CSV or ZIP)
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: formData
+ *         name: file
+ *         type: file
+ *         description: The dataset file to upload
+ *     responses:
+ *       200:
+ *         description: Dataset uploaded successfully
+ *       400:
+ *         description: No file uploaded or invalid file type (.csv or .zip)
+ */
 app.post('/api/upload-dataset', upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({
@@ -488,7 +767,24 @@ app.use((err, req, res, next) => {
   next();
 });
 
-// Upload thumbnail
+/**
+ * @swagger
+ * /api/upload-thumbnail:
+ *   post:
+ *     summary: Upload a thumbnail image
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: formData
+ *         name: file
+ *         type: file
+ *         description: The thumbnail file to upload
+ *     responses:
+ *       200:
+ *         description: Thumbnail uploaded successfully
+ *       400:
+ *         description: No file uploaded
+ */
 app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
@@ -523,7 +819,39 @@ const updateRelatedDocuments = async (resourceId, relatedIds, relatedField) => {
   }
 };
 
-// Endpoint to register a resource
+/**
+ * @swagger
+ * /api/resources:
+ *   put:
+ *     summary: Register a resource
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               resource-type:
+ *                 type: string
+ *               notebook-repo:
+ *                 type: string
+ *               notebook-file:
+ *                 type: string
+ *               related-resources:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     type:
+ *                       type: string
+ *                     title:
+ *                       type: string
+ *     responses:
+ *       200:
+ *         description: Resource registered successfully
+ *       500:
+ *         description: Internal server error
+ */
 app.put('/api/resources', async (req, res) => {
   const resource = req.body;
 
@@ -618,7 +946,23 @@ app.put('/api/resources', async (req, res) => {
   }
 });
 
-// Endpoint to delete a resource by ID
+/**
+ * @swagger
+ * /api/resources/{id}:
+ *   delete:
+ *     summary: Delete a resource by ID
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Resource deleted successfully
+ *       500:
+ *         description: Internal server error
+ */
 app.delete('/api/resources/:id', async (req, res) => {
   const resourceId = req.params.id;
 
@@ -723,8 +1067,32 @@ app.delete('/api/resources/:id', async (req, res) => {
 });
 
 
-// Endpoint to retrieve resources by field and values for exact match
-
+/**
+ * @swagger
+ * /api/resources/{field}/{values}:
+ *   get:
+ *     summary: Retrieve resources by field and values for exact match
+ *     parameters:
+ *       - in: path
+ *         name: field
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The field to match
+ *       - in: path
+ *         name: values
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The values to match (comma-separated)
+ *     responses:
+ *       200:
+ *         description: A list of resources
+ *       404:
+ *         description: No resources found
+ *       500:
+ *         description: Internal server error
+ */
 app.get('/api/resources/:field/:values', async (req, res) => {
   const { field, values } = req.params;
   const valueArray = values.split(',').map(value => decodeURIComponent(value)); //Decompose to handle openid as url
@@ -803,7 +1171,31 @@ app.get('/api/resources/:field/:values', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-//Return the number of hits by field and id
+
+/**
+ * @swagger
+ * /api/resources/count/{field}/{values}:
+ *   get:
+ *     summary: Return the number of hits by field and id
+ *     parameters:
+ *       - in: path
+ *         name: field
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The field to match
+ *       - in: path
+ *         name: values
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The values to match (comma-separated)
+ *     responses:
+ *       200:
+ *         description: The number of hits
+ *       500:
+ *         description: Internal server error
+ */
 app.get('/api/resources/count/:field/:values', async (req, res) => {
   const { field, values } = req.params;
   const valueArray = values.split(',').map(value => decodeURIComponent(value)); // Decompose to handle openid as URL
@@ -831,37 +1223,26 @@ app.get('/api/resources/count/:field/:values', async (req, res) => {
 });
 
 
-
-/*
-// Endpoint to fetch resources by field and value. If the field contains the value.
-app.get('/api/resources_contains/:field/:value', async (req, res) => {
-  const { field, value } = req.params;
-  try {
-    const resourceResponse = await client.search({
-      index: os_index, // Replace with your index name
-      body: {
-        query: {
-          match: {
-            [field]: value,
-          },
-        },
-      },
-    });
-
-    const resources = resourceResponse.body.hits.hits.map(hit => {
-      const { _id, _source } = hit;
-      const { metadata, ...rest } = _source; // Remove metadata
-      return { _id, ...rest };
-    });
-
-    res.json(resources);
-  } catch (error) {
-    console.error('Error querying OpenSearch:', error);
-    res.status(500).json({ message: 'Failed to fetch resources' });
-  }
-});*/
-
-// Endpoint to return the user document given the openid
+/**
+ * @swagger
+ * /api/users/{openid}:
+ *   get:
+ *     summary: Return the user document given the openid
+ *     parameters:
+ *       - in: path
+ *         name: openid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The OpenID of the user
+ *     responses:
+ *       200:
+ *         description: The user document
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Error fetching the user
+ */
 app.get('/api/users/:openid', async (req, res) => {
   const openid = decodeURIComponent(req.params.openid);
 
@@ -888,6 +1269,25 @@ app.get('/api/users/:openid', async (req, res) => {
     res.status(500).json({ message: 'Error fetching the user' });
   }
 });
+
+/**
+ * @swagger
+ * /api/check_users/{openid}:
+ *   get:
+ *     summary: Check if a user exists given the openid
+ *     parameters:
+ *       - in: path
+ *         name: openid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The OpenID of the user
+ *     responses:
+ *       200:
+ *         description: True if user exists, false otherwise
+ *       500:
+ *         description: Error checking the user
+ */
 app.get('/api/check_users/:openid', async (req, res) => {
   const openid = decodeURIComponent(req.params.openid);
 
@@ -914,10 +1314,30 @@ app.get('/api/check_users/:openid', async (req, res) => {
   }
 });
 
-
-
-
-// Endpoint to add a new user document
+/**
+ * @swagger
+ * /api/users:
+ *   post:
+ *     summary: Add a new user document
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               openid:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: User added successfully
+ *       500:
+ *         description: Internal server error
+ */
 app.post('/api/users', async (req, res) => {
   const user = req.body;
   console.log(user);
@@ -937,7 +1357,30 @@ app.post('/api/users', async (req, res) => {
 });
 
 
-// Endpoint to update the user document
+/**
+ * @swagger
+ * /api/users/{openid}:
+ *   put:
+ *     summary: Update the user document
+ *     parameters:
+ *       - in: path
+ *         name: openid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The OpenID of the user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: User updated successfully
+ *       500:
+ *         description: Internal server error
+ */
 app.put('/api/users/:openid', async (req, res) => {
   const openid = decodeURIComponent(req.params.openid);
   const updates = req.body;
@@ -959,7 +1402,24 @@ app.put('/api/users/:openid', async (req, res) => {
 });
 
 
-// Endpoint to delete the user document
+/**
+ * @swagger
+ * /api/users/{openid}:
+ *   delete:
+ *     summary: Delete the user document
+ *     parameters:
+ *       - in: path
+ *         name: openid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The OpenID of the user
+ *     responses:
+ *       200:
+ *         description: User deleted successfully
+ *       500:
+ *         description: Internal server error
+ */
 app.delete('/api/users/:openid', async (req, res) => {
   const openid = decodeURIComponent(req.params.openid);
 
@@ -975,7 +1435,27 @@ app.delete('/api/users/:openid', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-//Retrieve the title of the url
+
+/**
+ * @swagger
+ * /api/retrieve-title:
+ *   get:
+ *     summary: Retrieve the title of a URL
+ *     parameters:
+ *       - in: query
+ *         name: url
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The URL to retrieve the title from
+ *     responses:
+ *       200:
+ *         description: The title of the URL
+ *       404:
+ *         description: Title not found
+ *       500:
+ *         description: Failed to retrieve title
+ */
 app.get('/api/retrieve-title', async (req, res) => {
   const url = req.query.url;
   try {
@@ -987,11 +1467,42 @@ app.get('/api/retrieve-title', async (req, res) => {
       res.status(404).json({ error: 'Title not found' });
     }
   } catch (error) {
-  	console.log(error);
+    console.log(error);
     res.status(500).json({ error: 'Failed to retrieve title' });
   }
 });
 
+/**
+ * @swagger
+ * /api/searchByCreator:
+ *   post:
+ *     summary: Search for resources by creator
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               openid:
+ *                 type: string
+ *               sort_by:
+ *                 type: string
+ *               order:
+ *                 type: string
+ *                 enum: [asc, desc]
+ *               from:
+ *                 type: integer
+ *               size:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: A list of search results
+ *       400:
+ *         description: openid is required
+ *       500:
+ *         description: Error querying OpenSearch
+ */
 app.post('/api/searchByCreator', async (req, res) => {
   const { openid, sort_by = '_score', order = 'desc', from = 0, size = 15 } = req.body;
 
@@ -1038,6 +1549,46 @@ app.post('/api/searchByCreator', async (req, res) => {
     res.status(500).json({ error: 'Error querying OpenSearch' });
   }
 });
+
+/**
+ * @swagger
+ * /api/elements/retrieve:
+ *   post:
+ *     summary: Retrieve elements by field and value
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               field_name:
+ *                 type: string
+ *               match_value:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               element_type:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               sort_by:
+ *                 type: string
+ *               order:
+ *                 type: string
+ *                 enum: [asc, desc]
+ *               from:
+ *                 type: integer
+ *               size:
+ *                 type: integer
+ *               count_only:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: A list of elements or count of elements
+ *       500:
+ *         description: Internal server error
+ */
 app.post('/api/elements/retrieve', async (req, res) => {
   const { field_name, match_value, element_type, sort_by = '_score', order = 'desc', from = '0', size = '10', count_only = false } = req.body;
 
@@ -1095,7 +1646,7 @@ app.post('/api/elements/retrieve', async (req, res) => {
         body: query,
       });
       const elements = searchResponse.body.hits.hits.map(hit => hit._source);
-  res.json(elements);
+      res.json(elements);
     }
   } catch (error) {
     console.error('Error retrieving elements:', error);
@@ -1113,3 +1664,7 @@ app.listen(PORT, () => {
 https.createServer(options, app).listen(5000, () => {
   console.log('HTTPS server is running on 5000');
 });
+
+// Serve Swagger docs
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+

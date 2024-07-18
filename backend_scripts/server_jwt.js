@@ -124,6 +124,11 @@ app.post('/api/refresh-token', async (req, res) => {
   });
 });
 
+const generateAccessToken = (user) => {
+    return jwt.sign(user, process.env.JWT_ACCESS_TOKEN_SECRET, { expiresIn: '1m' });
+};
+
+
 // Other existing routes and logic...
 
 const PORT = 4001;

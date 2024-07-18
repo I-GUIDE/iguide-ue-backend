@@ -14,16 +14,20 @@ import http from 'http';
 import axios from 'axios';
 import swaggerUi from'swagger-ui-express';
 import { specs } from './swagger.js';
+import jwt from 'jsonwebtoken';
+import cookieParser from 'cookie-parser';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
 dotenv.config();
 
 const os_node = process.env.OPENSEARCH_NODE;
 const os_usr = process.env.OPENSEARCH_USERNAME;
 const os_pswd = process.env.OPENSEARCH_PASSWORD;
 const os_index = process.env.OPENSEARCH_INDEX;
+const user_index = process.env.USER_INDEX;
 
 const options = {
   key: fs.readFileSync(process.env.SSL_KEY),
@@ -52,6 +56,45 @@ fs.mkdirSync(notebookHtmlDir, { recursive: true });
 app.use('/user-uploads/thumbnails', express.static(thumbnailDir));
 app.use('/user-uploads/notebook_html', express.static(notebookHtmlDir));
 app.use('/user-uploads/avatars', express.static(avatarDir));
+
+// Middleware to verify JWT token
+const authenticateJWT = (req, res, next) => {
+  const token = req.cookies.jwt;
+
+  if (token) {
+    jwt.verify(token, process.env.JWT_ACCESS_TOKEN_SECRET, (err, user) => {
+      if (err) {
+        return res.sendStatus(403);
+      }
+
+      req.user = user;
+      next();
+    });
+  } else {
+    res.sendStatus(401);
+  }
+};
+
+// Middleware to check if the user has the required role
+const authorizeRole = (role) => (req, res, next) => {
+  if (req.user && req.user.role === role) {
+    next();
+  } else {
+    res.status(403).json({ message: 'Forbidden' });
+  }
+};
+
+// Store refresh token in OpenSearch
+const storeRefreshToken = async (token, user_id) => {
+  await client.index({
+    index: 'refresh_tokens',
+    body: {
+      token,
+      user_id,
+      created_at: new Date()
+    }
+  });
+};
 
 // Configure storage for thumbnails
 const thumbnailStorage = multer.diskStorage({
@@ -152,7 +195,7 @@ app.post('/api/update-avatar', uploadAvatar.single('file'), async (req, res) => 
 
     // Fetch user by openid from OpenSearch
     const { body: searchResponse } = await client.search({
-      index: 'users',
+      index: user_index,
       body: {
         query: {
           match: { openid }
@@ -182,7 +225,7 @@ app.post('/api/update-avatar', uploadAvatar.single('file'), async (req, res) => 
 
     // Update the user document in OpenSearch
     await client.update({
-      index: 'users',
+      index: user_index,
       id: userId,
       body: {
         doc: { avatar_url: newAvatarUrl }
@@ -963,6 +1006,7 @@ app.put('/api/resources', async (req, res) => {
  *       500:
  *         description: Internal server error
  */
+//app.delete('/api/resources/:id', authenticateJWT, async (req, res) => {
 app.delete('/api/resources/:id', async (req, res) => {
   const resourceId = req.params.id;
 
@@ -1248,7 +1292,7 @@ app.get('/api/users/:openid', async (req, res) => {
 
   try {
     const response = await client.search({
-      index: 'users',
+      index: user_index,
       body: {
         query: {
           term: {
@@ -1293,7 +1337,7 @@ app.get('/api/check_users/:openid', async (req, res) => {
 
   try {
     const response = await client.search({
-      index: 'users',
+      index: user_index,
       body: {
         query: {
           term: {
@@ -1344,7 +1388,7 @@ app.post('/api/users', async (req, res) => {
 
   try {
     const response = await client.index({
-      index: 'users',
+      index: user_index,
       id: user.openid,
       body: user
     });
@@ -1387,7 +1431,7 @@ app.put('/api/users/:openid', async (req, res) => {
 
   try {
     const response = await client.update({
-      index: 'users',
+      index: user_index,
       id: openid,
       body: {
         doc: updates
@@ -1425,7 +1469,7 @@ app.delete('/api/users/:openid', async (req, res) => {
 
   try {
     const response = await client.delete({
-      index: 'users',
+      index: user_index,
       id: openid
     });
 
@@ -1652,6 +1696,54 @@ app.post('/api/elements/retrieve', async (req, res) => {
     console.error('Error retrieving elements:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
+});
+
+// Endpoint to refresh token
+app.post('/api/refresh-token', async (req, res) => {
+  const refreshToken = req.cookies.refreshToken;
+
+  if (!refreshToken) {
+    return res.sendStatus(401);
+  }
+
+  // Verify the refresh token exists in OpenSearch
+  const { body } = await client.search({
+    index: 'refresh_tokens',
+    body: {
+      query: {
+        term: { token: refreshToken }
+      }
+    }
+  });
+
+  if (body.hits.total.value === 0) {
+    return res.sendStatus(403);
+  }
+
+  jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_SECRET, (err, user) => {
+    if (err) {
+      return res.sendStatus(403);
+    }
+
+    const newAccessToken = generateAccessToken({ id: user.id, role: user.role });
+    res.cookie('jwt', newAccessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+
+    res.json({ accessToken: newAccessToken });
+  });
+});
+
+const generateAccessToken = (user) => {
+    return jwt.sign(user, process.env.JWT_ACCESS_TOKEN_SECRET, { expiresIn: '1m' });
+};
+
+// Toy endpoint that requires JWT authentication
+app.get('/api/toy-auth', authenticateJWT, (req, res) => {
+  res.json({ message: 'You are authenticated!', user: req.user });
+});
+
+// Toy endpoint that requires admin role
+app.get('/api/toy-admin', authenticateJWT, authorizeRole('admin'), (req, res) => {
+  res.json({ message: 'You are an admin!', user: req.user });
 });
 
 console.log(`${process.env.SERV_TAG} server is up`);
