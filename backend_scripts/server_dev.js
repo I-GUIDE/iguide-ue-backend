@@ -1346,7 +1346,8 @@ app.post('/api/users', async (req, res) => {
     const response = await client.index({
       index: 'users',
       id: user.openid,
-      body: user
+      body: user,
+      refresh: true
     });
 
     res.status(201).json({ message: 'User added successfully', id: response.body._id });
@@ -1391,7 +1392,8 @@ app.put('/api/users/:openid', async (req, res) => {
       id: openid,
       body: {
         doc: updates
-      }
+      },
+      refresh: true
     });
 
     res.json({ message: 'User updated successfully', result: response.body.result });
