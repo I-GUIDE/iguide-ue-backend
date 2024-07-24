@@ -1,3 +1,4 @@
+import axios from 'axios';
 /**
  * Fetches metadata for a given DOI from the CrossRef API.
  * 
@@ -26,7 +27,7 @@ async function getMetadataByDOI(doi) {
 }
 
 // The NumPy DOI
-const doi = '10.1038/s41586-020-2649-2';
+const doi = '10.13012/B2IDB-9405860_V1';
 
 (async () => {
   try {

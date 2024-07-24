@@ -20,7 +20,7 @@ async function fetchResourcesByField(field, values) {
 
 let ids = ['nb1', 'nb2', 'nb3'];
 // Example usage: retrieve resources by field and array of values
-fetchResourcesByField('id', [ids])
+fetchResourcesByField('tags', ['chicago'])
   .then(resources => console.log(resources))
   .catch(error => console.error(error));
 
