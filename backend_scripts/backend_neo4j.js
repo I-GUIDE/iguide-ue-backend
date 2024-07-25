@@ -152,26 +152,31 @@ async function getElementByID(id){
 	ret['related-oers'] = []
 	ret['related-publications'] = []
 
+	// [ToDo] Current frontend expects only IDs for every related element and
+	// makes a call to get title of every related element. Should be changed
+	// A better approach will be to return ID, title, and type of all related elements
+	//as a result of this one query.
+	// [ToDo] Change `ret_elem.id`
 	for (elem of related_elements){
 	    switch(elem['element_type']){
 	    case ElementType.DATASET:{
 		let {element_type:_, ...ret_elem} = elem;
-		ret['related-datasets'].push(ret_elem);
+		ret['related-datasets'].push(ret_elem['id']);
 		break;
 	    }
 	    case ElementType.NOTEBOOK:{
 		let {element_type:_, ...ret_elem} = elem;
-		ret['related-notebooks'].push(ret_elem);
+		ret['related-notebooks'].push(ret_elem['id']);
 		break;
 	    }
 	    case ElementType.OER:{
 		let {element_type:_, ...ret_elem} = elem;
-		ret['related-oers'].push(ret_elem);
+		ret['related-oers'].push(ret_elem['id']);
 		break;
 	    }
 	    case ElementType.PUBLICATION:{
 		let {element_type:_, ...ret_elem} = elem;
-		ret['related-publications'].push(ret_elem);
+		ret['related-publications'].push(ret_elem['id']);
 		break;
 	    }
 	    case "Author":{
@@ -179,16 +184,36 @@ async function getElementByID(id){
 		break;
 	    }
 	    default:
-		throw Error("Server Neo4j: Related element type not implemented");
+		throw Error("Server Neo4j: Related element type not implemented: " +
+			    elem['element_type']);
 		break;
 	    }
 	}
 
 	// [ToDo] should be removed
+	ret['_id'] = ret['id']
+	delete ret['id'];
+	ret['resource-type'] = ret['element_type'].toLowerCase();
+	delete ret['element_type'];
 	ret['thumbnail-image'] = ret['thumbnail_image'];
 	delete ret['thumbnail_image'];
-	ret['direct-download-link'] = ret['direct_download_link'];
-	delete ret['direct_download_link'];
+
+	if ('direct_download_link' in ret){
+	    ret['direct-download-link'] = ret['direct_download_link'];
+	    delete ret['direct_download_link'];
+	}
+	if ('external_link' in ret){
+	    ret['external-link'] = ret['external_link'];
+	    delete ret['external_link'];
+	}
+	if ('notebook_file' in ret){
+	    ret['notebook-file'] = ret['notebook_file'];
+	    delete ret['notebook_file'];
+	}
+	if ('notebook_repo' in ret) {
+	    ret['notebook-repo'] = ret['notebook_repo'];
+	    delete ret['notebook_repo'];
+	}
 
 	return ret;
 	//return records[0]['_fields'][0];
@@ -221,7 +246,7 @@ async function getElementsByType(type, from, size){
 
     // [ToDo] Just to make things work with frontend (should be removed)
     const query_str = "MATCH (n:"+ node_type +")-[:CONTRIBUTED]-(r) " +
-	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)] }" +
+	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)] } " +
 	  "ORDER BY n.title " +
 	  "SKIP $from " +
 	  "LIMIT $size";
@@ -237,7 +262,10 @@ async function getElementsByType(type, from, size){
 	}
 	var ret = []
 	for (record of records){
-	    ret.push(record['_fields'][0])
+	    //ret.push(record['_fields'][0]);
+	    element = record['_fields'][0];
+	    element['resource-type'] = element['resource-type'].toLowerCase();
+	    ret.push(element);
 	}
 	return ret;
     } catch(err){console.log('Error in query: '+ err);}
@@ -263,13 +291,72 @@ async function getElementsCountByType(type){
 	throw Error("Server Neo4j: Element type not implemented");
     }
 
-    // Just to make things work with frontend (should be removed)
     const query_str = "MATCH (n:"+ node_type +") " +
 	  "RETURN COUNT(n)";
-
     try{
 	const {records, summary} =
 	      await driver.executeQuery(query_str, {database: process.env.NEO4J_DB});
+	if (records.length <= 0){
+	    // Error running query
+	    return -1;
+	}
+	var ret = records[0]['_fields'][0]['low'];
+	return ret;
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return -1;
+}
+/**
+ * Get elements by contributor
+ * @param {string} openid ID of the contributor
+ * @param {int}    from For pagintion, get elements from this number
+ * @param {int}    size For pagintion, get this number of elements
+ * @return {Object} Map of object with given ID. Empty map if ID not found or error
+ */
+async function getElementsByContributor(openid, from, size){
+    // [ToDo]
+    const query_str = "MATCH (c:Contributor{openid:$openid})-[:CONTRIBUTED]-(r) " +
+	  "RETURN {_id:r.id, tags: r.tags, title:r.title, `resource-type`:LABELS(r)[0], `thumbnail-image`:r.thumbnail_image, contents:r.contents, authors: r.authors} " +
+	  "ORDER BY r.title " +
+	  "SKIP $from " +
+	  "LIMIT $size";
+
+    try{
+	const {records, summary} =
+	      await driver.executeQuery(query_str,
+					{openid: openid,
+					 from: neo4j.int(from),
+					 size: neo4j.int(size)},
+					{database: process.env.NEO4J_DB});
+	if (records.length <= 0){
+	    // No elements found by contributor
+	    return [];
+	}
+	var ret = []
+	for (record of records){
+	    //ret.push(record['_fields'][0]);
+	    element = record['_fields'][0];
+	    element['resource-type'] = element['resource-type'].toLowerCase();
+	    ret.push(element);
+	}
+	return ret;
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return [];
+}
+/**
+ * Get elements count by contributor
+ * @param {string} openid ID of the contributor
+ * @return {int} Count
+ */
+async function getElementsCountByContributor(openid){
+    const query_str = "MATCH (c:Contributor{openid:$openid})-[:CONTRIBUTED]-(r) " +
+	  "RETURN COUNT(r)";
+    try{
+	const {records, summary} =
+	      await driver.executeQuery(query_str,
+					{openid: openid},
+					{database: process.env.NEO4J_DB});
 	if (records.length <= 0){
 	    // Error running query
 	    return -1;
@@ -305,7 +392,9 @@ async function getFeaturedElements(){
 	}
 	var ret = []
 	for (record of records){
-	    ret.push(record['_fields'][0])
+	    element = record['_fields'][0];
+	    element['resource-type'] = element['resource-type'].toLowerCase();
+	    ret.push(element);
 	}
 	return ret;
     } catch(err){console.log('Error in query: '+ err);}
@@ -351,47 +440,160 @@ async function registerContributor(contributor){
 	      await driver.executeQuery(query_str,
 					{contr_param: contributor},
 					{database: process.env.NEO4J_DB});
-
-	//console.log(summary.counters.updates());
 	if (summary.counters.updates()['nodesCreated'] == 1){
-	    // (3) remove non-searchable properties and insert to OpenSearch
-	    // [ToDo]
 	    return true;
 	}
     } catch(err){console.log('Error in query: '+ err);}
     // something went wrong
     return false;
+}
+/**
+ * Update existing contributor
+ * @param {string} openid Contributor id
+ * @param {Object} contributor Map with new contributor attributes (refer to schema)
+ * @return {Boolean} true for successful registration. false otherwise or in case of error
+ */
+async function updateContributor(openid, contributor_attributes){
+    const query_match = "MATCH (c:Contributor{openid:$openid}) ";
+    var query_set = "";
+    var query_params = {openid: openid};
 
+    let i=0;
+    for (const [key, value] of Object.entries(contributor_attributes)) {
+	query_set += "SET c." + key + "=$attr" + i + " ";
+	query_params['attr' + i] = value;
+	i+=1;
+    }
+
+    const query_str = query_match + query_set;
+    try{
+	const {_, summary} =
+	      await driver.executeQuery(query_str,
+					query_params,
+					{database: process.env.NEO4J_DB});
+	if (summary.counters.updates()['propertiesSet'] >= 1){
+	    return true;
+	}
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return false;
 }
 /**
  * Get contributor by OpenID with all related content
  * @param {string} id
+ * @param {string} avatar_url
+ * @return {Boolean} True if avatar set successfully. False if contributor not found
+ */
+async function setContributorAvatar(openid, avatar_url){
+
+    const session = driver.session({database: process.env.NEO4J_DB});
+    const tx = await session.beginTransaction();
+
+    var old_url = "";
+    var ret = false;
+    try {
+	// get exising avatar url
+	let query_str = "MATCH (c:Contributor{openid:$openid}) " +
+	    "RETURN c.avatar_url";
+	let {records, summ} = await tx.run(query_str,
+			      {openid: openid},
+			      {database: process.env.NEO4J_DB});
+	if (records.length > 0){
+	    old_url = records[0]['_fields'][0];
+	}
+
+	// update new avatar url
+	query_str = "MATCH (c:Contributor{openid:$openid}) " +
+	    "SET c.avatar_url=$avatar_url";
+	let {_, summary} = await tx.run(query_str,
+				    {openid: openid, avatar_url: avatar_url},
+				    {database: process.env.NEO4J_DB});
+	if (summary.counters.updates()['propertiesSet'] == 1){
+	    ret = true;
+	}
+
+	await tx.commit();
+    } catch(err){console.log('Error in query: '+ err);}
+    finally {await session.close();}
+
+    return {result: ret, old_avatar_url:old_url};
+}
+/**
+ * DEPRECATED. Use getContributorByID() instead
+ * Get contributor profile by OpenID with all related content
+ * @param {string} id
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
-async function getContributorByID(openid){
-    const query_str = "MATCH (n:Contributor{id:$id_param})--(r) " +
-	  "WHERE r.id IS NOT null " +
-	  "WITH COLLECT(r.id) as related_elems, COLLECT(r.name) as authors, n " +
-	  "RETURN n{.*, related_elements: related_elems, authors: authors, element_type:LABELS(n)[0]}";
+async function getContributorProfileByID(openid){
+    // This is not working -
+    // const query_str = "MATCH (c:Contributor{openid:$id_param})-[:CONTRIBUTED]-(r) " +
+    // 	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as contributed_elems, c " +
+    // 	  "RETURN c{.*, contributed_elements: contributed_elems} ";
+
 
     try {
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
 					{id_param: openid},
 					{database: process.env.NEO4J_DB});
-	console.log(records.length)
 	if (records.length <= 0){
 	    // Query returned no match for given ID
 	    return {};
 	} else if (records.length > 1){
 	    // should never reach here since ID is unique
-	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID: ${id}");
+	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID: ${openid}");
 	}
 	return records[0]['_fields'][0];
     } catch(err){console.log('Error in query: '+ err);}
     // something went wrong
     return {};
 }
+/**
+ * Get contributor by OpenID without any related information
+ * @param {string} id
+ * @return {Object} Map of object with given ID. Empty map if ID not found or error
+ */
+async function getContributorByID(openid){
+    const query_str = "MATCH (c:Contributor{openid:$id_param}) " +
+	  "RETURN c{.*} ";
+    try {
+	const {records, summary} =
+	      await driver.executeQuery(query_str,
+					{id_param: openid},
+					{database: process.env.NEO4J_DB});
+	if (records.length <= 0){
+	    // Query returned no match for given ID
+	    return {};
+	} else if (records.length > 1){
+	    // should never reach here since ID is unique
+	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID: ${openid}");
+	}
+	return records[0]['_fields'][0];
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return {};
+}
+/**
+ * Check if contributor exists
+ * @param {string} id
+ * @return {Object} Map of object with given ID. Empty map if ID not found or error
+ */
+async function checkContributorByID(openid){
+    const query_str = "OPTIONAL MATCH (c:Contributor{openid:$id_param}) " +
+	  "RETURN c IS NOT NULL AS Predicate";
+
+    try {
+	const {records, summary} =
+	      await driver.executeQuery(query_str,
+					{id_param: openid},
+					{database: process.env.NEO4J_DB});
+	const resp = records[0]['_fields'][0];
+	return resp;
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return false;
+}
+
 /**
  * Register new element
  * @param {String} contributor_id OpenID of registered contributor
@@ -401,7 +603,7 @@ async function registerElement(contributor_id, element){
 
     // separate common and specific element properties
     let{metadata:_,
-	thumbnail: thumbnail,
+	'thumbnail-image': thumbnail,
 	'resource-type': node_type,
 	'related-resources': related_elements,
 	'external-link': external_link,                 // Dataset
@@ -415,6 +617,7 @@ async function registerElement(contributor_id, element){
        } = element;
 
     node_type = node_type[0].toUpperCase() + node_type.slice(1);
+    node['thumbnail_image'] = thumbnail;
 
     // (1) generate id (UUID)
     node['id'] = uuidv4();
@@ -444,9 +647,23 @@ async function registerElement(contributor_id, element){
     // [ToDo] To avoid full DB scan, if we know the type of related elements, the query
     // can be updated to search for related ID with a lable as type
     for (let [i, related_elem] of related_elements.entries()){
-	query_match += "MATCH(to"+i+"{id:$id"+i+"}) ";
+	// query_match += "MATCH(to"+i+"{id:$id"+i+"}) ";
+	// query_merge += "MERGE (n)-[:RELATED]->(to"+i+") ";
+	// query_params["id"+i] = related_elem['id'];
+
+	// get related elements based on title
+	if (related_elem['type'] == 'notebook'){
+	    query_match += "MATCH(to"+i+":Notebook{title:$title"+i+"}) ";
+	} else if (related_elem['type'] == 'dataset') {
+	    query_match += "MATCH(to"+i+":Dataset{title:$title"+i+"}) ";
+	} else if (related_elem['type'] == 'publication') {
+	    query_match += "MATCH(to"+i+":Publication{title:$title"+i+"}) ";
+	} else if (related_elem['type'] == 'oer') {
+	    query_match += "MATCH(to"+i+":Oer{title:$title"+i+"}) ";
+	}
 	query_merge += "MERGE (n)-[:RELATED]->(to"+i+") ";
-	query_params["id"+i] = related_elem['id'];
+	query_params["title"+i] = related_elem['title'];
+
     }
     // (4) create CONTRIBUTED_BY relation with contributor_id
     query_match += "MATCH(c:Contributor{openid:$contrib_id}) ";
@@ -454,10 +671,6 @@ async function registerElement(contributor_id, element){
     query_params['contrib_id'] = contributor_id;
 
     const query_str = query_match + " CREATE (n: "+node_type+" $node_param) " + query_merge;
-
-    //console.log(query_str);
-    //console.log(query_params);
-    //return false;
 
     try{
 	const {_, summary} =
@@ -476,16 +689,46 @@ async function registerElement(contributor_id, element){
     return false;
 }
 
+/**
+ * Delete a resource given ID
+ * @param {string} id
+ * @return {Object} true if deleted successfully, false otherwise
+ */
+async function deleteElementByID(id){
+    const query_str = "MATCH (n{id:$id_param}) " +
+	  "DETACH DELETE n";
+    try {
+	const {_, summary} =
+	      await driver.executeQuery(query_str,
+					{id_param: id},
+					{database: process.env.NEO4J_DB});
+	if (summary.counters.updates()['nodesDeleted'] == 1){
+	    return true;
+	}
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return false;
+}
+
 exports.getElementByID = getElementByID;
 exports.registerElement = registerElement;
+exports.deleteElementByID = deleteElementByID
 exports.getElementsByType = getElementsByType
+exports.updateContributor = updateContributor
+exports.getContributorByID = getContributorByID
 exports.getFeaturedElements = getFeaturedElements
 exports.registerContributor = registerContributor
+exports.setContributorAvatar = setContributorAvatar
+exports.checkContributorByID = checkContributorByID
 exports.getElementsCountByType = getElementsCountByType
 exports.setElementFeaturedForID = setElementFeaturedForID
+exports.getElementsByContributor = getElementsByContributor
 exports.createLinkNotebook2Dataset = createLinkNotebook2Dataset
+exports.getElementsCountByContributor = getElementsCountByContributor
 
 exports.testServerConnection = testServerConnection;
+
+//exports.getContributorProfileByID = getContributorProfileByID
 
 /**************
  * Backup Query Strings
