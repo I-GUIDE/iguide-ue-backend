@@ -26,6 +26,9 @@ async function elementCount({
 }
 
 elementCount({
+  field_name: 'tags',
+  match_value: ['chicago'],
+  element_type: ['dataset']
 })
   .then(data => console.log(data))
   .catch(error => console.error(error));

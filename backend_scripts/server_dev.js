@@ -1561,7 +1561,6 @@ app.post('/api/searchByCreator', async (req, res) => {
     res.status(500).json({ error: 'Error querying OpenSearch' });
   }
 });
-
 /**
  * @swagger
  * /api/elements/retrieve:
@@ -1576,31 +1575,40 @@ app.post('/api/searchByCreator', async (req, res) => {
  *             properties:
  *               field_name:
  *                 type: string
+ *                 description: The name of the field to filter elements by.
  *               match_value:
  *                 type: array
  *                 items:
  *                   type: string
+ *                 description: The values to match in the specified field.
  *               element_type:
  *                 type: array
  *                 items:
  *                   type: string
+ *                 description: The type of elements to retrieve.
  *               sort_by:
  *                 type: string
+ *                 description: The field by which to sort the results.
  *               order:
  *                 type: string
  *                 enum: [asc, desc]
+ *                 description: The order to sort the results, either ascending (asc) or descending (desc).
  *               from:
  *                 type: integer
+ *                 description: The starting index for the results.
  *               size:
  *                 type: integer
+ *                 description: The number of elements to retrieve.
  *               count_only:
  *                 type: boolean
+ *                 description: Whether to return only the count of matching elements.
  *     responses:
  *       200:
  *         description: A list of elements or count of elements
  *       500:
  *         description: Internal server error
  */
+
 app.post('/api/elements/retrieve', async (req, res) => {
   const { field_name, match_value, element_type, sort_by = '_score', order = 'desc', from = '0', size = '10', count_only = false } = req.body;
 
@@ -1657,7 +1665,11 @@ app.post('/api/elements/retrieve', async (req, res) => {
         index: os_index,
         body: query,
       });
-      const elements = searchResponse.body.hits.hits.map(hit => hit._source);
+      const elements = searchResponse.body.hits.hits.map(hit => {
+        const { _id, _source } = hit;
+        //const { metadata, ...rest } = _source; // Remove metadata
+        return { _id, ..._source };
+      });
       res.json(elements);
     }
   } catch (error) {
