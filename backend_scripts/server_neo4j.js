@@ -873,75 +873,7 @@ app.get('/api/resources/:field/:values', async (req, res) => {
 
 	// Should never reach here ...
 	throw Error('Neo4j getElementByID not implemented');
-
-	// // Initial search request to initialize the scroll context
-	// const initialResponse = await client.search({
-	//     index: os_index,
-	//     scroll: '1m', // Set the scroll timeout
-	//     body: {
-	// 	query: {
-	// 	    terms: {
-	// 		[field]: valueArray,
-	// 	    },
-	// 	},
-	// 	sort: {
-	// 	    _script: {
-	// 		type: 'number',
-	// 		script: {
-	// 		    lang: 'painless',
-	// 		    source: `
-        //         int index = params.valueArray.indexOf(doc[params.field].value);
-        //         return index != -1 ? index : params.valueArray.length;
-        //       `,
-	// 		    params: {
-	// 			valueArray: valueArray,
-	// 			field: field,
-	// 		    },
-	// 		},
-	// 		order: 'asc',
-	// 	    },
-	// 	},
-	// 	size: 1000, // Set an initial batch size
-	//     },
-	// });
-
-	// let allHits = initialResponse.body.hits.hits;
-	// let scrollId = initialResponse.body._scroll_id;
-
-	// // Use the scroll ID to fetch subsequent batches of documents
-	// while (true) {
-	//     const scrollResponse = await client.scroll({
-	// 	scroll_id: scrollId,
-	// 	scroll: '1m',
-	//     });
-
-	//     if (scrollResponse.body.hits.hits.length === 0) {
-	// 	break;
-	//     }
-
-	//     allHits = allHits.concat(scrollResponse.body.hits.hits);
-	//     scrollId = scrollResponse.body._scroll_id;
-	// }
-
-	// // Clear the scroll context
-	// await client.clearScroll({
-	//     body: {
-	// 	scroll_id: scrollId,
-	//     },
-	// });
-
-	// if (allHits.length === 0) {
-	//     res.status(404).json({ message: 'No resources found' });
-	//     return;
-	// }
-
-	// const resources = allHits.map(hit => {
-	//     const { _id, _source } = hit;
-	//     const { metadata, ...rest } = _source; // Remove metadata
-	//     return { _id, ...rest };
-	// });
-
-	// res.json(resources);
+	
     } catch (error) {
 	console.error('Error querying OpenSearch:', error);
 	res.status(500).json({ message: 'Internal server error' });
@@ -1157,15 +1089,6 @@ app.put('/api/users/:openid', async (req, res) => {
 	    console.log('Error updating user');
 	    res.json({ message: 'Error updating user', result: response });
 	}
-	// const response = await client.update({
-	//     index: 'users',
-	//     id: openid,
-	//     body: {
-	// 	doc: updates
-	//     }
-	// });
-
-	// res.json({ message: 'User updated successfully', result: response.body.result });
     } catch (error) {
 	console.error('Error updating user:', error);
 	res.status(500).json({ message: 'Internal server error' });
@@ -1282,28 +1205,11 @@ app.post('/api/searchByCreator', async (req, res) => {
     if (!openid) {
 	return res.status(400).json({ error: 'openid is required' });
     }
-
-    // let query = {
-    // 	term: { 'metadata.created_by': openid },
-    // };
-
-    // // Replace title and authors with their keyword sub-fields for sorting
-    // let sortBy = sort_by;
-    // if (sortBy === 'title') {
-    // 	sortBy = 'title.keyword';
-    // } else if (sortBy === 'authors') {
-    // 	sortBy = 'authors.keyword';
-    // }
-
+    
     console.log('searchByCreator:' + openid);
     try {
 	// Note: Neo4j query always orders by title, needs to be updated if required otherwise
 	const response = await n4j.getElementsByContributor(openid, from, size);
-	// if (response.length == 0) {
-	//     res.status(404).json({ message: 'No elements found for contributor'+openid });
-	//     return;
-	// }
-	//console.log(response);
 	res.json(response);
 
     } catch (error) {
@@ -1437,78 +1343,6 @@ app.post('/api/elements/retrieve', async (req, res) => {
 	console.error('Error retrieving elements:', error);
 	res.status(500).json({ message: 'Internal server error' });
     }
-    
-    // // Build the query
-    // const query = {
-    // 	from: parseInt(from, 10),
-    // 	size: parseInt(size, 10),
-    // 	sort: [{ [sortBy]: { order: order } }],
-    // 	query: {
-    // 	    bool: {
-    // 		must: [],
-    // 		filter: [],
-    // 	    },
-    // 	},
-    // };
-
-    // Add match_value condition to the query
-    // if (match_value !== null) {
-    // 	//query.query.bool.must.push({
-    // 	//    terms: { [field_name]: match_value },
-    // 	//});
-    // 	if (match_value == '_id'){
-	    
-    // 	} else {
-	    
-    // 	}
-    // }
-
-    // // Add element_type condition to the query
-    // if (element_type !== null) {
-    // 	//query.query.bool.filter.push({
-    // 	//    terms: { 'resource-type': element_type },
-    // 	//});
-    // 	try {
-    // 	    if (count_only){
-    // 		const response = await n4j.getElementsCountByType(element_type);
-    // 		if (response < 0){
-    // 		    res.status(500).send({ error: 'Neo4j: Error occurred fetching resource count' });
-    // 		    return;
-    // 		}
-    // 		res.send({ count: response });
-    // 	    } else {
-    // 		const resources = await n4j.getElementsByType(type, from, size);
-    // 		if (resources.length == 0){
-    // 		    res.status(404).json({ message: 'No resource found' });
-    // 		    return;
-    // 		}
-    // 		res.json(resources);
-    // 	    }
-    // 	} catch (error) {
-    // 	    console.error('Error querying Neo4j:', error);
-    // 	    res.status(500).send({ error: 'Neo4j: Error occurred fetching resources or count' });
-    // 	}
-    // }
-
-    // try {
-    // 	if (count_only) {
-    // 	    const countResponse = await client.count({
-    // 		index: os_index,
-    // 		body: { query: query.query },
-    // 	    });
-    // 	    res.json(countResponse.body.count);
-    // 	} else {
-    // 	    const searchResponse = await client.search({
-    // 		index: os_index,
-    // 		body: query,
-    // 	    });
-    // 	    const elements = searchResponse.body.hits.hits.map(hit => hit._source);
-    // 	    res.json(elements);
-    // 	}
-    // } catch (error) {
-    // 	console.error('Error retrieving elements:', error);
-    // 	res.status(500).json({ message: 'Internal server error' });
-    // }
 });
 
 console.log(`${process.env.SERV_TAG} server is up`);
