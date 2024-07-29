@@ -463,53 +463,57 @@ app.get('/api/elements/titles', async (req, res) => {
  *         description: Internal server error
  */
 app.get('/api/featured-resources', async (req, res) => {
-  let sortBy = req.query.sort_by || '_score';
-  const order = req.query.order || 'desc';
-  const from = parseInt(req.query.from, 10) || 0;
-  const size = parseInt(req.query.size, 10) || 15;
+    let sortBy = req.query.sort_by || '_score';
+    const order = req.query.order || 'desc';
+    const from = parseInt(req.query.from, 10) || 0;
+    const size = parseInt(req.query.size, 10) || 15;
 
-  // Replace title and authors with their keyword sub-fields for sorting
-  if (sortBy === 'title') {
-    sortBy = 'title.keyword';
-  } else if (sortBy === 'authors') {
-    sortBy = 'authors.keyword';
-  }
-
-  try {
-    const featuredResponse = await client.search({
-      index: os_index,
-      body: {
-        from: from,
-        size: size,
-        query: {
-          match: {
-            featured: true,
-          },
-        },
-        sort: [
-          {
-            [sortBy]: {
-              order: order,
-            },
-          },
-        ],
-      },
-    });
-
-    if (featuredResponse.body.hits.total.value === 0) {
-      res.status(404).json({ message: 'No featured resource found' });
-      return;
+    // Replace title and authors with their keyword sub-fields for sorting
+    if (sortBy === 'title') {
+      sortBy = 'title.keyword';
+    } else if (sortBy === 'authors') {
+      sortBy = 'authors.keyword';
     }
-    const resources = featuredResponse.body.hits.hits.map(hit => {
-      const { _id, _source } = hit;
-      const { metadata, ...rest } = _source; // Remove metadata
-      return { _id, ...rest };
-    });
-    res.json(resources);
-  } catch (error) {
-    console.error('Error querying OpenSearch:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
+
+    //console.log('Featured resources from Neo4j');
+    
+    try {
+	//const resources = await n4j_server.getFeaturedElements();
+	//res.json(resources);
+	const featuredResponse = await client.search({
+	    index: os_index,
+	    body: {
+		from: from,
+		size: size,
+		query: {
+		    match: {
+			featured: true,
+		    },
+		},
+		sort: [
+		    {
+			[sortBy]: {
+			    order: order,
+			},
+		    },
+		],
+	    },
+	});
+
+	if (featuredResponse.body.hits.total.value === 0) {
+	    res.status(404).json({ message: 'No featured resource found' });
+	    return;
+	}
+	const resources = featuredResponse.body.hits.hits.map(hit => {
+	    const { _id, _source } = hit;
+	    const { metadata, ...rest } = _source; // Remove metadata
+	    return { _id, ...rest };
+	});
+	res.json(resources);
+    } catch (error) {
+	console.error('Error querying OpenSearch:', error);
+	res.status(500).json({ message: 'Internal server error' });
+    }
 });
 
 /**
@@ -1096,8 +1100,15 @@ app.delete('/api/resources/:id', async (req, res) => {
 app.get('/api/resources/:field/:values', async (req, res) => {
   const { field, values } = req.params;
   const valueArray = values.split(',').map(value => decodeURIComponent(value)); //Decompose to handle openid as url
-
-  try {
+    
+    try {
+    // 	if (field == '_id'){
+    // 	    console.log('getElemnetByID from Neo4j');
+    // 	    const resources = n4j_server.getElementByID(values[0]);
+    // 	    res.json(resources);
+    // 	    return;
+    // 	}
+	
     // Initial search request to initialize the scroll context
     const initialResponse = await client.search({
       index: os_index,
@@ -1161,12 +1172,13 @@ app.get('/api/resources/:field/:values', async (req, res) => {
 
     const resources = allHits.map(hit => {
       const { _id, _source } = hit;
-      const { metadata, ...rest } = _source; // Remove metadata
-      return { _id, ...rest };
+      //const { metadata, ...rest } = _source; // Remove metadata
+      //return { _id, ...rest };
+      return {_id, ..._source};
     });
 
-    res.json(resources);
-  } catch (error) {
+	res.json(resources);
+    } catch (error) {
     console.error('Error querying OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
@@ -1346,7 +1358,8 @@ app.post('/api/users', async (req, res) => {
     const response = await client.index({
       index: 'users',
       id: user.openid,
-      body: user
+	body: user,
+	refresh: true
     });
 
     res.status(201).json({ message: 'User added successfully', id: response.body._id });
@@ -1549,7 +1562,6 @@ app.post('/api/searchByCreator', async (req, res) => {
     res.status(500).json({ error: 'Error querying OpenSearch' });
   }
 });
-
 /**
  * @swagger
  * /api/elements/retrieve:
@@ -1564,31 +1576,40 @@ app.post('/api/searchByCreator', async (req, res) => {
  *             properties:
  *               field_name:
  *                 type: string
+ *                 description: The name of the field to filter elements by.
  *               match_value:
  *                 type: array
  *                 items:
  *                   type: string
+ *                 description: The values to match in the specified field.
  *               element_type:
  *                 type: array
  *                 items:
  *                   type: string
+ *                 description: The type of elements to retrieve.
  *               sort_by:
  *                 type: string
+ *                 description: The field by which to sort the results.
  *               order:
  *                 type: string
  *                 enum: [asc, desc]
+ *                 description: The order to sort the results, either ascending (asc) or descending (desc).
  *               from:
  *                 type: integer
+ *                 description: The starting index for the results.
  *               size:
  *                 type: integer
+ *                 description: The number of elements to retrieve.
  *               count_only:
  *                 type: boolean
+ *                 description: Whether to return only the count of matching elements.
  *     responses:
  *       200:
  *         description: A list of elements or count of elements
  *       500:
  *         description: Internal server error
  */
+
 app.post('/api/elements/retrieve', async (req, res) => {
   const { field_name, match_value, element_type, sort_by = '_score', order = 'desc', from = '0', size = '10', count_only = false } = req.body;
 
@@ -1600,6 +1621,10 @@ app.post('/api/elements/retrieve', async (req, res) => {
     return res.json(count_only ? 0 : []);
   }
   let sortBy = sort_by;
+  let fieldName = field_name;
+  if (fieldName === 'tags'){
+    fieldName = 'tags.keyword';
+  }
   if (sortBy === 'title') {
     sortBy = 'title.keyword';
   } else if (sortBy === 'authors') {
@@ -1622,7 +1647,7 @@ app.post('/api/elements/retrieve', async (req, res) => {
   // Add match_value condition to the query
   if (match_value !== null) {
     query.query.bool.must.push({
-      terms: { [field_name]: match_value },
+      terms: { [fieldName]: match_value },
     });
   }
 
@@ -1632,6 +1657,7 @@ app.post('/api/elements/retrieve', async (req, res) => {
       terms: { 'resource-type': element_type },
     });
   }
+  //console.log(query.query.bool.must);
 
   try {
     if (count_only) {
@@ -1645,7 +1671,11 @@ app.post('/api/elements/retrieve', async (req, res) => {
         index: os_index,
         body: query,
       });
-      const elements = searchResponse.body.hits.hits.map(hit => hit._source);
+      const elements = searchResponse.body.hits.hits.map(hit => {
+        const { _id, _source } = hit;
+        //const { metadata, ...rest } = _source; // Remove metadata
+        return { _id, ..._source };
+      });
       res.json(elements);
     }
   } catch (error) {
@@ -1653,6 +1683,98 @@ app.post('/api/elements/retrieve', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+/**
+ * @swagger
+ * /api/elements/tag/{value}:
+ *   get:
+ *     summary: Retrieve elements by exact tag match
+ *     parameters:
+ *       - in: path
+ *         name: value
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The exact tag value to match.
+ *     responses:
+ *       200:
+ *         description: A list of elements matching the exact tag
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   _id:
+ *                     type: string
+ *                     description: The unique identifier of the document.
+ *                   title:
+ *                     type: string
+ *                     description: The title of the document.
+ *                   authors:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                     description: The authors of the document.
+ *                   tags:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                     description: The tags associated with the document.
+ *                   contents:
+ *                     type: string
+ *                     description: The contents of the document.
+ *                   # Add other fields relevant to the documents
+ *       404:
+ *         description: No elements found for the given tag
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "No elements found for the given tag"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Internal server error"
+ */
+
+app.get('/api/elements/tag/:value', async (req, res) => {
+  const tagValue = req.params.value;
+
+  try {
+    const searchResponse = await client.search({
+      index: os_index,
+      body: {
+        query: {
+          term: {
+            'tags.keyword': tagValue // Use '.keyword' to ensure exact match
+          }
+        },
+        size: 1000 // Set a reasonable size or use pagination for large datasets
+      }
+    });
+
+    const results = searchResponse.body.hits.hits.map(hit => {
+      const { _id, _source } = hit;
+      return { _id, ...(_source || {}) };
+    });
+
+    res.status(200).json(results);
+  } catch (error) {
+    console.error('Error retrieving documents by tag:', error);
+    res.status(500).json({ error: 'Error retrieving documents by tag' });
+  }
+});
+
 
 console.log(`${process.env.SERV_TAG} server is up`);
 
