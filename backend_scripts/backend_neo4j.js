@@ -120,7 +120,14 @@ async function createLinkUserLikedElement(open_id, element_id){
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
 async function getElementByID(id){
-    const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param})-[:RELATED]-(r) " +
+    // [Bug] If an element 'n' with given 'id' does not have any related element,
+    // this query does not return anything
+    // const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param})-[:RELATED]-(r) " +
+    // 	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as related_elems, n, c  " +
+    // 	  "RETURN n{.*, related_elements: related_elems, element_type:LABELS(n)[0], created_by:c.openid}";
+    // [Fixed]
+    const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
+	  "OPTIONAL MATCH (n)-[:RELATED]-(r) " +
 	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as related_elems, n, c  " +
 	  "RETURN n{.*, related_elements: related_elems, element_type:LABELS(n)[0], created_by:c.openid}";
 
@@ -158,6 +165,7 @@ async function getElementByID(id){
 	//as a result of this one query.
 	// [ToDo] Change `ret_elem.id`
 	for (elem of related_elements){
+	    if (elem['id'] == null || elem['element_type'] == null) continue;
 	    switch(elem['element_type']){
 	    case ElementType.DATASET:{
 		let {element_type:_, ...ret_elem} = elem;
@@ -598,6 +606,7 @@ async function checkContributorByID(openid){
  * Register new element
  * @param {String} contributor_id OpenID of registered contributor
  * @param {Object} element Map with element attributes (refer to schema)
+ * @return {Boolean, String} {true, element_id} on success OR {false, ''} on failure.
  */
 async function registerElement(contributor_id, element){
 
@@ -677,16 +686,14 @@ async function registerElement(contributor_id, element){
 	      await driver.executeQuery(query_str,
 					query_params,
 					{database: process.env.NEO4J_DB});
-
-	//console.log(summary.counters.updates());
 	if (summary.counters.updates()['nodesCreated'] >= 1){
-	    // (3) remove non-searchable properties and insert to OpenSearch
-	    // [ToDo]
-	    return true;
+	    return {response: true, element_id: node['id']};
+	    //return true;
 	}
     } catch(err){console.log('Error in query: '+ err);}
     // something went wrong
-    return false;
+    //return false;
+    return {response: false, element_id: ''};
 }
 
 /**

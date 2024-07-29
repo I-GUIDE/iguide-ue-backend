@@ -25,7 +25,7 @@ dotenv.config();
 const os_node = process.env.OPENSEARCH_NODE;
 const os_usr = process.env.OPENSEARCH_USERNAME;
 const os_pswd = process.env.OPENSEARCH_PASSWORD;
-const os_index = process.env.OPENSEARCH_INDEX;
+const os_index = 'neo4j-elements-dev'; process.env.OPENSEARCH_INDEX;
 
 const options = {
     key: fs.readFileSync(process.env.SSL_KEY),
@@ -42,6 +42,10 @@ const client = new Client({
 	rejectUnauthorized: false, // Use this only if you encounter SSL certificate issues
     },
 });
+
+console.log('Connectd to OpenSearch: ' + os_node);
+console.log('\t- Using OpenSearch User: ' + os_usr);
+console.log('\t- Using OpenSearch Index: ' + os_index);
 
 // Ensure thumbnails and notebook_html directories exist
 const thumbnailDir = path.join(process.env.UPLOAD_FOLDER, 'thumbnails');
@@ -772,18 +776,39 @@ app.put('/api/resources', async (req, res) => {
 	}
 
 	const contributor_id = resource['metadata']['created_by'];
-	const response = await n4j.registerElement(contributor_id, resource);
+	//const response = await n4j.registerElement(contributor_id, resource);
+	const {response, element_id} = await n4j.registerElement(contributor_id, resource);
+	console.log('registerElement: ' + response);
 	if (response){
-	    // [ToDo] Insert searchable part to OpenSearch
+	    // Insert/index searchable part to OpenSearch
 	    let os_element = {};
-	    os_element['resource-type'] = resource['resource-type'];
+	    //os_element['id'] = element_id;
 	    os_element['title'] = resource['title'];
 	    os_element['contents'] = resource['contents'];
-	    let{
-		
-	    } = resource;
+	    os_element['authors'] = resource['authors'];
+	    os_element['tags'] = resource['tags'];
+	    os_element['resource-type'] = resource['resource-type'];
+	    os_element['thumbnail-image'] = resource['thumbnail-image'];
+	    console.log('Getting contributor name');
+	    // set contributor name
+	    let contributor = await n4j.getContributorByID(contributor_id);
+	    let contributor_name = '';
+	    if ('first_name' in contributor || 'last_name' in contributor) {
+		contributor_name = contributor['first_name'] + ' ' + contributor['last_name'];
+	    }
+	    os_element['contributor'] = contributor_name;
+
+	    console.log('indexing element: ' + os_element);
+	    const response = await client.index({
+		id: element_id,
+		index: os_index,
+		body: os_element,
+		refresh: true,
+	    });
+	    console.log(response['body']['result']);
 	    res.status(200).json({ message: 'Resource registered successfully' });
 	} else {
+	    console.log('Error registering resource ...');
 	    res.status(500).json({ error: 'Error registering resource' });
 	}
     } catch (error) {
@@ -1261,7 +1286,7 @@ app.post('/api/elements/retrieve', async (req, res) => {
     // [Done] Neo4j
     const { field_name, match_value, element_type, sort_by = '_score', order = 'desc', from = '0', size = '10', count_only = false } = req.body;
 
-    console.log('Neo4j /api/elements/retrieve - '+ element_type + ', ' + match_value);
+    //console.log('Neo4j /api/elements/retrieve - '+ element_type + ', ' + match_value);
     
     // Check if match_value or element_type is an empty array
     if (Array.isArray(match_value) && match_value.length === 0) {
