@@ -326,7 +326,7 @@ app.get('/api/resources', async (req, res) => {
  *         description: Internal server error
  */
 app.get('/api/elements/titles', async (req, res) => {
-    // [Done] Neo4j not required. Used to search for elements when submitting. Should be from OS
+    // [Done] Neo4j not required. For related elements when registering. Should be from OS
     const elementType = req.query.element_type;
     const scrollTimeout = '1m'; // Scroll timeout
 
@@ -718,6 +718,7 @@ app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => 
     if (!req.file) {
 	return res.status(400).json({ message: 'No file uploaded' });
     }
+    // [ToDo] Change filename to user ID
     const filePath = `https://${process.env.DOMAIN}:3000/user-uploads/thumbnails/${req.file.filename}`;
     res.json({
 	message: 'Thumbnail uploaded successfully',
@@ -778,7 +779,6 @@ app.put('/api/resources', async (req, res) => {
 	const contributor_id = resource['metadata']['created_by'];
 	//const response = await n4j.registerElement(contributor_id, resource);
 	const {response, element_id} = await n4j.registerElement(contributor_id, resource);
-	console.log('registerElement: ' + response);
 	if (response){
 	    // Insert/index searchable part to OpenSearch
 	    let os_element = {};
@@ -1315,8 +1315,16 @@ app.post('/api/elements/retrieve', async (req, res) => {
 		    }
 		    res.json(total_count);
 		    return;
+		} else if (field_name == 'tags') {
+		    let total_count = 0;
+		    for (let val of match_value){
+			let response = await n4j.getElementsCountByTag(val);
+			total_count += response;
+		    }
+		    res.json(total_count);
+		    return;
 		} else {
-		    throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
+		    throw Error('Neo4j not implemented Count:' + element_type + ', ' + match_value);
 		}
 	    } else {
 		if (field_name == '_id'){
@@ -1331,6 +1339,14 @@ app.post('/api/elements/retrieve', async (req, res) => {
 		    const resources = [];
 		    for (let val of match_value){
 			let resource = await n4j.getElementsByContributor(val, from, size);
+			resources.push(...resource);
+		    }
+		    res.json(resources);
+		    return;
+		} else if (field_name == 'tags') {
+		    const resources = [];
+		    for (let val of match_value){
+			let resource = await n4j.getElementsByTag(val, from, size);
 			resources.push(...resource);
 		    }
 		    res.json(resources);

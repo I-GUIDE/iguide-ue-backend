@@ -276,7 +276,7 @@ async function getElementsByType(type, from, size){
 	    ret.push(element);
 	}
 	return ret;
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getElementsByType() Error in query: '+ err);}
     // something went wrong
     return [];
 }
@@ -310,7 +310,7 @@ async function getElementsCountByType(type){
 	}
 	var ret = records[0]['_fields'][0]['low'];
 	return ret;
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getElementsCountByType() Error in query: '+ err);}
     // something went wrong
     return -1;
 }
@@ -348,7 +348,7 @@ async function getElementsByContributor(openid, from, size){
 	    ret.push(element);
 	}
 	return ret;
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getElementsByContributor() Error in query: '+ err);}
     // something went wrong
     return [];
 }
@@ -371,7 +371,68 @@ async function getElementsCountByContributor(openid){
 	}
 	var ret = records[0]['_fields'][0]['low'];
 	return ret;
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getElementsCountByContributor() Error in query: '+ err);}
+    // something went wrong
+    return -1;
+}
+/**
+ * Get elements by contributor
+ * @param {string} tag Tag string for case-insensitive match
+ * @param {int}    from For pagintion, get elements from this number
+ * @param {int}    size For pagintion, get this number of elements
+ * @return {Object} Map of object with given ID. Empty map if ID not found or error
+ */
+async function getElementsByTag(tag, from, size){
+    const query_str = "MATCH (n)-[:CONTRIBUTED]-(r) " +
+	  "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) )" +
+	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)] } " +
+	  "ORDER BY n.title " +
+	  "SKIP $from " +
+	  "LIMIT $size";
+
+    try{
+	const {records, summary} =
+	      await driver.executeQuery(query_str,
+					{tag_str: tag,
+					 from: neo4j.int(from),
+					 size: neo4j.int(size)},
+					{database: process.env.NEO4J_DB});
+	if (records.length <= 0){
+	    // No elements found with given tag
+	    return [];
+	}
+	var ret = []
+	for (record of records){
+	    element = record['_fields'][0];
+	    element['resource-type'] = element['resource-type'].toLowerCase();
+	    ret.push(element);
+	}
+	return ret;
+    } catch(err){console.log('getElementsByTag() Error in query: '+ err);}
+    // something went wrong
+    return [];
+}
+/**
+ * Get elements count by contributor
+ * @param {string} tag Tag to search for case-insensitive match
+ * @return {int} Count
+ */
+async function getElementsCountByTag(tag){
+    const query_str = "MATCH (n) " +
+	  "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) )" +
+	  "RETURN COUNT(n)";
+    try{
+	const {records, summary} =
+	      await driver.executeQuery(query_str,
+					{tag_str: tag},
+					{database: process.env.NEO4J_DB});
+	if (records.length <= 0){
+	    // Error running query
+	    return -1;
+	}
+	var ret = records[0]['_fields'][0]['low'];
+	return ret;
+    } catch(err){console.log('getElementsCountByTag() Error in query: '+ err);}
     // something went wrong
     return -1;
 }
@@ -719,20 +780,22 @@ async function deleteElementByID(id){
 
 exports.getElementByID = getElementByID;
 exports.registerElement = registerElement;
-exports.deleteElementByID = deleteElementByID
-exports.getElementsByType = getElementsByType
-exports.updateContributor = updateContributor
-exports.getContributorByID = getContributorByID
-exports.getFeaturedElements = getFeaturedElements
-exports.registerContributor = registerContributor
-exports.setContributorAvatar = setContributorAvatar
-exports.checkContributorByID = checkContributorByID
-exports.getElementsCountByType = getElementsCountByType
-exports.setElementFeaturedForID = setElementFeaturedForID
-exports.getElementsByContributor = getElementsByContributor
-exports.createLinkNotebook2Dataset = createLinkNotebook2Dataset
-exports.getElementsCountByContributor = getElementsCountByContributor
+exports.getElementsByTag = getElementsByTag;
+exports.deleteElementByID = deleteElementByID;
+exports.getElementsByType = getElementsByType;
+exports.updateContributor = updateContributor;
+exports.getContributorByID = getContributorByID;
+exports.getFeaturedElements = getFeaturedElements;
+exports.registerContributor = registerContributor;
+exports.setContributorAvatar = setContributorAvatar;
+exports.checkContributorByID = checkContributorByID;
+exports.getElementsCountByTag = getElementsCountByTag;
+exports.getElementsCountByType = getElementsCountByType;
+exports.setElementFeaturedForID = setElementFeaturedForID;
+exports.getElementsByContributor = getElementsByContributor;
+exports.createLinkNotebook2Dataset = createLinkNotebook2Dataset;
+exports.getElementsCountByContributor = getElementsCountByContributor;
 
 exports.testServerConnection = testServerConnection;
 
-//exports.getContributorProfileByID = getContributorProfileByID
+//exports.getContributorProfileByID = getContributorProfileByID;
