@@ -15,8 +15,6 @@ import axios from 'axios';
 import swaggerUi from'swagger-ui-express';
 import { specs } from './swagger.js';
 
-import * as n4j_server from './server_neo4j.cjs'
-
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -465,57 +463,53 @@ app.get('/api/elements/titles', async (req, res) => {
  *         description: Internal server error
  */
 app.get('/api/featured-resources', async (req, res) => {
-    let sortBy = req.query.sort_by || '_score';
-    const order = req.query.order || 'desc';
-    const from = parseInt(req.query.from, 10) || 0;
-    const size = parseInt(req.query.size, 10) || 15;
+  let sortBy = req.query.sort_by || '_score';
+  const order = req.query.order || 'desc';
+  const from = parseInt(req.query.from, 10) || 0;
+  const size = parseInt(req.query.size, 10) || 15;
 
-    // Replace title and authors with their keyword sub-fields for sorting
-    if (sortBy === 'title') {
-      sortBy = 'title.keyword';
-    } else if (sortBy === 'authors') {
-      sortBy = 'authors.keyword';
+  // Replace title and authors with their keyword sub-fields for sorting
+  if (sortBy === 'title') {
+    sortBy = 'title.keyword';
+  } else if (sortBy === 'authors') {
+    sortBy = 'authors.keyword';
+  }
+
+  try {
+    const featuredResponse = await client.search({
+      index: os_index,
+      body: {
+        from: from,
+        size: size,
+        query: {
+          match: {
+            featured: true,
+          },
+        },
+        sort: [
+          {
+            [sortBy]: {
+              order: order,
+            },
+          },
+        ],
+      },
+    });
+
+    if (featuredResponse.body.hits.total.value === 0) {
+      res.status(404).json({ message: 'No featured resource found' });
+      return;
     }
-
-    //console.log('Featured resources from Neo4j');
-    
-    try {
-	//const resources = await n4j_server.getFeaturedElements();
-	//res.json(resources);
-	const featuredResponse = await client.search({
-	    index: os_index,
-	    body: {
-		from: from,
-		size: size,
-		query: {
-		    match: {
-			featured: true,
-		    },
-		},
-		sort: [
-		    {
-			[sortBy]: {
-			    order: order,
-			},
-		    },
-		],
-	    },
-	});
-
-	if (featuredResponse.body.hits.total.value === 0) {
-	    res.status(404).json({ message: 'No featured resource found' });
-	    return;
-	}
-	const resources = featuredResponse.body.hits.hits.map(hit => {
-	    const { _id, _source } = hit;
-	    const { metadata, ...rest } = _source; // Remove metadata
-	    return { _id, ...rest };
-	});
-	res.json(resources);
-    } catch (error) {
-	console.error('Error querying OpenSearch:', error);
-	res.status(500).json({ message: 'Internal server error' });
-    }
+    const resources = featuredResponse.body.hits.hits.map(hit => {
+      const { _id, _source } = hit;
+      const { metadata, ...rest } = _source; // Remove metadata
+      return { _id, ...rest };
+    });
+    res.json(resources);
+  } catch (error) {
+    console.error('Error querying OpenSearch:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 });
 
 /**
@@ -1102,15 +1096,8 @@ app.delete('/api/resources/:id', async (req, res) => {
 app.get('/api/resources/:field/:values', async (req, res) => {
   const { field, values } = req.params;
   const valueArray = values.split(',').map(value => decodeURIComponent(value)); //Decompose to handle openid as url
-    
-    try {
-    // 	if (field == '_id'){
-    // 	    console.log('getElemnetByID from Neo4j');
-    // 	    const resources = n4j_server.getElementByID(values[0]);
-    // 	    res.json(resources);
-    // 	    return;
-    // 	}
-	
+
+  try {
     // Initial search request to initialize the scroll context
     const initialResponse = await client.search({
       index: os_index,
@@ -1178,8 +1165,8 @@ app.get('/api/resources/:field/:values', async (req, res) => {
       return { _id, ...rest };
     });
 
-	res.json(resources);
-    } catch (error) {
+    res.json(resources);
+  } catch (error) {
     console.error('Error querying OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
@@ -1356,11 +1343,10 @@ app.post('/api/users', async (req, res) => {
   console.log(user);
 
   try {
-      const response = await client.index({
-	index: 'users',
-	id: user.openid,
-	body: user,
-	refresh:'wait-for'
+    const response = await client.index({
+      index: 'users',
+      id: user.openid,
+      body: user
     });
 
     res.status(201).json({ message: 'User added successfully', id: response.body._id });

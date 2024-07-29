@@ -1,4 +1,5 @@
-# Graph Database - Neo4j 
+# [Outdated - Needs to be updated]
+## Graph Database - Neo4j 
 This directory contains scripts, settings and initial data to setup graph database (neo4j) backend for the I-GUIDE UX
 
 ## Getting Started
