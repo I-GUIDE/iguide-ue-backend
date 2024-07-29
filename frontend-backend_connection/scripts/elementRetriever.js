@@ -70,9 +70,8 @@ async function elementRetriever({
   
   
 elementRetriever({
-  field_name: 'title',
-  match_value: ['twitter'],
-  element_type: ['notebook']
+  field_name: 'tags',
+  match_value: ['heat exposure']
 })
   .then(data => console.log(data))
   .catch(error => console.error(error));
