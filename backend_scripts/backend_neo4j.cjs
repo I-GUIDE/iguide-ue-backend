@@ -120,7 +120,14 @@ async function createLinkUserLikedElement(open_id, element_id){
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
 async function getElementByID(id){
-    const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param})-[:RELATED]-(r) " +
+    // [Bug] If an element 'n' with given 'id' does not have any related element,
+    // this query does not return anything
+    // const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param})-[:RELATED]-(r) " +
+    // 	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as related_elems, n, c  " +
+    // 	  "RETURN n{.*, related_elements: related_elems, element_type:LABELS(n)[0], created_by:c.openid}";
+    // [Fixed]
+    const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
+	  "OPTIONAL MATCH (n)-[:RELATED]-(r) " +
 	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as related_elems, n, c  " +
 	  "RETURN n{.*, related_elements: related_elems, element_type:LABELS(n)[0], created_by:c.openid}";
 
@@ -157,7 +164,9 @@ async function getElementByID(id){
 	// A better approach will be to return ID, title, and type of all related elements
 	//as a result of this one query.
 	// [ToDo] Change `ret_elem.id`
+	console.log('related_elements: ' + related_elements.length);
 	for (elem of related_elements){
+	    console.log('Related Element: ' + JSON.stringify(elem));
 	    switch(elem['element_type']){
 	    case ElementType.DATASET:{
 		let {element_type:_, ...ret_elem} = elem;
@@ -525,11 +534,11 @@ async function setContributorAvatar(openid, avatar_url){
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
 async function getContributorProfileByID(openid){
-    // This is not working - 
+    // This is not working -
     // const query_str = "MATCH (c:Contributor{openid:$id_param})-[:CONTRIBUTED]-(r) " +
     // 	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as contributed_elems, c " +
     // 	  "RETURN c{.*, contributed_elements: contributed_elems} ";
-    
+
 
     try {
 	const {records, summary} =
@@ -598,6 +607,7 @@ async function checkContributorByID(openid){
  * Register new element
  * @param {String} contributor_id OpenID of registered contributor
  * @param {Object} element Map with element attributes (refer to schema)
+ * @return {Boolean, String} {true, element_id} on success OR {false, ''} on failure.
  */
 async function registerElement(contributor_id, element){
 
@@ -677,16 +687,14 @@ async function registerElement(contributor_id, element){
 	      await driver.executeQuery(query_str,
 					query_params,
 					{database: process.env.NEO4J_DB});
-
-	//console.log(summary.counters.updates());
 	if (summary.counters.updates()['nodesCreated'] >= 1){
-	    // (3) remove non-searchable properties and insert to OpenSearch
-	    // [ToDo]
-	    return true;
+	    return {response: true, element_id: node['id']};
+	    //return true;
 	}
     } catch(err){console.log('Error in query: '+ err);}
     // something went wrong
-    return false;
+    //return false;
+    return {response: false, element_id: ''};
 }
 
 /**
@@ -723,95 +731,9 @@ exports.checkContributorByID = checkContributorByID
 exports.getElementsCountByType = getElementsCountByType
 exports.setElementFeaturedForID = setElementFeaturedForID
 exports.getElementsByContributor = getElementsByContributor
-exports.getContributorProfileByID = getContributorProfileByID
 exports.createLinkNotebook2Dataset = createLinkNotebook2Dataset
 exports.getElementsCountByContributor = getElementsCountByContributor
 
 exports.testServerConnection = testServerConnection;
 
-/**************
- * Backup Query Strings
- **************/
-
-    // MATCH (n{id:"ds1"})--(r)
-    // WITH COLLECT(r.id) as related_nb, COLLECT(r.name) as authors, n
-    // RETURN n{.*, related_nb: related_nb, authors: authors}
-
-    // MATCH (n{id:"ds1"})--(nb:Notebook)
-    // WITH COLLECT(nb.id) as related_nb, n
-    // RETURN {id: n.id, title: n.title, related_nb: related_nb}
-
-    // Get any node by given id
-    // const { records, summary, key } = await driver.executeQuery(
-    // 	'MATCH (n{id:$id_param}) RETURN PROPERTIES(n)',
-    // 	{ id_param: id },
-    // 	{ database: 'neo4j' }
-    // )
-/**************
- * Backup Functions
- **************/
-
-    // try {
-    // 	//driver = neo4j.driver(URI,  neo4j.auth.basic(USER, PASSWORD))
-    // 	const serverInfo = await driver.getServerInfo()
-    // 	console.log('Connection estabilished')
-    // 	console.log(serverInfo)
-    // } catch(err) {
-    // 	console.log(`Connection error\n${err}\nCause: ${err.cause}`)
-    // 	await driver.close()
-    // 	return
-    // }
-
-// async function getRelatedResourcesForID(id){
-//     const { records, summary, key } = await driver.executeQuery(
-// 	'MATCH (n{id:$id_param})-[r]-(b) RETURN b.id',
-// 	{ id_param: id },
-// 	{ database: 'neo4j' }
-//     )
-//     await driver.close();
-
-//     for (rec of records){
-// 	console.log(rec['_fields'])
-//     }
-//     console.log('---------------------------')
-//     return records;
-// }
-
-// /**
-//  * Get multiple elements by given IDs in a single query call
-//  * @param {string[]} ids
-//  * @return {Object[]} Array of objects with given IDs. Empty array if ID not found or error
-//  */
-// async function getElementsByIDs(ids){
-//     // [Bug]: Due to `r.id IS NOT null`, any node without any relation will be excluded
-//     // const query_str = "MATCH (n)--(r) " +
-//     // 	  "WHERE n.id IN $ids_param AND r.id IS NOT null " +
-//     // 	  "WITH COLLECT({id:r.id, title:r.title}) as related_nb, COLLECT(r.name) as authors, n " +
-//     // 	  "RETURN n{.*, related_res: related_res, authors: authors, element_type:LABELS(n)[0]}";
-
-//     const query_str = "MATCH (n)--(r) " +
-// 	  "WHERE n.id IN $ids_param " +
-// 	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as related_elems, COLLECT(r.name) as authors, n " +
-// 	  "RETURN n{.*, related_elements: related_elems, authors: authors, element_type:LABELS(n)[0]}";
-//     try{
-// 	const {records, summary} =
-// 	      await driver.executeQuery(query_str,
-// 					{ids_param: ids},
-// 					{database: process.env.NEO4J_DB});
-// 	if (records.length <= 0){
-// 	    // Query returned no match for given IDs
-// 	    return [];
-// 	}
-// 	var ret = []
-// 	for (record of records){
-// 	    ret.push(record['_fields'][0])
-// 	}
-// 	return ret;
-//     } catch(err){
-// 	console.log('Error in query: '+ err);
-//     } finally {
-// 	await driver.close();
-//     }
-//     // something went wrong
-//     return [];
-// }
+//exports.getContributorProfileByID = getContributorProfileByID

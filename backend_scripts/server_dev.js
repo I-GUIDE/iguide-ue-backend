@@ -1172,8 +1172,9 @@ app.get('/api/resources/:field/:values', async (req, res) => {
 
     const resources = allHits.map(hit => {
       const { _id, _source } = hit;
-      const { metadata, ...rest } = _source; // Remove metadata
-      return { _id, ...rest };
+      //const { metadata, ...rest } = _source; // Remove metadata
+      //return { _id, ...rest };
+      return {_id, ..._source};
     });
 
 	res.json(resources);
@@ -1620,6 +1621,10 @@ app.post('/api/elements/retrieve', async (req, res) => {
     return res.json(count_only ? 0 : []);
   }
   let sortBy = sort_by;
+  let fieldName = field_name;
+  if (fieldName === 'tags'){
+    fieldName = 'tags.keyword';
+  }
   if (sortBy === 'title') {
     sortBy = 'title.keyword';
   } else if (sortBy === 'authors') {
@@ -1642,7 +1647,7 @@ app.post('/api/elements/retrieve', async (req, res) => {
   // Add match_value condition to the query
   if (match_value !== null) {
     query.query.bool.must.push({
-      terms: { [field_name]: match_value },
+      terms: { [fieldName]: match_value },
     });
   }
 
@@ -1652,6 +1657,7 @@ app.post('/api/elements/retrieve', async (req, res) => {
       terms: { 'resource-type': element_type },
     });
   }
+  //console.log(query.query.bool.must);
 
   try {
     if (count_only) {
@@ -1677,6 +1683,98 @@ app.post('/api/elements/retrieve', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+/**
+ * @swagger
+ * /api/elements/tag/{value}:
+ *   get:
+ *     summary: Retrieve elements by exact tag match
+ *     parameters:
+ *       - in: path
+ *         name: value
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The exact tag value to match.
+ *     responses:
+ *       200:
+ *         description: A list of elements matching the exact tag
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   _id:
+ *                     type: string
+ *                     description: The unique identifier of the document.
+ *                   title:
+ *                     type: string
+ *                     description: The title of the document.
+ *                   authors:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                     description: The authors of the document.
+ *                   tags:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                     description: The tags associated with the document.
+ *                   contents:
+ *                     type: string
+ *                     description: The contents of the document.
+ *                   # Add other fields relevant to the documents
+ *       404:
+ *         description: No elements found for the given tag
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "No elements found for the given tag"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Internal server error"
+ */
+
+app.get('/api/elements/tag/:value', async (req, res) => {
+  const tagValue = req.params.value;
+
+  try {
+    const searchResponse = await client.search({
+      index: os_index,
+      body: {
+        query: {
+          term: {
+            'tags.keyword': tagValue // Use '.keyword' to ensure exact match
+          }
+        },
+        size: 1000 // Set a reasonable size or use pagination for large datasets
+      }
+    });
+
+    const results = searchResponse.body.hits.hits.map(hit => {
+      const { _id, _source } = hit;
+      return { _id, ...(_source || {}) };
+    });
+
+    res.status(200).json(results);
+  } catch (error) {
+    console.error('Error retrieving documents by tag:', error);
+    res.status(500).json({ error: 'Error retrieving documents by tag' });
+  }
+});
+
 
 console.log(`${process.env.SERV_TAG} server is up`);
 

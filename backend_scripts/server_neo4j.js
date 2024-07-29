@@ -25,7 +25,7 @@ dotenv.config();
 const os_node = process.env.OPENSEARCH_NODE;
 const os_usr = process.env.OPENSEARCH_USERNAME;
 const os_pswd = process.env.OPENSEARCH_PASSWORD;
-const os_index = process.env.OPENSEARCH_INDEX;
+const os_index = 'neo4j-elements-dev'; process.env.OPENSEARCH_INDEX;
 
 const options = {
     key: fs.readFileSync(process.env.SSL_KEY),
@@ -42,6 +42,10 @@ const client = new Client({
 	rejectUnauthorized: false, // Use this only if you encounter SSL certificate issues
     },
 });
+
+console.log('Connectd to OpenSearch: ' + os_node);
+console.log('\t- Using OpenSearch User: ' + os_usr);
+console.log('\t- Using OpenSearch Index: ' + os_index);
 
 // Ensure thumbnails and notebook_html directories exist
 const thumbnailDir = path.join(process.env.UPLOAD_FOLDER, 'thumbnails');
@@ -772,18 +776,39 @@ app.put('/api/resources', async (req, res) => {
 	}
 
 	const contributor_id = resource['metadata']['created_by'];
-	const response = await n4j.registerElement(contributor_id, resource);
+	//const response = await n4j.registerElement(contributor_id, resource);
+	const {response, element_id} = await n4j.registerElement(contributor_id, resource);
+	console.log('registerElement: ' + response);
 	if (response){
-	    // [ToDo] Insert searchable part to OpenSearch
+	    // Insert/index searchable part to OpenSearch
 	    let os_element = {};
-	    os_element['resource-type'] = resource['resource-type'];
+	    //os_element['id'] = element_id;
 	    os_element['title'] = resource['title'];
 	    os_element['contents'] = resource['contents'];
-	    let{
-		
-	    } = resource;
+	    os_element['authors'] = resource['authors'];
+	    os_element['tags'] = resource['tags'];
+	    os_element['resource-type'] = resource['resource-type'];
+	    os_element['thumbnail-image'] = resource['thumbnail-image'];
+	    console.log('Getting contributor name');
+	    // set contributor name
+	    let contributor = await n4j.getContributorByID(contributor_id);
+	    let contributor_name = '';
+	    if ('first_name' in contributor || 'last_name' in contributor) {
+		contributor_name = contributor['first_name'] + ' ' + contributor['last_name'];
+	    }
+	    os_element['contributor'] = contributor_name;
+
+	    console.log('indexing element: ' + os_element);
+	    const response = await client.index({
+		id: element_id,
+		index: os_index,
+		body: os_element,
+		refresh: true,
+	    });
+	    console.log(response['body']['result']);
 	    res.status(200).json({ message: 'Resource registered successfully' });
 	} else {
+	    console.log('Error registering resource ...');
 	    res.status(500).json({ error: 'Error registering resource' });
 	}
     } catch (error) {
@@ -873,75 +898,7 @@ app.get('/api/resources/:field/:values', async (req, res) => {
 
 	// Should never reach here ...
 	throw Error('Neo4j getElementByID not implemented');
-
-	// // Initial search request to initialize the scroll context
-	// const initialResponse = await client.search({
-	//     index: os_index,
-	//     scroll: '1m', // Set the scroll timeout
-	//     body: {
-	// 	query: {
-	// 	    terms: {
-	// 		[field]: valueArray,
-	// 	    },
-	// 	},
-	// 	sort: {
-	// 	    _script: {
-	// 		type: 'number',
-	// 		script: {
-	// 		    lang: 'painless',
-	// 		    source: `
-        //         int index = params.valueArray.indexOf(doc[params.field].value);
-        //         return index != -1 ? index : params.valueArray.length;
-        //       `,
-	// 		    params: {
-	// 			valueArray: valueArray,
-	// 			field: field,
-	// 		    },
-	// 		},
-	// 		order: 'asc',
-	// 	    },
-	// 	},
-	// 	size: 1000, // Set an initial batch size
-	//     },
-	// });
-
-	// let allHits = initialResponse.body.hits.hits;
-	// let scrollId = initialResponse.body._scroll_id;
-
-	// // Use the scroll ID to fetch subsequent batches of documents
-	// while (true) {
-	//     const scrollResponse = await client.scroll({
-	// 	scroll_id: scrollId,
-	// 	scroll: '1m',
-	//     });
-
-	//     if (scrollResponse.body.hits.hits.length === 0) {
-	// 	break;
-	//     }
-
-	//     allHits = allHits.concat(scrollResponse.body.hits.hits);
-	//     scrollId = scrollResponse.body._scroll_id;
-	// }
-
-	// // Clear the scroll context
-	// await client.clearScroll({
-	//     body: {
-	// 	scroll_id: scrollId,
-	//     },
-	// });
-
-	// if (allHits.length === 0) {
-	//     res.status(404).json({ message: 'No resources found' });
-	//     return;
-	// }
-
-	// const resources = allHits.map(hit => {
-	//     const { _id, _source } = hit;
-	//     const { metadata, ...rest } = _source; // Remove metadata
-	//     return { _id, ...rest };
-	// });
-
-	// res.json(resources);
+	
     } catch (error) {
 	console.error('Error querying OpenSearch:', error);
 	res.status(500).json({ message: 'Internal server error' });
@@ -1157,15 +1114,6 @@ app.put('/api/users/:openid', async (req, res) => {
 	    console.log('Error updating user');
 	    res.json({ message: 'Error updating user', result: response });
 	}
-	// const response = await client.update({
-	//     index: 'users',
-	//     id: openid,
-	//     body: {
-	// 	doc: updates
-	//     }
-	// });
-
-	// res.json({ message: 'User updated successfully', result: response.body.result });
     } catch (error) {
 	console.error('Error updating user:', error);
 	res.status(500).json({ message: 'Internal server error' });
@@ -1282,28 +1230,11 @@ app.post('/api/searchByCreator', async (req, res) => {
     if (!openid) {
 	return res.status(400).json({ error: 'openid is required' });
     }
-
-    // let query = {
-    // 	term: { 'metadata.created_by': openid },
-    // };
-
-    // // Replace title and authors with their keyword sub-fields for sorting
-    // let sortBy = sort_by;
-    // if (sortBy === 'title') {
-    // 	sortBy = 'title.keyword';
-    // } else if (sortBy === 'authors') {
-    // 	sortBy = 'authors.keyword';
-    // }
-
+    
     console.log('searchByCreator:' + openid);
     try {
 	// Note: Neo4j query always orders by title, needs to be updated if required otherwise
 	const response = await n4j.getElementsByContributor(openid, from, size);
-	// if (response.length == 0) {
-	//     res.status(404).json({ message: 'No elements found for contributor'+openid });
-	//     return;
-	// }
-	//console.log(response);
 	res.json(response);
 
     } catch (error) {
@@ -1352,10 +1283,10 @@ app.post('/api/searchByCreator', async (req, res) => {
  *         description: Internal server error
  */
 app.post('/api/elements/retrieve', async (req, res) => {
-    // [ToDo] Neo4j
+    // [Done] Neo4j
     const { field_name, match_value, element_type, sort_by = '_score', order = 'desc', from = '0', size = '10', count_only = false } = req.body;
 
-    console.log('Neo4j /api/elements/retrieve - '+ element_type + ', ' + match_value);
+    //console.log('Neo4j /api/elements/retrieve - '+ element_type + ', ' + match_value);
     
     // Check if match_value or element_type is an empty array
     if (Array.isArray(match_value) && match_value.length === 0) {
@@ -1383,7 +1314,6 @@ app.post('/api/elements/retrieve', async (req, res) => {
 			total_count += response;
 		    }
 		    res.json(total_count);
-		    //res.send({ count: total_count});
 		    return;
 		} else {
 		    throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
@@ -1403,7 +1333,6 @@ app.post('/api/elements/retrieve', async (req, res) => {
 			let resource = await n4j.getElementsByContributor(val, from, size);
 			resources.push(...resource);
 		    }
-		    console.log(resources);
 		    res.json(resources);
 		    return;
 		} else {
@@ -1421,7 +1350,6 @@ app.post('/api/elements/retrieve', async (req, res) => {
 		    total_count += response;
 		}
 		res.json(total_count);
-		//res.send({ count: total_count});
 	    } else {
 		const resources = [];
 		for (let val of element_type){
@@ -1440,78 +1368,6 @@ app.post('/api/elements/retrieve', async (req, res) => {
 	console.error('Error retrieving elements:', error);
 	res.status(500).json({ message: 'Internal server error' });
     }
-    
-    // // Build the query
-    // const query = {
-    // 	from: parseInt(from, 10),
-    // 	size: parseInt(size, 10),
-    // 	sort: [{ [sortBy]: { order: order } }],
-    // 	query: {
-    // 	    bool: {
-    // 		must: [],
-    // 		filter: [],
-    // 	    },
-    // 	},
-    // };
-
-    // Add match_value condition to the query
-    // if (match_value !== null) {
-    // 	//query.query.bool.must.push({
-    // 	//    terms: { [field_name]: match_value },
-    // 	//});
-    // 	if (match_value == '_id'){
-	    
-    // 	} else {
-	    
-    // 	}
-    // }
-
-    // // Add element_type condition to the query
-    // if (element_type !== null) {
-    // 	//query.query.bool.filter.push({
-    // 	//    terms: { 'resource-type': element_type },
-    // 	//});
-    // 	try {
-    // 	    if (count_only){
-    // 		const response = await n4j.getElementsCountByType(element_type);
-    // 		if (response < 0){
-    // 		    res.status(500).send({ error: 'Neo4j: Error occurred fetching resource count' });
-    // 		    return;
-    // 		}
-    // 		res.send({ count: response });
-    // 	    } else {
-    // 		const resources = await n4j.getElementsByType(type, from, size);
-    // 		if (resources.length == 0){
-    // 		    res.status(404).json({ message: 'No resource found' });
-    // 		    return;
-    // 		}
-    // 		res.json(resources);
-    // 	    }
-    // 	} catch (error) {
-    // 	    console.error('Error querying Neo4j:', error);
-    // 	    res.status(500).send({ error: 'Neo4j: Error occurred fetching resources or count' });
-    // 	}
-    // }
-
-    // try {
-    // 	if (count_only) {
-    // 	    const countResponse = await client.count({
-    // 		index: os_index,
-    // 		body: { query: query.query },
-    // 	    });
-    // 	    res.json(countResponse.body.count);
-    // 	} else {
-    // 	    const searchResponse = await client.search({
-    // 		index: os_index,
-    // 		body: query,
-    // 	    });
-    // 	    const elements = searchResponse.body.hits.hits.map(hit => hit._source);
-    // 	    res.json(elements);
-    // 	}
-    // } catch (error) {
-    // 	console.error('Error retrieving elements:', error);
-    // 	res.status(500).json({ message: 'Internal server error' });
-    // }
 });
 
 console.log(`${process.env.SERV_TAG} server is up`);

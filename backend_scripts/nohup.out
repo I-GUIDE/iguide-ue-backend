@@ -6,3 +6,85 @@ neo4j://10.0.147.173:7687
 development server is up
 Server is running on port 5001
 HTTPS server is running on 5000
+neo4j://10.0.147.173:7687
+development server is up
+Server is running on port 3001
+HTTPS server is running on 3000
+Neo4j /api/elements/retrieve - dataset, null
+Neo4j /api/elements/retrieve - dataset, null
+Neo4j /api/elements/retrieve - dataset, null
+Neo4j /api/elements/retrieve - dataset, null
+Neo4j /api/elements/retrieve - notebook, null
+Neo4j /api/elements/retrieve - notebook, null
+Neo4j /api/elements/retrieve - notebook, null
+Neo4j /api/elements/retrieve - notebook, null
+Neo4j /api/elements/retrieve - publication, null
+Neo4j /api/elements/retrieve - publication, null
+Neo4j /api/elements/retrieve - publication, null
+Neo4j /api/elements/retrieve - publication, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - oer, null
+Check user ...
+Neo4j /api/elements/retrieve - null, http://cilogon.org/serverA/users/48835826
+[
+  {
+    tags: [ 't1', 't2.t3' ],
+    'thumbnail-image': 'https://backend-dev.i-guide.io:3000/user-uploads/thumbnails/1721843075506-screenshot_2023_08_30_at_12.47.46_pm.png',
+    authors: [ 'a1' ],
+    title: 'Test D',
+    'resource-type': 'dataset',
+    _id: '0a4c5fcd-cdee-4c31-b02b-86be6396fa97',
+    contents: 'Abstract ....'
+  }
+]
+Neo4j /api/elements/retrieve - null, http://cilogon.org/serverA/users/48835826
+Neo4j /api/elements/retrieve - null, http://cilogon.org/serverA/users/48835826
+[
+  {
+    tags: [ 't1', 't2.t3' ],
+    'thumbnail-image': 'https://backend-dev.i-guide.io:3000/user-uploads/thumbnails/1721843075506-screenshot_2023_08_30_at_12.47.46_pm.png',
+    authors: [ 'a1' ],
+    title: 'Test D',
+    'resource-type': 'dataset',
+    _id: '0a4c5fcd-cdee-4c31-b02b-86be6396fa97',
+    contents: 'Abstract ....'
+  }
+]
+Neo4j /api/elements/retrieve - null, http://cilogon.org/serverA/users/48835826
+neo4j://10.0.147.173:7687
+Connectd to OpenSearch: https://10.0.147.52:9200
+	- Using OpenSearch User: admin
+	- Using OpenSearch Index: neo4j-elements
+development server is up
+Server is running on port 3001
+HTTPS server is running on 3000
+Neo4j /api/elements/retrieve - dataset, null
+Neo4j /api/elements/retrieve - dataset, null
+Neo4j /api/elements/retrieve - dataset, null
+Neo4j /api/elements/retrieve - dataset, null
+Neo4j /api/elements/retrieve - notebook, null
+Neo4j /api/elements/retrieve - notebook, null
+Neo4j /api/elements/retrieve - notebook, null
+Neo4j /api/elements/retrieve - notebook, null
+Neo4j /api/elements/retrieve - publication, null
+Neo4j /api/elements/retrieve - publication, null
+Neo4j /api/elements/retrieve - publication, null
+Neo4j /api/elements/retrieve - publication, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - oer, null
+Neo4j /api/elements/retrieve - dataset, null
+Neo4j /api/elements/retrieve - dataset, null
+Neo4j /api/elements/retrieve - dataset, null
+Neo4j /api/elements/retrieve - dataset, null

@@ -71,7 +71,7 @@ async function elementRetriever({
   
 elementRetriever({
   field_name: 'tags',
-  match_value: ['chicago']
+  match_value: ['heat exposure']
 })
   .then(data => console.log(data))
   .catch(error => console.error(error));
