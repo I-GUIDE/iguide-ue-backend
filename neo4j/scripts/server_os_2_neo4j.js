@@ -147,7 +147,13 @@ async function registerElementFromOpenSearch(tx, contributor_id, element){
 	    os_node['resource-type'] = node_type.toLowerCase();
 	    os_node['thumbnail-image'] = thumbnail_image;
 
-	    let contributor = await n4j_server.getContributorByID(contributor_id);
+	    // get contributor information from Neo4j to be added to OS element
+	    const {records, summary_} =
+		  await tx.run("MATCH (c:Contributor{openid:$id_param}) RETURN c{.*}",
+			       {id_param: contributor_id},
+			       {database: process.env.NEO4J_DB});
+
+	    let contributor = records[0]['_fields'][0];
 	    let contributor_name = '';
 	    if ('first_name' in contributor || 'last_name' in contributor) {
 		contributor_name = contributor['first_name'] + ' ' + contributor['last_name'];
