@@ -7,8 +7,7 @@
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 const fs = require('fs/promises');
 
-//const dotenv = require('dotenv').config({path: 'os.env'});
-const dotenv = require('dotenv').config();
+const dotenv = require('dotenv').config({path: 'os.env'});
 const fs_sync = require('fs');
 
 const os = require('@opensearch-project/opensearch')
@@ -37,11 +36,11 @@ const client = new os.Client({
 
 console.log('Connectd to OpenSearch: ' + os_node);
 console.log('\t- Using OpenSearch User: ' + os_usr);
-console.log('\t- Using OpenSearch Index: ' + os_index);
+//console.log('\t- Using OpenSearch Index: ' + os_index);
 
 async function getUsers() {
     const response = await client.search({
-	index: 'users',
+	index: 'users_dev_backup',
 	body: {
 	    from: 0,
 	    size: 100,
@@ -54,14 +53,13 @@ async function getUsers() {
       const { _id, _source } = hit;
       return { _id, ..._source };
     });
-    
-    //console.log(users);
+
     return users;
 }
 
 async function getElements() {
     const response = await client.search({
-	index: 'resources_dev',
+	index: 'elements', //'resources_dev',
 	body: {
 	    from: 0,
 	    size: 100,
@@ -76,6 +74,12 @@ async function getElements() {
       return { _id, ..._source };
     });
 
+    //let count = 0;
+    //for (e of elements){
+    //	if ('metadata' in e) count+=1;
+    // console.log(e);
+    //}
+    //console.log('Elements with openid: ' + count);
     // const authors = new Set();
     // for (e of elements){
     // 	if (e['authors'].length > 1) continue;
@@ -85,21 +89,27 @@ async function getElements() {
     // console.log(authors);
     
     //elements = elements.filter(e => (!('metadata.created_by' in e)));
-    //await fs.writeFile('./test.txt', JSON.stringify(elements, null, 2), { flag: 'a+' }, err => {});
+    //await fs.writeFile('./os_elements_july-29-24.json', JSON.stringify(elements, null, 2), { flag: 'a+' }, err => {});
     return elements;
 }
 
 async function insertElement(os_element) {
 
-    const {'id': element_id, ...element} = os_element;
+    const insert_index = 'neo4j-elements-dev';
+    console.log('Inserting to OpenSearch index: ' + insert_index);
     
+    const {'id': element_id, ...element} = os_element;
     const response = await client.index({
 	id: element_id,
-	index: 'neo4j-elements-dev',
+	index: insert_index,
 	body: element,
 	refresh: true,
     });
     return response['body']['result'];
+}
+
+async function emptyIndex() {
+    // [ToDo]
 }
 /***********
  * OS query to create index
@@ -139,15 +149,17 @@ PUT neo4j-elements-dev
 async function loadUsersFromFile() {
 
     const data = await fs.readFile('/code/os_users_sample_cleaned.json', { encoding: 'utf8' });
-    const ret = JSON.parse(data);
-    console.log('Users loaded from file:' + ret.length);
+    const users_data = JSON.parse(data);
+    console.log('Users loaded from file:' + users_data.length);
 
-    return ret;
+    return users_data;
 }
 
 async function loadElementsFromFile() {
-
-    const data = await fs.readFile('/code/os_elements_sample.json', { encoding: 'utf8' });
+    const elements_file_path = '/backend/neo4j/data/os_resources_july_29-24_cleaned.json';
+    // '/code/os_elements_sample.json'
+    
+    const data = await fs.readFile(elements_file_path, {encoding: 'utf8' });
     const ret = JSON.parse(data);
     console.log('Elements loaded from file:' + ret.length);
 

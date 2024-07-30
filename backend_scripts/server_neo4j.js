@@ -109,7 +109,7 @@ app.post('/api/upload-avatar', uploadAvatar.single('file'), (req, res) => {
 	return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    const filePath = `https://${process.env.DOMAIN}:3000/user-uploads/avatars/${req.file.filename}`;
+    const filePath = `https://${process.env.DOMAIN}:3500/user-uploads/avatars/${req.file.filename}`;
     res.json({
 	message: 'Avatar uploaded successfully',
 	url: filePath,
@@ -159,7 +159,7 @@ app.post('/api/update-avatar', uploadAvatar.single('file'), async (req, res) => 
 	}
 
 	// Update the user's avatar URL with the new file URL
-	const newAvatarUrl = `https://${process.env.DOMAIN}:3000/user-uploads/avatars/${newAvatarFile.filename}`;
+	const newAvatarUrl = `https://${process.env.DOMAIN}:3500/user-uploads/avatars/${newAvatarFile.filename}`;
 
 	const {result, oldAvatarUrl} = await n4j.setContributorAvatar(openid, newAvatarUrl);
 	if (result == false){
@@ -719,7 +719,7 @@ app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => 
 	return res.status(400).json({ message: 'No file uploaded' });
     }
     // [ToDo] Change filename to user ID
-    const filePath = `https://${process.env.DOMAIN}:3000/user-uploads/thumbnails/${req.file.filename}`;
+    const filePath = `https://${process.env.DOMAIN}:3500/user-uploads/thumbnails/${req.file.filename}`;
     res.json({
 	message: 'Thumbnail uploaded successfully',
 	url: filePath,
@@ -772,7 +772,7 @@ app.put('/api/resources', async (req, res) => {
 					      resource['notebook-file'], notebookHtmlDir);
 	    if (htmlNotebookPath) {
 		resource['html-notebook'] =
-		    `https://${process.env.DOMAIN}:3000/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+		    `https://${process.env.DOMAIN}:3500/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
 	    }
 	}
 
@@ -840,6 +840,14 @@ app.delete('/api/resources/:id', async (req, res) => {
     try {
 	const response = await n4j.deleteElementByID(resourceId);
 	if (response) {
+	    // Delete from OpenSearch
+	    const response = await client.delete({
+		index: os_index,
+		id: resourceId
+	    });
+	    console.log(response['body']['result']);
+	    await client.indices.refresh({ index: os_index });
+	    
 	    res.status(200).json({ message: 'Resource deleted successfully' });
 	} else {
 	    res.status(500).json({ error: 'Resource still exists after deletion' });
@@ -1013,6 +1021,7 @@ app.get('/api/check_users/:openid', async (req, res) => {
     const openid = decodeURIComponent(req.params.openid);
 
     console.log('Check user ...');
+    // [ToDo] Return {true, version_num} OR {false, -1}
     try {
 	const response = await n4j.checkContributorByID(openid);
 	res.json(response);
@@ -1388,13 +1397,13 @@ app.post('/api/elements/retrieve', async (req, res) => {
 
 console.log(`${process.env.SERV_TAG} server is up`);
 
-const PORT = 3001;
+const PORT = 3501;
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
 
-https.createServer(options, app).listen(3000, () => {
-    console.log('HTTPS server is running on 3000');
+https.createServer(options, app).listen(3500, () => {
+    console.log('HTTPS server is running on 3500');
 });
 
 // Serve Swagger docs

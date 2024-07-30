@@ -4,15 +4,15 @@ const n4j_server = require("./backend_neo4j")
  * Functions to move data from OpenSearch
  *****************************************************/
 
-async function createdRelationFromOpenSearch(tx, elem_data){
+async function createRelationFromOpenSearch(tx, elem_data){
 
-    let{'id':element_id,
+    let{'_id':element_id,
 	'resource-type': node_type,
 	'related-resources': related_elements,
-	'related-notebooks': related_notebooks,         // [Deprecated]
-	'related-datasets': related_datasets,           // [Deprecated]
-	'related-publications': related_publications,   // [Deprecated]
-	'related-oer': related_oer,                     // [Deprecated]
+	'related-notebooks': related_notebooks,
+	'related-datasets': related_datasets,
+	'related-publications': related_publications,
+	'related-oer': related_oer,
 	..._
        } = elem_data;
 
@@ -55,7 +55,7 @@ async function createdRelationFromOpenSearch(tx, elem_data){
 	await tx.run(query_str,
 		     query_params,
 		     {database: process.env.NEO4J_DB});
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('createdRelationFromOpenSearch() Error in query: '+ err);}
 }
 
 /**
@@ -66,7 +66,8 @@ async function createdRelationFromOpenSearch(tx, elem_data){
  */
 async function registerElementFromOpenSearch(tx, contributor_id, element){
 
-    let{'id':relation_id,
+    let{'_id':relation_id,
+	'thumbnail': thumbnail_,
 	'thumbnail-image': thumbnail_image,
 	'resource-type': node_type,
 	'related-resources': related_elements,
@@ -80,7 +81,8 @@ async function registerElementFromOpenSearch(tx, contributor_id, element){
 	'notebook-file': notebook_file,                 // Notebook
 	size: size,                                     // Dataset
 	'external-link-publication': external_link_pub, // Publication
-	'external-link-oer': external_link_oer,         // OER
+	//'external-link-oer': external_link_oer,         // OER
+	'oer-external-links': oer_external_links,         // OER
 	...node
        } = element;
 
@@ -102,7 +104,17 @@ async function registerElementFromOpenSearch(tx, contributor_id, element){
     } else if (node_type == n4j_server.ElementType.PUBLICATION){
 	node['external_link'] = external_link_pub;
     } else if (node_type == n4j_server.ElementType.OER){
-	node['external_link'] = external_link_oer;
+	node['oer_elink_titles'] = [];
+	node['oer_elink_urls'] = [];
+	node['oer_elink_types'] = [];
+
+	for (elink of oer_external_links){
+	    node['oer_elink_titles'].push(elink['title']);
+	    node['oer_elink_urls'].push(elink['url']);
+	    node['oer_elink_types'].push(elink['type']);
+	}
+	//node['external_link'] = oer-external-links;
+	//node['external_link'] = external_link_oer;
 	// this needs to be separated ...
 	//node['class, slides, '] = '';
     } else {
@@ -134,11 +146,17 @@ async function registerElementFromOpenSearch(tx, contributor_id, element){
 	    os_node['tags'] = node['tags'];
 	    os_node['resource-type'] = node_type.toLowerCase();
 	    os_node['thumbnail-image'] = thumbnail_image;
-	    os_node['contributor'] = ''; // [ToDo] get contributor first and last name
-	    
+
+	    let contributor = await n4j_server.getContributorByID(contributor_id);
+	    let contributor_name = '';
+	    if ('first_name' in contributor || 'last_name' in contributor) {
+		contributor_name = contributor['first_name'] + ' ' + contributor['last_name'];
+	    }
+	    os_node['contributor'] = contributor_name; 
+
 	    return {response: true, os_node: os_node};
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('registerElementFromOpenSearch() Error in query: '+ err);}
     return {response: false, os_node:{}};
 }
 
@@ -153,7 +171,7 @@ async function registerContributor(tx, contributor){
 	await tx.run(query_str,
 		     {contr_param: contributor},
 		     {database: process.env.NEO4J_DB});
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('registerContributor() cError in query: '+ err);}
 }
 
 /**
@@ -165,43 +183,60 @@ async function registerDataFromOpenSearchBatch(users, elements){
     const tx = await session.beginTransaction();
 
     try{
-	// register contributors
+	// (1) register contributors
 	for (u of users){
 	    registerContributor(tx, u);
 	}
-	
-	// register elements
+
+	// (2) register elements
 	const os_elements = [];
 	for (e of elements){
-	    authors = e['authors'];
-	    if (authors.includes('Fangzheng Lyu')){
-		// Fangzheng Lyu openid not available. Make Shaowen as contributor
-		contributor_id = "http://cilogon.org/serverB/users/47466092";
-	    } else if (authors.includes('Wei Hu')){
-		contributor_id = "http://cilogon.org/serverE/users/8927";
+	    const {metadata, ...cleaned_elem} = e;
+
+	    if ('metadata' in e){
+		// Elements having contributor id
+		contributor_id = metadata['created_by'];
+		//console.log('Element with metadata: ' + JSON.stringify(cleaned_elem));
 	    } else {
-		// Make Anand as default contributor
-		contributor_id = "http://cilogon.org/serverA/users/10128";
+		// Explicit contribbutor mapping for elements not having associated openid
+		authors = cleaned_elem['authors'];
+		if (authors.includes('Fangzheng Lyu')){
+		    // Fangzheng Lyu openid not available. Make Shaowen as contributor
+		    contributor_id = "http://cilogon.org/serverB/users/47466092";
+		} else if (authors.includes('Wei Hu')){
+		    contributor_id = "http://cilogon.org/serverE/users/8927";
+		} else {
+		    // Make Anand as default contributor
+		    contributor_id = "http://cilogon.org/serverA/users/10128";
+		}
 	    }
+
 	    const {response, os_node} =
-		  await registerElementFromOpenSearch(tx, contributor_id, e);
+		  await registerElementFromOpenSearch(tx, contributor_id, cleaned_elem);
 	    if (response){
 		os_elements.push(os_node);
 	    }
 	}
 
-	// create relations between elements
+	// (3) create relations between elements
 	for (e of elements){
-	    createdRelationFromOpenSearch(tx, e);
+	    createRelationFromOpenSearch(tx, e);
 	}
+
+	// (4) remove relationship IDs from OpenSearch
+	const query_str = "MATCH (n) REMOVE n.relation_id";
+	try{
+	    await tx.run(query_str,
+			 {database: process.env.NEO4J_DB});
+	} catch(err){console.log('removeRelationIds() Error in query: '+ err);}
 
 	try{
 	    await tx.commit();
-	} catch(err){console.log('Error in transaction: '+ err);}
+	} catch(err){console.log('registerDataFromOpenSearchBatch() Error in transaction: '+ err);}
 
 	return {response: true, os_elements: os_elements};
     } catch(err){
-	console.log('Error in transaction: '+ err);
+	console.log('registerDataFromOpenSearchBatch() Error in transaction: '+ err);
     } finally {
 	await session.close();
 	await n4j_server.driver.close();
