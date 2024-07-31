@@ -129,7 +129,7 @@ async function getElementByID(id){
     const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
 	  "OPTIONAL MATCH (n)-[:RELATED]-(r) " +
 	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as related_elems, n, c  " +
-	  "RETURN n{.*, related_elements: related_elems, element_type:LABELS(n)[0], created_by:c.openid}";
+	  "RETURN n{.*, related_elements: related_elems, element_type:LABELS(n)[0], contributor:c.openid}";
 
     try {
 	const {records, summary} =
@@ -214,8 +214,6 @@ async function getElementByID(id){
 		
 		ret['oer-external-links'].push(oer_elink);
 	    }
-	    
-	    console.log('getElementByID(): ' + ret);
 	} else {
 	    var ret = this_elem;
 	}
