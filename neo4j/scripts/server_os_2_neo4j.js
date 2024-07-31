@@ -108,10 +108,12 @@ async function registerElementFromOpenSearch(tx, contributor_id, element){
 	node['oer_elink_urls'] = [];
 	node['oer_elink_types'] = [];
 
-	for (elink of oer_external_links){
-	    node['oer_elink_titles'].push(elink['title']);
-	    node['oer_elink_urls'].push(elink['url']);
-	    node['oer_elink_types'].push(elink['type']);
+	if (oer_external_links) {
+	    for (elink of oer_external_links){
+		node['oer_elink_titles'].push(elink['title']);
+		node['oer_elink_urls'].push(elink['url']);
+		node['oer_elink_types'].push(elink['type']);
+	    }
 	}
 	//node['external_link'] = oer-external-links;
 	//node['external_link'] = external_link_oer;
@@ -198,23 +200,24 @@ async function registerDataFromOpenSearchBatch(users, elements){
 	const os_elements = [];
 	for (e of elements){
 	    const {metadata, ...cleaned_elem} = e;
-
+	    
 	    if ('metadata' in e){
 		// Elements having contributor id
 		contributor_id = metadata['created_by'];
 		//console.log('Element with metadata: ' + JSON.stringify(cleaned_elem));
 	    } else {
-		// Explicit contribbutor mapping for elements not having associated openid
-		authors = cleaned_elem['authors'];
-		if (authors.includes('Fangzheng Lyu')){
-		    // Fangzheng Lyu openid not available. Make Shaowen as contributor
-		    contributor_id = "http://cilogon.org/serverB/users/47466092";
-		} else if (authors.includes('Wei Hu')){
-		    contributor_id = "http://cilogon.org/serverE/users/8927";
-		} else {
-		    // Make Anand as default contributor
-		    contributor_id = "http://cilogon.org/serverA/users/10128";
-		}
+		throw Error('registerDataFromOpenSearchBatch() contributor_id not found');
+		// // Explicit contribbutor mapping for elements not having associated openid
+		// authors = cleaned_elem['authors'];
+		// if (authors.includes('Fangzheng Lyu')){
+		//     // Fangzheng Lyu openid not available. Make Shaowen as contributor
+		//     contributor_id = "http://cilogon.org/serverB/users/47466092";
+		// } else if (authors.includes('Wei Hu')){
+		//     contributor_id = "http://cilogon.org/serverE/users/8927";
+		// } else {
+		//     // Make Anand as default contributor
+		//     contributor_id = "http://cilogon.org/serverA/users/10128";
+		// }
 	    }
 
 	    const {response, os_node} =

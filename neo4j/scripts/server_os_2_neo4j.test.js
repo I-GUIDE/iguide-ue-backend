@@ -90,12 +90,24 @@ async function moveDataFromOS2Neo4j() {
 		user['last_name'] = 'Kang';
 		break;
 	    default:
-		console.log('ignore ...');
+		console.log('Missing info for: ' + user['openid']);
 	    }
 	}
 	users.push(user);
     }
 
+    // manually add Fangzheng
+    fangzheng = {};
+    fangzheng['first_name'] = 'Fangzheng';
+    fangzheng['last_name'] = 'Lyu';
+    fangzheng['openid'] = 'http://cilogon.org/serverE/users/209193';
+    fangzheng['affiliation'] = 'University of Illinois Urbana Champaign';
+    fangzheng['bio'] = '';
+    fangzheng['role'] = 'user';
+    fangzheng['version'] = '1';
+    
+    users.push(fangzheng);
+    
     // read elements data from OS filedump
     //const data = await os_server.loadElementsFromFile();
     //const elements = [];
@@ -111,9 +123,17 @@ async function moveDataFromOS2Neo4j() {
 
     // filter elements with invalid data
     elements = elements.filter(e => ((e['title'])));
+    const elements_without_contrib = elements.filter(e => (!('metadata' in e)));
     // filter elements having contributor information
     elements = elements.filter(e => (('metadata' in e)));
 
+    for (let e of elements_without_contrib){
+	e['metadata'] = {};
+	e['metadata']['created_by'] = 'http://cilogon.org/serverE/users/209193';
+	//console.log(e['authors']);
+	elements.push(e);
+    }
+    
     // write data to Neo4j
     try {
         const {response, os_elements} =
@@ -145,4 +165,11 @@ moveDataFromOS2Neo4j()
 
 // os_server.getElements()
 //     .then(d => console.log('Elements Count: ' + d.length))
+//     .catch(error => console.error(error));
+
+/**********
+ * DANGER
+ **********/
+// os_server.emptyIndex('neo4j-elements-dev')
+//     .then(d => console.log(d))
 //     .catch(error => console.error(error));
