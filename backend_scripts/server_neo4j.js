@@ -944,7 +944,7 @@ app.get('/api/resources/count/:field/:values', async (req, res) => {
     console.log('/api/resource/count');
 
     try{
-	if (field == 'metadata.created_by'){
+	if (field == 'contributor'){
 	    if (valueArray.length > 1){
 		throw Error('Neo4j /api/resources/count/ not implemented for multiple values');
 	    }
@@ -1316,7 +1316,7 @@ app.post('/api/elements/retrieve', async (req, res) => {
 	    if (element_type !== null){
 		throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
 	    } else if (count_only) {
-		if (field_name == 'metadata.created_by') {
+		if (field_name == 'contributor') {
 		    let total_count = 0;
 		    for (let val of match_value){
 			let response = await n4j.getElementsCountByContributor(val);
@@ -1344,7 +1344,7 @@ app.post('/api/elements/retrieve', async (req, res) => {
 		    }
 		    res.json(resources);
 		    return;
-		} else if (field_name == 'metadata.created_by') {
+		} else if (field_name == 'contributor') {
 		    const resources = [];
 		    for (let val of match_value){
 			let resource = await n4j.getElementsByContributor(val, from, size);
