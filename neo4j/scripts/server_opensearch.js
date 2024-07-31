@@ -50,8 +50,8 @@ async function getUsers() {
 	}
     });
     const users = response.body.hits.hits.map(hit => {
-      const { _id, _source } = hit;
-      return { _id, ..._source };
+	const { _id, _source } = hit;
+	return _source;//{ _id, ..._source };
     });
 
     return users;
@@ -108,8 +108,17 @@ async function insertElement(os_element) {
     return response['body']['result'];
 }
 
-async function emptyIndex() {
-    // [ToDo]
+async function emptyIndex(index_to_empty) {
+    // console.log('Clearing index: ' + index_to_empty);
+    // const response = await client.delete({
+    // 	index: index_to_empty,
+    // 	body: {
+    //         query: {
+    // 		match_all: { }
+    //         }
+    // 	}
+    // });
+    // return response['body']['result'];
 }
 /***********
  * OS query to create index
@@ -176,3 +185,5 @@ exports.insertElement = insertElement;
 
 exports.loadUsersFromFile = loadUsersFromFile;
 exports.loadElementsFromFile = loadElementsFromFile;
+
+exports.emptyIndex = emptyIndex;

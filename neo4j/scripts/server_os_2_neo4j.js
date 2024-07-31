@@ -175,6 +175,7 @@ async function registerElementFromOpenSearch(tx, contributor_id, element){
  */
 async function registerContributor(tx, contributor){
     const query_str = "CREATE (c: Contributor $contr_param)";
+    //const query_str = "MERGE (c: Contributor $contr_param)";
     try{
 	await tx.run(query_str,
 		     {contr_param: contributor},

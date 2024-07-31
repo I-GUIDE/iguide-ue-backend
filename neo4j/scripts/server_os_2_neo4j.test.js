@@ -8,12 +8,17 @@ async function moveDataFromOS2Neo4j() {
     // read users data from OpenSearch
     const user_data = await os_server.getUsers();
     const users = [];
+
+    let fangzheng_added = false;
     for (c of user_data){
 	let user = c; //c['_source'];
 	// default role of every user
 	user['role'] = 'user';
 	user['version'] = '1';
 
+	if (user['openid'] == 'http://cilogon.org/serverE/users/209193')
+	    fangzheng_added = true;
+	
 	// insert missing data
 	if (!('first_name' in user)) {
 	    switch(user['openid']){
@@ -96,17 +101,19 @@ async function moveDataFromOS2Neo4j() {
 	users.push(user);
     }
 
-    // manually add Fangzheng
-    fangzheng = {};
-    fangzheng['first_name'] = 'Fangzheng';
-    fangzheng['last_name'] = 'Lyu';
-    fangzheng['openid'] = 'http://cilogon.org/serverE/users/209193';
-    fangzheng['affiliation'] = 'University of Illinois Urbana Champaign';
-    fangzheng['bio'] = '';
-    fangzheng['role'] = 'user';
-    fangzheng['version'] = '1';
+    if (!fangzheng_added){
+	// manually add Fangzheng
+	fangzheng = {};
+	fangzheng['first_name'] = 'Fangzheng';
+	fangzheng['last_name'] = 'Lyu';
+	fangzheng['openid'] = 'http://cilogon.org/serverE/users/209193';
+	fangzheng['affiliation'] = 'University of Illinois Urbana Champaign';
+	fangzheng['bio'] = '';
+	fangzheng['role'] = 'user';
+	fangzheng['version'] = '1';
     
-    users.push(fangzheng);
+	users.push(fangzheng);
+    }
     
     // read elements data from OS filedump
     //const data = await os_server.loadElementsFromFile();
