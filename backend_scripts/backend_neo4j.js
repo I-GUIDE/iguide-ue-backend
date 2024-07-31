@@ -277,7 +277,7 @@ async function getElementsByType(type, from, size){
 
     // [ToDo] Just to make things work with frontend (should be removed)
     const query_str = "MATCH (n:"+ node_type +")-[:CONTRIBUTED]-(r) " +
-	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)] } " +
+	  "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)] } " +
 	  "ORDER BY n.title " +
 	  "SKIP $from " +
 	  "LIMIT $size";
@@ -347,7 +347,7 @@ async function getElementsCountByType(type){
 async function getElementsByContributor(openid, from, size){
     // [ToDo]
     const query_str = "MATCH (c:Contributor{openid:$openid})-[:CONTRIBUTED]-(r) " +
-	  "RETURN {_id:r.id, tags: r.tags, title:r.title, `resource-type`:LABELS(r)[0], `thumbnail-image`:r.thumbnail_image, contents:r.contents, authors: r.authors} " +
+	  "RETURN {_id:r.id, tags: r.tags, title:r.title, contents:r.contents, tags:r.tags, `resource-type`:LABELS(r)[0], `thumbnail-image`:r.thumbnail_image, contents:r.contents, authors: r.authors} " +
 	  "ORDER BY r.title " +
 	  "SKIP $from " +
 	  "LIMIT $size";
@@ -408,7 +408,7 @@ async function getElementsCountByContributor(openid){
 async function getElementsByTag(tag, from, size){
     const query_str = "MATCH (n)-[:CONTRIBUTED]-(r) " +
 	  "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) )" +
-	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)] } " +
+	  "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)] } " +
 	  "ORDER BY n.title " +
 	  "SKIP $from " +
 	  "LIMIT $size";
@@ -658,7 +658,7 @@ async function getContributorByID(openid){
 	    return {};
 	} else if (records.length > 1){
 	    // should never reach here since ID is unique
-	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID: ${openid}");
+	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID:" + openid);
 	}
 	return records[0]['_fields'][0];
     } catch(err){console.log('Error in query: '+ err);}
