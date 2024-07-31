@@ -145,7 +145,7 @@ async function getElementByID(id){
 	}
 	// frontend expects separate lists for related elements
 	let result = records[0]['_fields'][0];
-	let {related_elements: related_elements, ...ret} = result;
+	let {related_elements: related_elements, ...this_elem} = result;
 
 	// Original
 	// ret['related_nb'] = []
@@ -154,37 +154,37 @@ async function getElementByID(id){
 	// ret['related_pub'] = []
 
 	// [ToDo] should be removed
-	ret['related-notebooks'] = []
-	ret['related-datasets'] = []
-	ret['related-oers'] = []
-	ret['related-publications'] = []
+	this_elem['related-notebooks'] = []
+	this_elem['related-datasets'] = []
+	this_elem['related-oers'] = []
+	this_elem['related-publications'] = []
 
 	// [ToDo] Current frontend expects only IDs for every related element and
 	// makes a call to get title of every related element. Should be changed
 	// A better approach will be to return ID, title, and type of all related elements
 	//as a result of this one query.
-	// [ToDo] Change `ret_elem.id`
+	// [ToDo] Change `rel_elem.id` to return everything for related elem
 	for (elem of related_elements){
 	    if (elem['id'] == null || elem['element_type'] == null) continue;
 	    switch(elem['element_type']){
 	    case ElementType.DATASET:{
-		let {element_type:_, ...ret_elem} = elem;
-		ret['related-datasets'].push(ret_elem['id']);
+		let {element_type:_, ...rel_elem} = elem;
+		this_elem['related-datasets'].push(rel_elem['id']);
 		break;
 	    }
 	    case ElementType.NOTEBOOK:{
-		let {element_type:_, ...ret_elem} = elem;
-		ret['related-notebooks'].push(ret_elem['id']);
+		let {element_type:_, ...rel_elem} = elem;
+		this_elem['related-notebooks'].push(rel_elem['id']);
 		break;
 	    }
 	    case ElementType.OER:{
-		let {element_type:_, ...ret_elem} = elem;
-		ret['related-oers'].push(ret_elem['id']);
+		let {element_type:_, ...rel_elem} = elem;
+		this_elem['related-oers'].push(rel_elem['id']);
 		break;
 	    }
 	    case ElementType.PUBLICATION:{
-		let {element_type:_, ...ret_elem} = elem;
-		ret['related-publications'].push(ret_elem['id']);
+		let {element_type:_, ...rel_elem} = elem;
+		this_elem['related-publications'].push(rel_elem['id']);
 		break;
 	    }
 	    case "Author":{
@@ -197,6 +197,31 @@ async function getElementByID(id){
 		break;
 	    }
 	}
+
+	// External links for OERs
+	if (this_elem['element_type'] == ElementType.OER){
+	    var {'oer_elink_types': oer_elink_types,
+		 'oer_elink_titles': oer_elink_titles,
+		 'oer_elink_urls': oer_elink_urls,
+		 ...ret} = this_elem;
+	    
+	    ret['oer-external-links'] = [];
+	    for (let i=0; i<oer_elink_titles.length; ++i){
+		let oer_elink = {}
+		oer_elink['type'] = oer_elink_types[i];
+		oer_elink['title'] = oer_elink_titles[i];
+		oer_elink['url'] = oer_elink_urls[i];
+		
+		ret['oer-external-links'].push(oer_elink);
+	    }
+	    
+	    console.log('getElementByID(): ' + ret);
+	} else {
+	    var ret = this_elem;
+	}
+	// const ret = (() => {
+	// })();
+	
 
 	// [ToDo] should be removed
 	ret['_id'] = ret['id']
