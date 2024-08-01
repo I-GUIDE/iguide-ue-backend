@@ -129,7 +129,7 @@ async function getElementByID(id){
     const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
 	  "OPTIONAL MATCH (n)-[:RELATED]-(r) " +
 	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as related_elems, n, c  " +
-	  "RETURN n{.*, related_elements: related_elems, element_type:LABELS(n)[0], contributor:c.openid}";
+	  "RETURN n{.*, related_elements: related_elems, element_type:LABELS(n)[0], `contributor-id`:c.openid, `contributor-name`:[(c.first_name + ' ' + c.last_name)]}";
 
     try {
 	const {records, summary} =
@@ -141,7 +141,7 @@ async function getElementByID(id){
 	    return {};
 	} else if (records.length > 1){
 	    // should never reach here since ID is unique
-	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID: ${id}");
+	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID: " + id);
 	}
 	// frontend expects separate lists for related elements
 	let result = records[0]['_fields'][0];
@@ -204,14 +204,14 @@ async function getElementByID(id){
 		 'oer_elink_titles': oer_elink_titles,
 		 'oer_elink_urls': oer_elink_urls,
 		 ...ret} = this_elem;
-	    
+
 	    ret['oer-external-links'] = [];
 	    for (let i=0; i<oer_elink_titles.length; ++i){
 		let oer_elink = {}
 		oer_elink['type'] = oer_elink_types[i];
 		oer_elink['title'] = oer_elink_titles[i];
 		oer_elink['url'] = oer_elink_urls[i];
-		
+
 		ret['oer-external-links'].push(oer_elink);
 	    }
 	} else {
@@ -219,7 +219,7 @@ async function getElementByID(id){
 	}
 	// const ret = (() => {
 	// })();
-	
+
 
 	// [ToDo] should be removed
 	ret['_id'] = ret['id']
@@ -276,8 +276,14 @@ async function getElementsByType(type, from, size){
     }
 
     // [ToDo] Just to make things work with frontend (should be removed)
-    const query_str = "MATCH (n:"+ node_type +")-[:CONTRIBUTED]-(r) " +
-	  "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)] } " +
+    // const query_str = "MATCH (n:"+ node_type +")-[:CONTRIBUTED]-(r) " +
+    // 	  "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)] } " +
+    // 	  "ORDER BY n.title " +
+    // 	  "SKIP $from " +
+    // 	  "LIMIT $size";
+
+    const query_str = "MATCH (n:"+ node_type +") " +
+	  "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors } " +
 	  "ORDER BY n.title " +
 	  "SKIP $from " +
 	  "LIMIT $size";
@@ -406,9 +412,16 @@ async function getElementsCountByContributor(openid){
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
 async function getElementsByTag(tag, from, size){
-    const query_str = "MATCH (n)-[:CONTRIBUTED]-(r) " +
+    // const query_str = "MATCH (n)-[:CONTRIBUTED]-(r) " +
+    // 	  "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) )" +
+    // 	  "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)] } " +
+    // 	  "ORDER BY n.title " +
+    // 	  "SKIP $from " +
+    // 	  "LIMIT $size";
+
+    const query_str = "MATCH (n) " +
 	  "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) )" +
-	  "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)] } " +
+	  "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors } " +
 	  "ORDER BY n.title " +
 	  "SKIP $from " +
 	  "LIMIT $size";
@@ -633,7 +646,7 @@ async function getContributorProfileByID(openid){
 	    return {};
 	} else if (records.length > 1){
 	    // should never reach here since ID is unique
-	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID: ${openid}");
+	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID: " + openid);
 	}
 	return records[0]['_fields'][0];
     } catch(err){console.log('Error in query: '+ err);}
