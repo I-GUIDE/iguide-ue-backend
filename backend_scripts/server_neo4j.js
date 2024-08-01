@@ -1001,6 +1001,41 @@ app.get('/api/users/:openid', async (req, res) => {
 
 /**
  * @swagger
+ * /api/users/{openid}:
+ *   get:
+ *     summary: Return the user document given the openid
+ *     parameters:
+ *       - in: path
+ *         name: openid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The OpenID of the user
+ *     responses:
+ *       200:
+ *         description: The user document
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Error fetching the user
+ */
+app.get('/api/user/role/:openid', async (req, res) => {
+    const openid = decodeURIComponent(req.params.openid);
+    try {
+	const response = await n4j.getContributorByID(openid);
+	if (response.size == 0){
+	    return res.status(404).json({ message: 'User not found' });
+	}
+	let ret = {'role' : response['role']};
+	res.json(ret);
+    } catch (error) {
+	console.error('Error fetching user:', error);
+	res.status(500).json({ message: 'Error fetching the user' });
+    }
+});
+
+/**
+ * @swagger
  * /api/check_users/{openid}:
  *   get:
  *     summary: Check if a user exists given the openid
@@ -1084,6 +1119,50 @@ app.post('/api/users', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/element/{type}/{id}:
+ *   put:
+ *     summary: Update the user document
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The id of the elemnt
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: User updated successfully
+ *       500:
+ *         description: Internal server error
+ */
+app.put('/api/element/:type/:id', async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
+    const type = decodeURIComponent(req.params.type);
+    const updates = req.body;
+
+    console.log('Updating element ...');
+
+    try {
+	const response = await n4j.updateContributor(openid, updates);
+	if (response) {
+	    res.json({ message: 'User updated successfully', result: response });
+	} else {
+	    console.log('Error updating user');
+	    res.json({ message: 'Error updating user', result: response });
+	}
+    } catch (error) {
+	console.error('Error updating user:', error);
+	res.status(500).json({ message: 'Internal server error' });
+    }
+});
 
 /**
  * @swagger
