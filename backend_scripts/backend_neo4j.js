@@ -699,55 +699,74 @@ async function checkContributorByID(openid){
     return false;
 }
 
-/**
- * Register new element
- * @param {String} contributor_id OpenID of registered contributor
- * @param {Object} element Map with element attributes (refer to schema)
- * @return {Boolean, String} {true, element_id} on success OR {false, ''} on failure.
- */
-async function registerElement(contributor_id, element){
+async function updateElement(id, element){
 
-    // separate common and specific element properties
-    let{metadata:_,
-	'thumbnail-image': thumbnail,
-	'resource-type': node_type,
-	'related-resources': related_elements,
-	'external-link': external_link,                 // Dataset
-	'direct-download-link': direct_download_link,   // Dataset
-	'notebook-repo': notebook_repo,                 // Notebook
-	'notebook-file': notebook_file,                 // Notebook
-	size: size,                                     // Dataset
-	'external-link-publication': external_link_pub, // Publication
-	'external-link-oer': external_link_oer,         // OER
-	...node
-       } = element;
+    // let{metadata:_,
+    // 	'resource-type': node_type,
+    // 	'related-resources': related_elements,
+    // 	...node
+    //    } = element;
 
+    const session = driver.session({database: process.env.NEO4J_DB});
+    const tx = await session.beginTransaction();
+    
+    let {node, node_type, related_elements} = await elementToNode(element, generate_id=false);
     node_type = node_type[0].toUpperCase() + node_type.slice(1);
-    node['thumbnail_image'] = thumbnail;
 
-    // (1) generate id (UUID)
-    node['id'] = uuidv4();
-    // (2) insert element as a new node with id and other fields
-    if (node_type == ElementType.NOTEBOOK){
-	node['notebook_repo'] = notebook_repo;
-	node['notebook_file'] = notebook_file;
-    } else if (node_type == ElementType.DATASET){
-	node['external_link'] = external_link;
-	node['direct_download_link'] = direct_download_link;
-	node['size'] = size;
-    } else if (node_type == ElementType.PUBLICATION){
-	node['external_link'] = external_link_pub;
-    } else if (node_type == ElementType.OER){
-	node['external_link'] = external_link_oer
-    } else {
-	throw Error("Server Neo4j: Register element type not implemented");
+    const this_element_match = "MATCH (n:"+node_type+"{id:$id}) ";
+    var this_element_set = "";
+    const this_element_query_params = {id: id};
+
+    // update this element
+    let i=0;
+    for (const [key, value] of Object.entries(node)) {
+	this_element_set += "SET n." + key + "=$attr" + i + " ";
+	this_element_query_params['attr' + i] = value;
+	i+=1;
     }
 
-    //console.log(node);
+    // handle related elements
+    var {query_match, query_merge, query_params} =
+	await generateQueryStringForRelatedElements(related_elements);
+    
+    // combine all query parameters
+    query_params = {...query_params, ...this_element_query_params};
+    
+    const query_str = this_element_match + query_match + this_element_set + query_merge;
+    try{
+	let ret = false;
+	// first remove all existing relations
+	await tx.run("MATCH (n:"+node_type+"{id:$id})-[r:RELATED]-(e) DELETE r",
+		     {id:id},
+		     {database: process.env.NEO4J_DB}
+	);
+	// update node and relations
+	const {_, summary} =
+	      await tx.run(query_str,
+			   query_params,
+			   {database: process.env.NEO4J_DB});
+	if (summary.counters.updates()['propertiesSet'] >= 1){
+	    //return true;
+	    ret = true;
+	}
 
-    var query_match = "";
-    var query_merge = "";
-    var query_params = {node_param: node}
+	await tx.commit();
+	return ret;
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return false;
+}
+
+/**
+ * Helper function to generate CQL query string to create relations to Element 'n'
+ * @param {Object} related_elements Object map with related elements information. Every related
+ *                 element is expected to have at least 'type', and 'title' values 
+ * @return {String, String, Object} {query_match, query_merge, query_params}
+ */
+async function generateQueryStringForRelatedElements(related_elements){
+    let query_match = "";
+    let query_merge = "";
+    let query_params = {}
 
     // (3) create relations based on related-elements
     // [ToDo] To avoid full DB scan, if we know the type of related elements, the query
@@ -769,8 +788,96 @@ async function registerElement(contributor_id, element){
 	}
 	query_merge += "MERGE (n)-[:RELATED]->(to"+i+") ";
 	query_params["title"+i] = related_elem['title'];
-
     }
+
+    return {query_match:query_match, query_merge:query_merge, query_params:query_params}
+}
+
+async function elementToNode(element, generate_id=true){
+    // separate common and specific element properties
+    let{metadata:_,
+	'thumbnail-image': thumbnail,
+	'resource-type': node_type,
+	'related-resources': related_elements,
+	'external-link': external_link,                 // Dataset
+	'direct-download-link': direct_download_link,   // Dataset
+	'notebook-repo': notebook_repo,                 // Notebook
+	'notebook-file': notebook_file,                 // Notebook
+	size: size,                                     // Dataset
+	'external-link-publication': external_link_pub, // Publication
+	'external-link-oer': external_link_oer,         // OER
+	...node
+       } = element;
+
+    node_type = node_type[0].toUpperCase() + node_type.slice(1);
+    node['thumbnail_image'] = thumbnail;
+
+    // (1) generate id (UUID)
+    if (generate_id) node['id'] = uuidv4();
+    // (2) insert element as a new node with id and other fields
+    if (node_type == ElementType.NOTEBOOK){
+	node['notebook_repo'] = notebook_repo;
+	node['notebook_file'] = notebook_file;
+    } else if (node_type == ElementType.DATASET){
+	node['external_link'] = external_link;
+	node['direct_download_link'] = direct_download_link;
+	node['size'] = size;
+    } else if (node_type == ElementType.PUBLICATION){
+	node['external_link'] = external_link_pub;
+    } else if (node_type == ElementType.OER){
+	node['external_link'] = external_link_oer
+    } else {
+	throw Error("Backend Neo4j: elementToNode type not implemented");
+    }
+
+    return {node:node, node_type:node_type, related_elements:related_elements};
+}
+
+/**
+ * Register new element
+ * @param {String} contributor_id OpenID of registered contributor
+ * @param {Object} element Map with element attributes (refer to schema)
+ * @return {Boolean, String} {true, element_id} on success OR {false, ''} on failure.
+ */
+async function registerElement(contributor_id, element){
+
+    // (1) and (2)
+    const {node, node_type, related_elements} = await elementToNode(element);
+    
+    // (3) create relations based on related-elements
+    var {query_match, query_merge, query_params} =
+	  await generateQueryStringForRelatedElements(related_elements);
+
+    // add node (element info) as parameter
+    query_params = {node_param: node, ...query_params};
+    
+    // var query_match = "";
+    // var query_merge = "";
+    // var query_params = {node_param: node}
+
+    // // (3) create relations based on related-elements
+    // // [ToDo] To avoid full DB scan, if we know the type of related elements, the query
+    // // can be updated to search for related ID with a lable as type
+    // for (let [i, related_elem] of related_elements.entries()){
+    // 	// query_match += "MATCH(to"+i+"{id:$id"+i+"}) ";
+    // 	// query_merge += "MERGE (n)-[:RELATED]->(to"+i+") ";
+    // 	// query_params["id"+i] = related_elem['id'];
+
+    // 	// get related elements based on title
+    // 	if (related_elem['type'] == 'notebook'){
+    // 	    query_match += "MATCH(to"+i+":Notebook{title:$title"+i+"}) ";
+    // 	} else if (related_elem['type'] == 'dataset') {
+    // 	    query_match += "MATCH(to"+i+":Dataset{title:$title"+i+"}) ";
+    // 	} else if (related_elem['type'] == 'publication') {
+    // 	    query_match += "MATCH(to"+i+":Publication{title:$title"+i+"}) ";
+    // 	} else if (related_elem['type'] == 'oer') {
+    // 	    query_match += "MATCH(to"+i+":Oer{title:$title"+i+"}) ";
+    // 	}
+    // 	query_merge += "MERGE (n)-[:RELATED]->(to"+i+") ";
+    // 	query_params["title"+i] = related_elem['title'];
+
+    // }
+
     // (4) create CONTRIBUTED_BY relation with contributor_id
     query_match += "MATCH(c:Contributor{openid:$contrib_id}) ";
     query_merge += "MERGE (c)-[:CONTRIBUTED]->(n) ";
@@ -814,6 +921,7 @@ async function deleteElementByID(id){
     return false;
 }
 
+exports.updateElement = updateElement;
 exports.getElementByID = getElementByID;
 exports.registerElement = registerElement;
 exports.getElementsByTag = getElementsByTag;

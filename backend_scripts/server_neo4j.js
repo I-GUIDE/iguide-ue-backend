@@ -727,6 +727,7 @@ app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => 
 });
 
 /**
+ * DEPRECATED. Should use PUT /api/element instead
  * @swagger
  * /api/resources:
  *   put:
@@ -760,6 +761,8 @@ app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => 
  *         description: Internal server error
  */
 app.put('/api/resources', async (req, res) => {
+    // DERECATED ....
+    console.warn('/api/resources is DEPRECATED. Should NOT be used');
     // [Done] Neo4j
     const resource = req.body;
 
@@ -815,6 +818,97 @@ app.put('/api/resources', async (req, res) => {
 	res.status(500).json({ error: error.message });
     }
 });
+
+/**
+ * @swagger
+ * /api/element:
+ *   put:
+ *     summary: Register a resource
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               resource-type:
+ *                 type: string
+ *               notebook-repo:
+ *                 type: string
+ *               notebook-file:
+ *                 type: string
+ *               related-resources:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     type:
+ *                       type: string
+ *                     title:
+ *                       type: string
+ *     responses:
+ *       200:
+ *         description: Resource registered successfully
+ *       500:
+ *         description: Internal server error
+ */
+app.post('/api/element', async (req, res) => {
+    // [Done] Neo4j
+    const resource = req.body;
+
+    try {
+	if (resource['resource-type'] === 'notebook' &&
+	    resource['notebook-repo'] &&
+	    resource['notebook-file']) {
+	    const htmlNotebookPath =
+		  await convertNotebookToHtml(resource['notebook-repo'],
+					      resource['notebook-file'], notebookHtmlDir);
+	    if (htmlNotebookPath) {
+		resource['html-notebook'] =
+		    `https://${process.env.DOMAIN}:3500/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+	    }
+	}
+
+	const contributor_id = resource['metadata']['created_by'];
+	//const response = await n4j.registerElement(contributor_id, resource);
+	const {response, element_id} = await n4j.registerElement(contributor_id, resource);
+	if (response){
+	    // Insert/index searchable part to OpenSearch
+	    let os_element = {};
+	    //os_element['id'] = element_id;
+	    os_element['title'] = resource['title'];
+	    os_element['contents'] = resource['contents'];
+	    os_element['authors'] = resource['authors'];
+	    os_element['tags'] = resource['tags'];
+	    os_element['resource-type'] = resource['resource-type'];
+	    os_element['thumbnail-image'] = resource['thumbnail-image'];
+	    console.log('Getting contributor name');
+	    // set contributor name
+	    let contributor = await n4j.getContributorByID(contributor_id);
+	    let contributor_name = '';
+	    if ('first_name' in contributor || 'last_name' in contributor) {
+		contributor_name = contributor['first_name'] + ' ' + contributor['last_name'];
+	    }
+	    os_element['contributor'] = contributor_name;
+
+	    console.log('indexing element: ' + os_element);
+	    const response = await client.index({
+		id: element_id,
+		index: os_index,
+		body: os_element,
+		refresh: true,
+	    });
+	    console.log(response['body']['result']);
+	    res.status(200).json({ message: 'Resource registered successfully' });
+	} else {
+	    console.log('Error registering resource ...');
+	    res.status(500).json({ error: 'Error registering resource' });
+	}
+    } catch (error) {
+	res.status(500).json({ error: error.message });
+    }
+});
+
 
 /**
  * @swagger
@@ -1121,7 +1215,7 @@ app.post('/api/users', async (req, res) => {
 
 /**
  * @swagger
- * /api/element/{type}/{id}:
+ * /api/element/{id}:
  *   put:
  *     summary: Update the user document
  *     parameters:
@@ -1143,20 +1237,37 @@ app.post('/api/users', async (req, res) => {
  *       500:
  *         description: Internal server error
  */
-app.put('/api/element/:type/:id', async (req, res) => {
+app.put('/api/element/:id', async (req, res) => {
     const id = decodeURIComponent(req.params.id);
-    const type = decodeURIComponent(req.params.type);
     const updates = req.body;
 
-    console.log('Updating element ...');
+    console.log('Updating element with id: ' + id);
+    //console.log(updates);
 
     try {
-	const response = await n4j.updateContributor(openid, updates);
+	const response = await n4j.updateElement(id, updates);
 	if (response) {
-	    res.json({ message: 'User updated successfully', result: response });
+	    // Update in OpenSearch
+	    const response = await client.update({
+		id: id,
+		index: os_index,
+		body: {
+		    doc: {
+			'title': updates['title'],
+			'contents': updates['contents'],
+			'authors': updates['authors'],
+			'tags': updates['tags'],
+			'thumbnail-image': updates['thumbnail-image']
+			// type and contributor should never be updated
+		    }
+		},
+		refresh: true,
+	    });
+	    //console.log(response['body']['result']);
+	    res.json({ message: 'Element updated successfully', result: response });
 	} else {
 	    console.log('Error updating user');
-	    res.json({ message: 'Error updating user', result: response });
+	    res.json({ message: 'Error updating element', result: response });
 	}
     } catch (error) {
 	console.error('Error updating user:', error);
