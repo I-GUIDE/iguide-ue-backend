@@ -212,7 +212,7 @@ async function getElementByID(id){
 		    oer_elink['type'] = oer_elink_types[i];
 		    oer_elink['title'] = oer_elink_titles[i];
 		    oer_elink['url'] = oer_elink_urls[i];
-		    
+
 		    ret['oer-external-links'].push(oer_elink);
 		}
 	    }
@@ -711,7 +711,7 @@ async function updateElement(id, element){
 
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
-    
+
     let {node, node_type, related_elements} = await elementToNode(element, generate_id=false);
     node_type = node_type[0].toUpperCase() + node_type.slice(1);
 
@@ -730,10 +730,10 @@ async function updateElement(id, element){
     // handle related elements
     var {query_match, query_merge, query_params} =
 	await generateQueryStringForRelatedElements(related_elements);
-    
+
     // combine all query parameters
     query_params = {...query_params, ...this_element_query_params};
-    
+
     const query_str = this_element_match + query_match + this_element_set + query_merge;
     try{
 	let ret = false;
@@ -762,7 +762,7 @@ async function updateElement(id, element){
 /**
  * Helper function to generate CQL query string to create relations to Element 'n'
  * @param {Object} related_elements Object map with related elements information. Every related
- *                 element is expected to have at least 'type', and 'title' values 
+ *                 element is expected to have at least 'type', and 'title' values
  * @return {String, String, Object} {query_match, query_merge, query_params}
  */
 async function generateQueryStringForRelatedElements(related_elements){
@@ -807,7 +807,7 @@ async function elementToNode(element, generate_id=true){
 	'notebook-file': notebook_file,                 // Notebook
 	size: size,                                     // Dataset
 	'external-link-publication': external_link_pub, // Publication
-	'external-link-oer': external_link_oer,         // OER
+	'oer-external-links': oer_external_links,       // OER
 	...node
        } = element;
 
@@ -827,7 +827,17 @@ async function elementToNode(element, generate_id=true){
     } else if (node_type == ElementType.PUBLICATION){
 	node['external_link'] = external_link_pub;
     } else if (node_type == ElementType.OER){
-	node['external_link'] = external_link_oer
+	node['oer_elink_titles'] = [];
+	node['oer_elink_urls'] = [];
+	node['oer_elink_types'] = [];
+
+	if (oer_external_links) {
+	    for (elink of oer_external_links){
+		node['oer_elink_titles'].push(elink['title']);
+		node['oer_elink_urls'].push(elink['url']);
+		node['oer_elink_types'].push(elink['type']);
+	    }
+	}
     } else {
 	throw Error("Backend Neo4j: elementToNode type not implemented");
     }
@@ -845,14 +855,14 @@ async function registerElement(contributor_id, element){
 
     // (1) and (2)
     const {node, node_type, related_elements} = await elementToNode(element);
-    
+
     // (3) create relations based on related-elements
     var {query_match, query_merge, query_params} =
 	  await generateQueryStringForRelatedElements(related_elements);
 
     // add node (element info) as parameter
     query_params = {node_param: node, ...query_params};
-    
+
     // var query_match = "";
     // var query_merge = "";
     // var query_params = {node_param: node}
