@@ -25,7 +25,7 @@ dotenv.config();
 const os_node = process.env.OPENSEARCH_NODE;
 const os_usr = process.env.OPENSEARCH_USERNAME;
 const os_pswd = process.env.OPENSEARCH_PASSWORD;
-const os_index = 'neo4j-elements-dev'; process.env.OPENSEARCH_INDEX;
+const os_index = 'neo4j-elements-dev'; //process.env.OPENSEARCH_INDEX;
 
 const options = {
     key: fs.readFileSync(process.env.SSL_KEY),
@@ -109,7 +109,7 @@ app.post('/api/upload-avatar', uploadAvatar.single('file'), (req, res) => {
 	return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    const filePath = `https://${process.env.DOMAIN}:3500/user-uploads/avatars/${req.file.filename}`;
+    const filePath = `https://${process.env.DOMAIN}:443/user-uploads/avatars/${req.file.filename}`;
     res.json({
 	message: 'Avatar uploaded successfully',
 	url: filePath,
@@ -159,7 +159,7 @@ app.post('/api/update-avatar', uploadAvatar.single('file'), async (req, res) => 
 	}
 
 	// Update the user's avatar URL with the new file URL
-	const newAvatarUrl = `https://${process.env.DOMAIN}:3500/user-uploads/avatars/${newAvatarFile.filename}`;
+	const newAvatarUrl = `https://${process.env.DOMAIN}:443/user-uploads/avatars/${newAvatarFile.filename}`;
 
 	const {result, oldAvatarUrl} = await n4j.setContributorAvatar(openid, newAvatarUrl);
 	if (result == false){
@@ -719,7 +719,7 @@ app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => 
 	return res.status(400).json({ message: 'No file uploaded' });
     }
     // [ToDo] Change filename to user ID
-    const filePath = `https://${process.env.DOMAIN}:3500/user-uploads/thumbnails/${req.file.filename}`;
+    const filePath = `https://${process.env.DOMAIN}:443/user-uploads/thumbnails/${req.file.filename}`;
     res.json({
 	message: 'Thumbnail uploaded successfully',
 	url: filePath,
@@ -775,7 +775,7 @@ app.put('/api/resources', async (req, res) => {
 					      resource['notebook-file'], notebookHtmlDir);
 	    if (htmlNotebookPath) {
 		resource['html-notebook'] =
-		    `https://${process.env.DOMAIN}:3500/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+		    `https://${process.env.DOMAIN}:443/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
 	    }
 	}
 
@@ -865,7 +865,7 @@ app.post('/api/element', async (req, res) => {
 					      resource['notebook-file'], notebookHtmlDir);
 	    if (htmlNotebookPath) {
 		resource['html-notebook'] =
-		    `https://${process.env.DOMAIN}:3500/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+		    `https://${process.env.DOMAIN}:443/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
 	    }
 	}
 
@@ -1587,13 +1587,13 @@ app.post('/api/elements/retrieve', async (req, res) => {
 
 console.log(`${process.env.SERV_TAG} server is up`);
 
-const PORT = 3501;
+const PORT = 8443;
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
 
-https.createServer(options, app).listen(3500, () => {
-    console.log('HTTPS server is running on 3500');
+https.createServer(options, app).listen(443, () => {
+    console.log('HTTPS server is running on 443');
 });
 
 // Serve Swagger docs
