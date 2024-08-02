@@ -206,13 +206,15 @@ async function getElementByID(id){
 		 ...ret} = this_elem;
 
 	    ret['oer-external-links'] = [];
-	    for (let i=0; i<oer_elink_titles.length; ++i){
-		let oer_elink = {}
-		oer_elink['type'] = oer_elink_types[i];
-		oer_elink['title'] = oer_elink_titles[i];
-		oer_elink['url'] = oer_elink_urls[i];
-
-		ret['oer-external-links'].push(oer_elink);
+	    if (Array.isArray(oer_elink_titles)) {
+		for (let i=0; i<oer_elink_titles.length; ++i){
+		    let oer_elink = {}
+		    oer_elink['type'] = oer_elink_types[i];
+		    oer_elink['title'] = oer_elink_titles[i];
+		    oer_elink['url'] = oer_elink_urls[i];
+		    
+		    ret['oer-external-links'].push(oer_elink);
+		}
 	    }
 	} else {
 	    var ret = this_elem;
