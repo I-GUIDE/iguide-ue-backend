@@ -487,23 +487,41 @@ async function getFeaturedElements(){
     // 	  "RETURN n{id: n.id, title:n.title, thumbnail_image:n.thumbnail_image, element_type:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)]}";
 
     // [ToDo] Just to make things work with frontend (should be removed)
-    const query_str = "MATCH (n{featured:True})-[:CONTRIBUTED]-(r) " +
-	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)]}";
+    // const query_str = "MATCH (n{featured:True})-[:CONTRIBUTED]-(r) " +
+    // 	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)]}";
+
+    // For dynamically loading featured/highlight elements
+    const rel_count = 2; // threshold number of related elements for a given element to determine if it is featured
+    const query_str = "CALL {MATCH(n:Notebook)-[r:RELATED]-() WITH n, COUNT(r) as rel_count WHERE rel_count>$rel_count " +
+	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0])} AS featured, rand() as random ORDER BY random LIMIT 1 " +
+	  "UNION " +
+	  "MATCH(n:Dataset)-[r:RELATED]-() WITH n, COUNT(r) as rel_count WHERE rel_count>$rel_count " +
+	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0])} AS featured, rand() as random ORDER BY random LIMIT 1 " +
+	  "UNION " +
+	  "MATCH(n:Publication)-[r:RELATED]-() WITH n, COUNT(r) as rel_count WHERE rel_count>$rel_count " +
+	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0])} AS featured, rand() as random ORDER BY random LIMIT 1 " +
+	  "UNION " +
+	  "MATCH(n:Oer)-[r:RELATED]-() WITH n, COUNT(r) as rel_count WHERE rel_count>$rel_count " +
+	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0])} AS featured, rand() as random ORDER BY random LIMIT 1 " +
+	  "}RETURN COLLECT(featured) AS featured";
 
     try{
 	const {records, summary} =
-	      await driver.executeQuery(query_str, {database: process.env.NEO4J_DB});
+	      await driver.executeQuery(query_str,
+					{rel_count:rel_count},
+					{database: process.env.NEO4J_DB});
 	if (records.length <= 0){
 	    // No featured elements found
 	    return [];
 	}
-	var ret = []
-	for (record of records){
-	    element = record['_fields'][0];
-	    element['resource-type'] = element['resource-type'].toLowerCase();
-	    ret.push(element);
-	}
-	return ret;
+	// var ret = []
+	// for (record of records){
+	//     element = record['_fields'][0];
+	//     element['resource-type'] = element['resource-type'].toLowerCase();
+	//     ret.push(element);
+	// }
+	// return ret;
+	return records[0]['_fields'][0];
     } catch(err){console.log('Error in query: '+ err);}
     // something went wrong
     return [];
