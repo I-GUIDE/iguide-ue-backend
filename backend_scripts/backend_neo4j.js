@@ -128,7 +128,7 @@ async function getElementByID(id){
     // [Fixed]
     const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
 	  "OPTIONAL MATCH (n)-[:RELATED]-(r) " +
-	  "WITH COLLECT({id:r.id, title:r.title, `resource-type`:TOLOWER(LABELS(r)[0])}) as related_elems, n, c  " +
+	  "WITH COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) as related_elems, n, c  " +
 	  "RETURN n{.*, related_elements: related_elems, `resource-type`:TOLOWER(LABELS(n)[0]), `contributor-id`:c.openid, `contributor-name`:[(c.first_name + ' ' + c.last_name)]}";
 
     const session = driver.session({database: process.env.NEO4J_DB});
@@ -233,6 +233,13 @@ async function getElementByID(id){
 	} else {
 	    var ret = this_elem;
 	}
+
+	// handle 64-bit numbers returned from neo4j
+	let res = ret['click_count']['high'];
+	for (let i=0; i<32; i++) {
+	    res *= 2;
+	}
+	ret['click_count'] = ret['click_count']['low'] + res;
 
 	// [ToDo] should be removed
 	ret['_id'] = ret['id']
