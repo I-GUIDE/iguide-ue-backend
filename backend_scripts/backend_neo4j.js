@@ -235,11 +235,18 @@ async function getElementByID(id){
 	}
 
 	// handle 64-bit numbers returned from neo4j
-	let res = ret['click_count']['high'];
-	for (let i=0; i<32; i++) {
-	    res *= 2;
+	if (ret['click_count']){
+	    console.log(ret['click_count']);
+	    let res = ret['click_count']['high'];
+	    for (let i=0; i<32; i++) {
+		res *= 2;
+	    }
+	    ret['click_count'] = ret['click_count']['low'] + res;
+	} else {
+	    // to handle corner cases, when click_count is not set. May happen for legacy elements added before summer school 2024
+	    // for all such elements, this will happen the first time only
+	    ret['click_count'] = 0;
 	}
-	ret['click_count'] = ret['click_count']['low'] + res;
 
 	// [ToDo] should be removed
 	ret['_id'] = ret['id']
@@ -878,6 +885,9 @@ async function elementToNode(element, generate_id=true){
 	throw Error("Backend Neo4j: elementToNode type not implemented");
     }
 
+    // for every element initialize click_count
+    node['click_count'] = neo4j.int(0);
+    
     return {node:node, node_type:node_type, related_elements:related_elements};
 }
 
