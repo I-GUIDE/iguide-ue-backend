@@ -128,12 +128,12 @@ async function getElementByID(id){
     // [Fixed]
     const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
 	  "OPTIONAL MATCH (n)-[:RELATED]-(r) " +
-	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as related_elems, n, c  " +
-	  "RETURN n{.*, related_elements: related_elems, element_type:LABELS(n)[0], `contributor-id`:c.openid, `contributor-name`:[(c.first_name + ' ' + c.last_name)]}";
+	  "WITH COLLECT({id:r.id, title:r.title, `resource-type`:TOLOWER(LABELS(r)[0])}) as related_elems, n, c  " +
+	  "RETURN n{.*, related_elements: related_elems, `resource-type`:TOLOWER(LABELS(n)[0]), `contributor-id`:c.openid, `contributor-name`:[(c.first_name + ' ' + c.last_name)]}";
 
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
-    
+
     try {
 	const {records, summary} =
 	      await tx.run(query_str,
@@ -146,7 +146,7 @@ async function getElementByID(id){
 	    // should never reach here since ID is unique
 	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID: " + id);
 	}
-	
+
 	// frontend expects separate lists for related elements
 	let result = records[0]['_fields'][0];
 	let {related_elements: related_elements, ...this_elem} = result;
@@ -175,26 +175,30 @@ async function getElementByID(id){
 	//as a result of this one query.
 	// [ToDo] Change `rel_elem.id` to return everything for related elem
 	for (elem of related_elements){
-	    if (elem['id'] == null || elem['element_type'] == null) continue;
-	    switch(elem['element_type']){
-	    case ElementType.DATASET:{
+	    if (elem['id'] == null || elem['resource-type'] == null) continue;
+	    switch(elem['resource-type']){
+	    case ElementType.DATASET.toLowerCase():{
 		let {element_type:_, ...rel_elem} = elem;
-		this_elem['related-datasets'].push(rel_elem['id']);
+		//this_elem['related-datasets'].push(rel_elem['id']);
+		this_elem['related-datasets'].push(rel_elem);
 		break;
 	    }
-	    case ElementType.NOTEBOOK:{
+	    case ElementType.NOTEBOOK.toLowerCase():{
 		let {element_type:_, ...rel_elem} = elem;
-		this_elem['related-notebooks'].push(rel_elem['id']);
+		//this_elem['related-notebooks'].push(rel_elem['id']);
+		this_elem['related-notebooks'].push(rel_elem);
 		break;
 	    }
-	    case ElementType.OER:{
+	    case ElementType.OER.toLowerCase():{
 		let {element_type:_, ...rel_elem} = elem;
-		this_elem['related-oers'].push(rel_elem['id']);
+		//this_elem['related-oers'].push(rel_elem['id']);
+		this_elem['related-oers'].push(rel_elem);
 		break;
 	    }
-	    case ElementType.PUBLICATION:{
+	    case ElementType.PUBLICATION.toLowerCase():{
 		let {element_type:_, ...rel_elem} = elem;
-		this_elem['related-publications'].push(rel_elem['id']);
+		//this_elem['related-publications'].push(rel_elem['id']);
+		this_elem['related-publications'].push(rel_elem);
 		break;
 	    }
 	    case "Author":{
@@ -203,7 +207,7 @@ async function getElementByID(id){
 	    }
 	    default:
 		throw Error("Server Neo4j: Related element type not implemented: " +
-			    elem['element_type']);
+			    elem['resource-type']);
 		break;
 	    }
 	}
@@ -229,15 +233,12 @@ async function getElementByID(id){
 	} else {
 	    var ret = this_elem;
 	}
-	// const ret = (() => {
-	// })();
-
 
 	// [ToDo] should be removed
 	ret['_id'] = ret['id']
 	delete ret['id'];
-	ret['resource-type'] = ret['element_type'].toLowerCase();
-	delete ret['element_type'];
+	//ret['resource-type'] = ret['element_type'].toLowerCase();
+	//delete ret['element_type'];
 	ret['thumbnail-image'] = ret['thumbnail_image'];
 	delete ret['thumbnail_image'];
 
