@@ -131,11 +131,14 @@ async function getElementByID(id){
 	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as related_elems, n, c  " +
 	  "RETURN n{.*, related_elements: related_elems, element_type:LABELS(n)[0], `contributor-id`:c.openid, `contributor-name`:[(c.first_name + ' ' + c.last_name)]}";
 
+    const session = driver.session({database: process.env.NEO4J_DB});
+    const tx = await session.beginTransaction();
+    
     try {
 	const {records, summary} =
-	      await driver.executeQuery(query_str,
-					{id_param: id},
-					{database: process.env.NEO4J_DB});
+	      await tx.run(query_str,
+			   {id_param: id},
+			   {database: process.env.NEO4J_DB});
 	if (records.length <= 0){
 	    // Query returned no match for given ID
 	    return {};
@@ -143,10 +146,17 @@ async function getElementByID(id){
 	    // should never reach here since ID is unique
 	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID: " + id);
 	}
+	
 	// frontend expects separate lists for related elements
 	let result = records[0]['_fields'][0];
 	let {related_elements: related_elements, ...this_elem} = result;
 
+	// set/increment click count for this element
+	await tx.run("MATCH(n:"+result['element_type']+"{id:$id_param}) WITH n, CASE n.click_count WHEN IS NULL THEN 0 ELSE n.click_count END AS click_count SET n.click_count = click_count+1" ,
+		     {id_param: id},
+		     {database: process.env.NEO4J_DB});
+
+	await tx.commit();
 	// Original
 	// ret['related_nb'] = []
 	// ret['related_ds'] = []

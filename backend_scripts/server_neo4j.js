@@ -728,7 +728,7 @@ app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => 
 });
 
 /**
- * DEPRECATED. Should use PUT /api/element instead
+ * @Deprecated Should use PUT /api/element instead
  * @swagger
  * /api/resources:
  *   put:
@@ -955,6 +955,7 @@ app.delete('/api/resources/:id', async (req, res) => {
 
 
 /**
+ * @Deprecated
  * @swagger
  * /api/resources/{field}/{values}:
  *   get:
@@ -1004,6 +1005,40 @@ app.get('/api/resources/:field/:values', async (req, res) => {
 	
     } catch (error) {
 	console.error('Error querying OpenSearch:', error);
+	res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/element/{elementId}:
+ *   get:
+ *     summary: Retrieve ONE element using id
+ *     parameters:
+ *       - in: path
+ *         name: element-id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The element ID to fetch
+ *     responses:
+ *       200:
+ *         description: JSON Map object for element with given ID
+ *       404:
+ *         description: No element found with given ID
+ *       500:
+ *         description: Internal server error
+ */
+app.get('/api/element/:elementId', async (req, res) => {
+    const element_id = decodeURIComponent(req.params.elementId);
+    try {
+	const element = await n4j.getElementByID(element_id);
+	if (JSON.stringify(element) === '{}'){
+	    return res.status(404).json({ message: 'Element not found' });
+	}
+	res.json(element);
+    } catch (error) {
+	console.error('/api/resources/:id Error querying OpenSearch:', error);
 	res.status(500).json({ message: 'Internal server error' });
     }
 });
