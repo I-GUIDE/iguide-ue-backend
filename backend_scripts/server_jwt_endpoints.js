@@ -12,10 +12,22 @@ import multerS3 from 'multer-s3';
 import https from 'https';
 import http from 'http';
 import axios from 'axios';
+import jwt from 'jsonwebtoken';
+import cookieParser from 'cookie-parser';
+import swaggerUi from'swagger-ui-express';
+import { specs } from './swagger.js';
 
 const app = express();
 app.use(cors());
+/*const corsOptions = {
+  origin: 'https://localhost', // Allow requests from this origin
+  credentials: true,           // Allow cookies and other credentials
+};
+
+app.use(cors(corsOptions));*/
+app.use(cors({ credentials: true, origin: "https://localhost" }));
 app.use(express.json());
+app.use(cookieParser());
 dotenv.config();
 
 const os_node = process.env.OPENSEARCH_NODE;
@@ -24,8 +36,8 @@ const os_pswd = process.env.OPENSEARCH_PASSWORD;
 const os_index = process.env.OPENSEARCH_INDEX;
 
 const options = {
-    key: fs.readFileSync(process.env.SSL_KEY),
-    cert: fs.readFileSync(process.env.SSL_CERT)
+  key: fs.readFileSync(process.env.SSL_KEY),
+  cert: fs.readFileSync(process.env.SSL_CERT)
 };
 
 const client = new Client({
@@ -38,6 +50,56 @@ const client = new Client({
     rejectUnauthorized: false, // Use this only if you encounter SSL certificate issues
   },
 });
+
+
+
+
+
+// Toy endpoint that requires JWT authentication
+app.get('/api/toy-auth', authenticateJWT, (req, res) => {
+  res.json({ message: 'You are authenticated!', user: req.user });
+});
+
+// Toy endpoint that requires admin role
+app.get('/api/toy-admin', authenticateJWT, authorizeRole('admin'), (req, res) => {
+  res.json({ message: 'You are an admin!', user: req.user });
+});
+
+
+// Endpoint to refresh token
+app.post('/api/refresh-token', async (req, res) => {
+  const refreshToken = req.cookies.refreshToken;
+  //console.log("Refresh token", refreshToken);
+  if (!refreshToken) {
+    return res.sendStatus(401);
+  }
+
+  // Verify the refresh token exists in OpenSearch
+  const { body } = await client.search({
+    index: 'refresh_tokens',
+    body: {
+      query: {
+        term: { token: refreshToken }
+      }
+    }
+  });
+
+  if (body.hits.total.value === 0) {
+    return res.sendStatus(403);
+  }
+
+  jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_SECRET, (err, user) => {
+    if (err) {
+      return res.sendStatus(403);
+    }
+
+    const newAccessToken = generateAccessToken({ id: user.id, role: user.role });
+    res.cookie('jwt', newAccessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+
+    res.json({ accessToken: newAccessToken });
+  });
+});
+
 
 // Ensure thumbnails and notebook_html directories exist
 const thumbnailDir = path.join(process.env.UPLOAD_FOLDER, 'thumbnails');
@@ -77,7 +139,24 @@ const avatarStorage = multer.diskStorage({
 });
 const uploadAvatar = multer({ storage: avatarStorage });
 
-// Upload avatar
+/**
+ * @swagger
+ * /api/upload-avatar:
+ *   post:
+ *     summary: Upload an avatar image for the user profile
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: formData
+ *         name: file
+ *         type: file
+ *         description: The avatar file to upload
+ *     responses:
+ *       200:
+ *         description: Avatar uploaded successfully
+ *       400:
+ *         description: No file uploaded
+ */
 app.post('/api/upload-avatar', uploadAvatar.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
@@ -90,7 +169,38 @@ app.post('/api/upload-avatar', uploadAvatar.single('file'), (req, res) => {
   });
 });
 
-// Update avatar
+/**
+ * @swagger
+ * /api/update-avatar:
+ *   post:
+ *     summary: Update the user's avatar
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: formData
+ *         name: file
+ *         type: file
+ *         description: The new avatar file to upload
+ *       - in: body
+ *         name: openid
+ *         description: The OpenID of the user
+ *         schema:
+ *           type: object
+ *           required:
+ *             - openid
+ *           properties:
+ *             openid:
+ *               type: string
+ *     responses:
+ *       200:
+ *         description: Avatar updated successfully
+ *       400:
+ *         description: OpenID and new avatar file are required
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
 app.post('/api/update-avatar', uploadAvatar.single('file'), async (req, res) => {
   try {
     const { openid } = req.body;
@@ -149,59 +259,53 @@ app.post('/api/update-avatar', uploadAvatar.single('file'), async (req, res) => 
   }
 });
 
-// Function to convert notebook to HTML
 
-async function fetchNotebookContent(url) {
-  const response = await fetch(url);
-  if (response.ok) {
-    return await response.text();
-  }
-  throw new Error('Failed to fetch the notebook');
-}
-async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
-  const notebookName = path.basename(notebookPath, '.ipynb');
-  const timestamp = Date.now();
-  const htmlOutputPath = path.join(outputDir, `${timestamp}-${notebookName}.html`);
-  const branches = ['main', 'master'];
 
-  let notebookContent;
-
-  for (const branch of branches) {
-    try {
-      const notebookUrl = `${githubRepo}/raw/${branch}/${notebookPath}`;
-      notebookContent = await fetchNotebookContent(notebookUrl);
-      break;
-    } catch (error) {
-      console.log(`Failed to fetch from ${branch} branch. Trying next branch...`);
-    }
-  }
-
-  if (!notebookContent) {
-    console.log('Failed to fetch the notebook from both main and master branches');
-    return null;
-  }
-
-  const notebookFilePath = path.join(outputDir, `${timestamp}-${notebookName}.ipynb`);
-  fs.writeFileSync(notebookFilePath, notebookContent);
-
-  try {
-    await new Promise((resolve, reject) => {
-      exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${htmlOutputPath}"`, (error, stdout, stderr) => {
-        if (error) {
-          reject(`Error converting notebook: ${stderr}`);
-        } else {
-          resolve();
-        }
-      });
-    });
-    return htmlOutputPath;
-  } catch (error) {
-    console.log(error);
-    return null;
-  }
-}
-
-// Endpoint to fetch documents by resource-type
+/**
+ * @swagger
+ * /api/resources:
+ *   get:
+ *     summary: Fetch documents by resource type
+ *     parameters:
+ *       - in: query
+ *         name: data_name
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The type of resource to fetch
+ *       - in: query
+ *         name: sort_by
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: The field to sort by
+ *       - in: query
+ *         name: order
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *         description: The sort order
+ *       - in: query
+ *         name: from
+ *         required: false
+ *         schema:
+ *           type: integer
+ *         description: The starting index of the results
+ *       - in: query
+ *         name: size
+ *         required: false
+ *         schema:
+ *           type: integer
+ *         description: The number of results to fetch
+ *     responses:
+ *       200:
+ *         description: A list of resources
+ *       404:
+ *         description: No resource found
+ *       500:
+ *         description: Internal server error
+ */
 app.get('/api/resources', async (req, res) => {
   const type = req.query.data_name;
   let sortBy = req.query.sort_by || '_score'; // Default to '_score' for relevance sorting
@@ -253,57 +357,206 @@ app.get('/api/resources', async (req, res) => {
   }
 });
 
-// Endpoint to fetch all featured documents
-app.get('/api/featured-resources', async (req, res) => {
-  let sortBy = req.query.sort_by || '_score';
-  const order = req.query.order || 'desc';
-  const from = parseInt(req.query.from, 10) || 0;
-  const size = parseInt(req.query.size, 10) || 15;
+/**
+ * @swagger
+ * /api/elements/titles:
+ *   get:
+ *     summary: Fetch all titles of a given type of elements
+ *     parameters:
+ *       - in: query
+ *         name: element_type
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The type of element to fetch titles for
+ *     responses:
+ *       200:
+ *         description: A list of titles
+ *       400:
+ *         description: element_type query parameter is required
+ *       500:
+ *         description: Internal server error
+ */
+app.get('/api/elements/titles', async (req, res) => {
+  const elementType = req.query.element_type;
+  const scrollTimeout = '1m'; // Scroll timeout
 
-  // Replace title and authors with their keyword sub-fields for sorting
-  if (sortBy === 'title') {
-    sortBy = 'title.keyword';
-  } else if (sortBy === 'authors') {
-    sortBy = 'authors.keyword';
+  if (!elementType) {
+    res.status(400).json({ message: 'element_type query parameter is required' });
+    return;
   }
 
   try {
-    const featuredResponse = await client.search({
+    // Initial search request with scrolling
+    const initialSearchResponse = await client.search({
       index: os_index,
+      scroll: scrollTimeout,
       body: {
-        from: from,
-        size: size,
+        size: 100, // Number of results to fetch per scroll request
         query: {
-          match: {
-            featured: true,
+          term: {
+            'resource-type': elementType,
           },
         },
-        sort: [
-          {
-            [sortBy]: {
-              order: order,
-            },
-          },
-        ],
+        _source: ['title'], // Only fetch the title field
       },
     });
 
-    if (featuredResponse.body.hits.total.value === 0) {
-      res.status(404).json({ message: 'No featured resource found' });
-      return;
-    }
-    const resources = featuredResponse.body.hits.hits.map(hit => {
-      const { _id, _source } = hit;
-      const { metadata, ...rest } = _source; // Remove metadata
-      return { _id, ...rest };
-    });
-    res.json(resources);
+    let scrollId = initialSearchResponse.body._scroll_id;
+    let allTitles = initialSearchResponse.body.hits.hits.map(hit => hit._source.title);
+
+    // Function to handle scrolling
+    const fetchAllTitles = async (scrollId) => {
+      while (true) {
+        const scrollResponse = await client.scroll({
+          scroll_id: scrollId,
+          scroll: scrollTimeout,
+        });
+
+        const hits = scrollResponse.body.hits.hits;
+        if (hits.length === 0) {
+          break; // Exit loop when no more results are returned
+        }
+
+        allTitles = allTitles.concat(hits.map(hit => hit._source.title));
+        scrollId = scrollResponse.body._scroll_id; // Update scrollId for the next scroll request
+      }
+      return allTitles;
+    };
+
+    const titles = await fetchAllTitles(scrollId);
+
+    res.json(titles);
   } catch (error) {
     console.error('Error querying OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
+/**
+ * @swagger
+ * /api/featured-resources:
+ *   get:
+ *     summary: Fetch all featured documents
+ *     parameters:
+ *       - in: query
+ *         name: sort_by
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: The field to sort by
+ *       - in: query
+ *         name: order
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *         description: The sort order
+ *       - in: query
+ *         name: from
+ *         required: false
+ *         schema:
+ *           type: integer
+ *         description: The starting index of the results
+ *       - in: query
+ *         name: size
+ *         required: false
+ *         schema:
+ *           type: integer
+ *         description: The number of results to fetch
+ *     responses:
+ *       200:
+ *         description: A list of featured resources
+ *       404:
+ *         description: No featured resource found
+ *       500:
+ *         description: Internal server error
+ */
+app.get('/api/featured-resources', authenticateJWT, async (req, res) => {
+    let sortBy = req.query.sort_by || '_score';
+    const order = req.query.order || 'desc';
+    const from = parseInt(req.query.from, 10) || 0;
+    const size = parseInt(req.query.size, 10) || 15;
+
+    // Replace title and authors with their keyword sub-fields for sorting
+    if (sortBy === 'title') {
+      sortBy = 'title.keyword';
+    } else if (sortBy === 'authors') {
+      sortBy = 'authors.keyword';
+    }
+
+    //console.log('Featured resources from Neo4j');
+    
+    try {
+	//const resources = await n4j_server.getFeaturedElements();
+	//res.json(resources);
+	const featuredResponse = await client.search({
+	    index: os_index,
+	    body: {
+		from: from,
+		size: size,
+		query: {
+		    match: {
+			featured: true,
+		    },
+		},
+		sort: [
+		    {
+			[sortBy]: {
+			    order: order,
+			},
+		    },
+		],
+	    },
+	});
+
+	if (featuredResponse.body.hits.total.value === 0) {
+	    res.status(404).json({ message: 'No featured resource found' });
+	    return;
+	}
+	const resources = featuredResponse.body.hits.hits.map(hit => {
+	    const { _id, _source } = hit;
+	    const { metadata, ...rest } = _source; // Remove metadata
+	    return { _id, ...rest };
+	});
+	res.json(resources);
+    } catch (error) {
+	console.error('Error querying OpenSearch:', error);
+	res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/search:
+ *   post:
+ *     summary: Search for resources
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               keyword:
+ *                 type: string
+ *               resource_type:
+ *                 type: string
+ *               sort_by:
+ *                 type: string
+ *               order:
+ *                 type: string
+ *                 enum: [asc, desc]
+ *               from:
+ *                 type: integer
+ *               size:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: A list of search results
+ *       500:
+ *         description: Error querying OpenSearch
+ */
 app.post('/api/search', async (req, res) => {
   const { keyword, resource_type, sort_by = '_score', order = 'desc', from = 0, size = 15 } = req.body;
 
@@ -383,8 +636,30 @@ app.post('/api/search', async (req, res) => {
 });
 
 
-
-// Endpoint to get the count of documents by resource-type or search keywords
+/**
+ * @swagger
+ * /api/resource-count:
+ *   post:
+ *     summary: Get the count of documents by resource-type or search keywords
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               resourceType:
+ *                 type: string
+ *               keywords:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: The count of documents
+ *       400:
+ *         description: Either resourceType or keywords are required
+ *       500:
+ *         description: Internal server error
+ */
 app.post('/api/resource-count', async (req, res) => {
   const { resourceType, keywords } = req.body;
 
@@ -460,6 +735,24 @@ const upload = multer({
   }
 });
 
+/**
+ * @swagger
+ * /api/upload-dataset:
+ *   post:
+ *     summary: Upload a dataset (CSV or ZIP)
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: formData
+ *         name: file
+ *         type: file
+ *         description: The dataset file to upload
+ *     responses:
+ *       200:
+ *         description: Dataset uploaded successfully
+ *       400:
+ *         description: No file uploaded or invalid file type (.csv or .zip)
+ */
 app.post('/api/upload-dataset', upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({
@@ -488,7 +781,24 @@ app.use((err, req, res, next) => {
   next();
 });
 
-// Upload thumbnail
+/**
+ * @swagger
+ * /api/upload-thumbnail:
+ *   post:
+ *     summary: Upload a thumbnail image
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: formData
+ *         name: file
+ *         type: file
+ *         description: The thumbnail file to upload
+ *     responses:
+ *       200:
+ *         description: Thumbnail uploaded successfully
+ *       400:
+ *         description: No file uploaded
+ */
 app.post('/api/upload-thumbnail', uploadThumbnail.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
@@ -523,11 +833,45 @@ const updateRelatedDocuments = async (resourceId, relatedIds, relatedField) => {
   }
 };
 
-// Endpoint to register a resource
-app.put('/api/resources', async (req, res) => {
+/**
+ * @swagger
+ * /api/resources:
+ *   put:
+ *     summary: Register a resource
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               resource-type:
+ *                 type: string
+ *               notebook-repo:
+ *                 type: string
+ *               notebook-file:
+ *                 type: string
+ *               related-resources:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     type:
+ *                       type: string
+ *                     title:
+ *                       type: string
+ *     responses:
+ *       200:
+ *         description: Resource registered successfully
+ *       500:
+ *         description: Internal server error
+ */
+app.put('/api/resources', authenticateJWT, async (req, res) => {
   const resource = req.body;
-
+  console.log(resource);
   try {
+    resource.metadata = resource.metadata || {};
+    resource.metadata.created_by_jwt = req.user.id;
     if (resource['resource-type'] === 'notebook' && resource['notebook-repo'] && resource['notebook-file']) {
       const htmlNotebookPath = await convertNotebookToHtml(resource['notebook-repo'], resource['notebook-file'], notebookHtmlDir);
       if (htmlNotebookPath) {
@@ -618,7 +962,23 @@ app.put('/api/resources', async (req, res) => {
   }
 });
 
-// Endpoint to delete a resource by ID
+/**
+ * @swagger
+ * /api/resources/{id}:
+ *   delete:
+ *     summary: Delete a resource by ID
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Resource deleted successfully
+ *       500:
+ *         description: Internal server error
+ */
 app.delete('/api/resources/:id', async (req, res) => {
   const resourceId = req.params.id;
 
@@ -723,13 +1083,44 @@ app.delete('/api/resources/:id', async (req, res) => {
 });
 
 
-// Endpoint to retrieve resources by field and values for exact match
-
+/**
+ * @swagger
+ * /api/resources/{field}/{values}:
+ *   get:
+ *     summary: Retrieve resources by field and values for exact match
+ *     parameters:
+ *       - in: path
+ *         name: field
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The field to match
+ *       - in: path
+ *         name: values
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The values to match (comma-separated)
+ *     responses:
+ *       200:
+ *         description: A list of resources
+ *       404:
+ *         description: No resources found
+ *       500:
+ *         description: Internal server error
+ */
 app.get('/api/resources/:field/:values', async (req, res) => {
   const { field, values } = req.params;
   const valueArray = values.split(',').map(value => decodeURIComponent(value)); //Decompose to handle openid as url
-
-  try {
+    
+    try {
+    // 	if (field == '_id'){
+    // 	    console.log('getElemnetByID from Neo4j');
+    // 	    const resources = n4j_server.getElementByID(values[0]);
+    // 	    res.json(resources);
+    // 	    return;
+    // 	}
+	
     // Initial search request to initialize the scroll context
     const initialResponse = await client.search({
       index: os_index,
@@ -793,17 +1184,42 @@ app.get('/api/resources/:field/:values', async (req, res) => {
 
     const resources = allHits.map(hit => {
       const { _id, _source } = hit;
-      const { metadata, ...rest } = _source; // Remove metadata
-      return { _id, ...rest };
+      //const { metadata, ...rest } = _source; // Remove metadata
+      //return { _id, ...rest };
+      return {_id, ..._source};
     });
 
-    res.json(resources);
-  } catch (error) {
+	res.json(resources);
+    } catch (error) {
     console.error('Error querying OpenSearch:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-//Return the number of hits by field and id
+
+/**
+ * @swagger
+ * /api/resources/count/{field}/{values}:
+ *   get:
+ *     summary: Return the number of hits by field and id
+ *     parameters:
+ *       - in: path
+ *         name: field
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The field to match
+ *       - in: path
+ *         name: values
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The values to match (comma-separated)
+ *     responses:
+ *       200:
+ *         description: The number of hits
+ *       500:
+ *         description: Internal server error
+ */
 app.get('/api/resources/count/:field/:values', async (req, res) => {
   const { field, values } = req.params;
   const valueArray = values.split(',').map(value => decodeURIComponent(value)); // Decompose to handle openid as URL
@@ -831,37 +1247,26 @@ app.get('/api/resources/count/:field/:values', async (req, res) => {
 });
 
 
-
-/*
-// Endpoint to fetch resources by field and value. If the field contains the value.
-app.get('/api/resources_contains/:field/:value', async (req, res) => {
-  const { field, value } = req.params;
-  try {
-    const resourceResponse = await client.search({
-      index: os_index, // Replace with your index name
-      body: {
-        query: {
-          match: {
-            [field]: value,
-          },
-        },
-      },
-    });
-
-    const resources = resourceResponse.body.hits.hits.map(hit => {
-      const { _id, _source } = hit;
-      const { metadata, ...rest } = _source; // Remove metadata
-      return { _id, ...rest };
-    });
-
-    res.json(resources);
-  } catch (error) {
-    console.error('Error querying OpenSearch:', error);
-    res.status(500).json({ message: 'Failed to fetch resources' });
-  }
-});*/
-
-// Endpoint to return the user document given the openid
+/**
+ * @swagger
+ * /api/users/{openid}:
+ *   get:
+ *     summary: Return the user document given the openid
+ *     parameters:
+ *       - in: path
+ *         name: openid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The OpenID of the user
+ *     responses:
+ *       200:
+ *         description: The user document
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Error fetching the user
+ */
 app.get('/api/users/:openid', async (req, res) => {
   const openid = decodeURIComponent(req.params.openid);
 
@@ -888,6 +1293,25 @@ app.get('/api/users/:openid', async (req, res) => {
     res.status(500).json({ message: 'Error fetching the user' });
   }
 });
+
+/**
+ * @swagger
+ * /api/check_users/{openid}:
+ *   get:
+ *     summary: Check if a user exists given the openid
+ *     parameters:
+ *       - in: path
+ *         name: openid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The OpenID of the user
+ *     responses:
+ *       200:
+ *         description: True if user exists, false otherwise
+ *       500:
+ *         description: Error checking the user
+ */
 app.get('/api/check_users/:openid', async (req, res) => {
   const openid = decodeURIComponent(req.params.openid);
 
@@ -914,10 +1338,30 @@ app.get('/api/check_users/:openid', async (req, res) => {
   }
 });
 
-
-
-
-// Endpoint to add a new user document
+/**
+ * @swagger
+ * /api/users:
+ *   post:
+ *     summary: Add a new user document
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               openid:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: User added successfully
+ *       500:
+ *         description: Internal server error
+ */
 app.post('/api/users', async (req, res) => {
   const user = req.body;
   console.log(user);
@@ -926,7 +1370,8 @@ app.post('/api/users', async (req, res) => {
     const response = await client.index({
       index: 'users',
       id: user.openid,
-      body: user
+	body: user,
+	refresh: true
     });
 
     res.status(201).json({ message: 'User added successfully', id: response.body._id });
@@ -937,7 +1382,30 @@ app.post('/api/users', async (req, res) => {
 });
 
 
-// Endpoint to update the user document
+/**
+ * @swagger
+ * /api/users/{openid}:
+ *   put:
+ *     summary: Update the user document
+ *     parameters:
+ *       - in: path
+ *         name: openid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The OpenID of the user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: User updated successfully
+ *       500:
+ *         description: Internal server error
+ */
 app.put('/api/users/:openid', async (req, res) => {
   const openid = decodeURIComponent(req.params.openid);
   const updates = req.body;
@@ -959,7 +1427,24 @@ app.put('/api/users/:openid', async (req, res) => {
 });
 
 
-// Endpoint to delete the user document
+/**
+ * @swagger
+ * /api/users/{openid}:
+ *   delete:
+ *     summary: Delete the user document
+ *     parameters:
+ *       - in: path
+ *         name: openid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The OpenID of the user
+ *     responses:
+ *       200:
+ *         description: User deleted successfully
+ *       500:
+ *         description: Internal server error
+ */
 app.delete('/api/users/:openid', async (req, res) => {
   const openid = decodeURIComponent(req.params.openid);
 
@@ -975,7 +1460,27 @@ app.delete('/api/users/:openid', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-//Retrieve the title of the url
+
+/**
+ * @swagger
+ * /api/retrieve-title:
+ *   get:
+ *     summary: Retrieve the title of a URL
+ *     parameters:
+ *       - in: query
+ *         name: url
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The URL to retrieve the title from
+ *     responses:
+ *       200:
+ *         description: The title of the URL
+ *       404:
+ *         description: Title not found
+ *       500:
+ *         description: Failed to retrieve title
+ */
 app.get('/api/retrieve-title', async (req, res) => {
   const url = req.query.url;
   try {
@@ -987,11 +1492,42 @@ app.get('/api/retrieve-title', async (req, res) => {
       res.status(404).json({ error: 'Title not found' });
     }
   } catch (error) {
-  	console.log(error);
+    console.log(error);
     res.status(500).json({ error: 'Failed to retrieve title' });
   }
 });
 
+/**
+ * @swagger
+ * /api/searchByCreator:
+ *   post:
+ *     summary: Search for resources by creator
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               openid:
+ *                 type: string
+ *               sort_by:
+ *                 type: string
+ *               order:
+ *                 type: string
+ *                 enum: [asc, desc]
+ *               from:
+ *                 type: integer
+ *               size:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: A list of search results
+ *       400:
+ *         description: openid is required
+ *       500:
+ *         description: Error querying OpenSearch
+ */
 app.post('/api/searchByCreator', async (req, res) => {
   const { openid, sort_by = '_score', order = 'desc', from = 0, size = 15 } = req.body;
 
@@ -1038,6 +1574,54 @@ app.post('/api/searchByCreator', async (req, res) => {
     res.status(500).json({ error: 'Error querying OpenSearch' });
   }
 });
+/**
+ * @swagger
+ * /api/elements/retrieve:
+ *   post:
+ *     summary: Retrieve elements by field and value
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               field_name:
+ *                 type: string
+ *                 description: The name of the field to filter elements by.
+ *               match_value:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: The values to match in the specified field.
+ *               element_type:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: The type of elements to retrieve.
+ *               sort_by:
+ *                 type: string
+ *                 description: The field by which to sort the results.
+ *               order:
+ *                 type: string
+ *                 enum: [asc, desc]
+ *                 description: The order to sort the results, either ascending (asc) or descending (desc).
+ *               from:
+ *                 type: integer
+ *                 description: The starting index for the results.
+ *               size:
+ *                 type: integer
+ *                 description: The number of elements to retrieve.
+ *               count_only:
+ *                 type: boolean
+ *                 description: Whether to return only the count of matching elements.
+ *     responses:
+ *       200:
+ *         description: A list of elements or count of elements
+ *       500:
+ *         description: Internal server error
+ */
+
 app.post('/api/elements/retrieve', async (req, res) => {
   const { field_name, match_value, element_type, sort_by = '_score', order = 'desc', from = '0', size = '10', count_only = false } = req.body;
 
@@ -1049,6 +1633,10 @@ app.post('/api/elements/retrieve', async (req, res) => {
     return res.json(count_only ? 0 : []);
   }
   let sortBy = sort_by;
+  let fieldName = field_name;
+  if (fieldName === 'tags'){
+    fieldName = 'tags.keyword';
+  }
   if (sortBy === 'title') {
     sortBy = 'title.keyword';
   } else if (sortBy === 'authors') {
@@ -1071,7 +1659,7 @@ app.post('/api/elements/retrieve', async (req, res) => {
   // Add match_value condition to the query
   if (match_value !== null) {
     query.query.bool.must.push({
-      terms: { [field_name]: match_value },
+      terms: { [fieldName]: match_value },
     });
   }
 
@@ -1081,6 +1669,7 @@ app.post('/api/elements/retrieve', async (req, res) => {
       terms: { 'resource-type': element_type },
     });
   }
+  //console.log(query.query.bool.must);
 
   try {
     if (count_only) {
@@ -1094,22 +1683,123 @@ app.post('/api/elements/retrieve', async (req, res) => {
         index: os_index,
         body: query,
       });
-      const elements = searchResponse.body.hits.hits.map(hit => hit._source);
-  res.json(elements);
+      const elements = searchResponse.body.hits.hits.map(hit => {
+        const { _id, _source } = hit;
+        //const { metadata, ...rest } = _source; // Remove metadata
+        return { _id, ..._source };
+      });
+      res.json(elements);
     }
   } catch (error) {
     console.error('Error retrieving elements:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+/**
+ * @swagger
+ * /api/elements/tag/{value}:
+ *   get:
+ *     summary: Retrieve elements by exact tag match
+ *     parameters:
+ *       - in: path
+ *         name: value
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The exact tag value to match.
+ *     responses:
+ *       200:
+ *         description: A list of elements matching the exact tag
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   _id:
+ *                     type: string
+ *                     description: The unique identifier of the document.
+ *                   title:
+ *                     type: string
+ *                     description: The title of the document.
+ *                   authors:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                     description: The authors of the document.
+ *                   tags:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *                     description: The tags associated with the document.
+ *                   contents:
+ *                     type: string
+ *                     description: The contents of the document.
+ *                   # Add other fields relevant to the documents
+ *       404:
+ *         description: No elements found for the given tag
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "No elements found for the given tag"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Internal server error"
+ */
+
+app.get('/api/elements/tag/:value', async (req, res) => {
+  const tagValue = req.params.value;
+
+  try {
+    const searchResponse = await client.search({
+      index: os_index,
+      body: {
+        query: {
+          term: {
+            'tags.keyword': tagValue // Use '.keyword' to ensure exact match
+          }
+        },
+        size: 1000 // Set a reasonable size or use pagination for large datasets
+      }
+    });
+
+    const results = searchResponse.body.hits.hits.map(hit => {
+      const { _id, _source } = hit;
+      return { _id, ...(_source || {}) };
+    });
+
+    res.status(200).json(results);
+  } catch (error) {
+    console.error('Error retrieving documents by tag:', error);
+    res.status(500).json({ error: 'Error retrieving documents by tag' });
+  }
+});
+
 
 console.log(`${process.env.SERV_TAG} server is up`);
 
+// Serve Swagger docs
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
-https.createServer(options, app).listen(443, () => {
-  console.log('HTTPS server is running on 443');
+
+const PORT = 4001;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
-https.createServer(options, app).listen(8443, () => {
-  console.log('HTTPS server is running on 8443');
+
+https.createServer(options, app).listen(4000, () => {
+  console.log('Server is running on https://backend.i-guide.io:4000');
 });
 

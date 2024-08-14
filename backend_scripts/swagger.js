@@ -7,8 +7,8 @@ const options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'API Documentation',
-      version: '1.0.0',
+      title: 'I-GUIDE Platform Backend API Documentation',
+      version: '0.1.0',
       description: `API documentation for the i-guide platform ${process.env.SERV_TAG} backend`,
     },
     servers: [
