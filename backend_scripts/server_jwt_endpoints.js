@@ -12,12 +12,22 @@ import multerS3 from 'multer-s3';
 import https from 'https';
 import http from 'http';
 import axios from 'axios';
+import jwt from 'jsonwebtoken';
+import cookieParser from 'cookie-parser';
 import swaggerUi from'swagger-ui-express';
 import { specs } from './swagger.js';
 
 const app = express();
 app.use(cors());
+/*const corsOptions = {
+  origin: 'https://localhost', // Allow requests from this origin
+  credentials: true,           // Allow cookies and other credentials
+};
+
+app.use(cors(corsOptions));*/
+app.use(cors({ credentials: true, origin: "https://localhost" }));
 app.use(express.json());
+app.use(cookieParser());
 dotenv.config();
 
 const os_node = process.env.OPENSEARCH_NODE;
@@ -40,6 +50,56 @@ const client = new Client({
     rejectUnauthorized: false, // Use this only if you encounter SSL certificate issues
   },
 });
+
+
+
+
+
+// Toy endpoint that requires JWT authentication
+app.get('/api/toy-auth', authenticateJWT, (req, res) => {
+  res.json({ message: 'You are authenticated!', user: req.user });
+});
+
+// Toy endpoint that requires admin role
+app.get('/api/toy-admin', authenticateJWT, authorizeRole('admin'), (req, res) => {
+  res.json({ message: 'You are an admin!', user: req.user });
+});
+
+
+// Endpoint to refresh token
+app.post('/api/refresh-token', async (req, res) => {
+  const refreshToken = req.cookies.refreshToken;
+  //console.log("Refresh token", refreshToken);
+  if (!refreshToken) {
+    return res.sendStatus(401);
+  }
+
+  // Verify the refresh token exists in OpenSearch
+  const { body } = await client.search({
+    index: 'refresh_tokens',
+    body: {
+      query: {
+        term: { token: refreshToken }
+      }
+    }
+  });
+
+  if (body.hits.total.value === 0) {
+    return res.sendStatus(403);
+  }
+
+  jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_SECRET, (err, user) => {
+    if (err) {
+      return res.sendStatus(403);
+    }
+
+    const newAccessToken = generateAccessToken({ id: user.id, role: user.role });
+    res.cookie('jwt', newAccessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+
+    res.json({ accessToken: newAccessToken });
+  });
+});
+
 
 // Ensure thumbnails and notebook_html directories exist
 const thumbnailDir = path.join(process.env.UPLOAD_FOLDER, 'thumbnails');
@@ -199,57 +259,7 @@ app.post('/api/update-avatar', uploadAvatar.single('file'), async (req, res) => 
   }
 });
 
-// Function to convert notebook to HTML
 
-async function fetchNotebookContent(url) {
-  const response = await fetch(url);
-  if (response.ok) {
-    return await response.text();
-  }
-  throw new Error('Failed to fetch the notebook');
-}
-async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
-  const notebookName = path.basename(notebookPath, '.ipynb');
-  const timestamp = Date.now();
-  const htmlOutputPath = path.join(outputDir, `${timestamp}-${notebookName}.html`);
-  const branches = ['main', 'master'];
-
-  let notebookContent;
-
-  for (const branch of branches) {
-    try {
-      const notebookUrl = `${githubRepo}/raw/${branch}/${notebookPath}`;
-      notebookContent = await fetchNotebookContent(notebookUrl);
-      break;
-    } catch (error) {
-      console.log(`Failed to fetch from ${branch} branch. Trying next branch...`);
-    }
-  }
-
-  if (!notebookContent) {
-    console.log('Failed to fetch the notebook from both main and master branches');
-    return null;
-  }
-
-  const notebookFilePath = path.join(outputDir, `${timestamp}-${notebookName}.ipynb`);
-  fs.writeFileSync(notebookFilePath, notebookContent);
-
-  try {
-    await new Promise((resolve, reject) => {
-      exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${htmlOutputPath}"`, (error, stdout, stderr) => {
-        if (error) {
-          reject(`Error converting notebook: ${stderr}`);
-        } else {
-          resolve();
-        }
-      });
-    });
-    return htmlOutputPath;
-  } catch (error) {
-    console.log(error);
-    return null;
-  }
-}
 
 /**
  * @swagger
@@ -462,7 +472,7 @@ app.get('/api/elements/titles', async (req, res) => {
  *       500:
  *         description: Internal server error
  */
-app.get('/api/featured-resources', async (req, res) => {
+app.get('/api/featured-resources', authenticateJWT, async (req, res) => {
     let sortBy = req.query.sort_by || '_score';
     const order = req.query.order || 'desc';
     const from = parseInt(req.query.from, 10) || 0;
@@ -856,10 +866,12 @@ const updateRelatedDocuments = async (resourceId, relatedIds, relatedField) => {
  *       500:
  *         description: Internal server error
  */
-app.put('/api/resources', async (req, res) => {
+app.put('/api/resources', authenticateJWT, async (req, res) => {
   const resource = req.body;
-
+  console.log(resource);
   try {
+    resource.metadata = resource.metadata || {};
+    resource.metadata.created_by_jwt = req.user.id;
     if (resource['resource-type'] === 'notebook' && resource['notebook-repo'] && resource['notebook-file']) {
       const htmlNotebookPath = await convertNotebookToHtml(resource['notebook-repo'], resource['notebook-file'], notebookHtmlDir);
       if (htmlNotebookPath) {
@@ -1778,15 +1790,16 @@ app.get('/api/elements/tag/:value', async (req, res) => {
 
 console.log(`${process.env.SERV_TAG} server is up`);
 
-const PORT = 5001;
+// Serve Swagger docs
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+
+
+const PORT = 4001;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
-https.createServer(options, app).listen(5000, () => {
-  console.log('HTTPS server is running on 5000');
+https.createServer(options, app).listen(4000, () => {
+  console.log('Server is running on https://backend.i-guide.io:4000');
 });
-
-// Serve Swagger docs
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
