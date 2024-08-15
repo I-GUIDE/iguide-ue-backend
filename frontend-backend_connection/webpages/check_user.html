@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check User</title>
+    <script>
+        async function checkUser(event) {
+            event.preventDefault();
+            const openid = document.getElementById('openid').value;
+            const response = await fetch(`http://149.165.154.200:5001/api/check_users/${encodeURIComponent(openid)}`);
+            const exists = await response.json();
+            
+            document.getElementById('result').textContent = exists ? 'User exists.' : 'User not found.';
+        }
+    </script>
+</head>
+<body>
+    <h1>Check if User Exists</h1>
+    <form id="checkUserForm" onsubmit="checkUser(event)">
+        <label for="openid">OpenID:</label>
+        <input type="text" id="openid" name="openid" required>
+        <button type="submit">Check</button>
+    </form>
+    <p id="result"></p>
+</body>
+</html>
+
