@@ -1,0 +1,88 @@
+
+services:
+  neo4j:
+    image: neo4j:5.20.0
+    container_name: neo4j
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_import_file_use__neo4j__config=true
+      - NEO4J_PLUGINS=["apoc","apoc-extended"]
+    volumes:
+      - ${NEO4J_DATA_DIR}:/var/lib/neo4j/import
+      - ${NEO4J_IMPORT_DIR}:/data
+    ports:
+      - 7474:7474  # Browser UI
+      - 7687:7687  # Bolt protocol
+
+  # opensearch:
+  #   image: opensearchproject/opensearch:latest
+  #   container_name: opensearch
+  #   environment:
+  #     - cluster.name=docker-cluster
+  #     - node.name=opensearch-node
+  #     - discovery.type=single-node
+  #     - bootstrap.memory_lock=true
+  #     - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+  #     - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
+  #     - plugins.security.ssl.transport.pemcert_filepath=node1.pem
+  #     - plugins.security.ssl.transport.pemkey_filepath=node1-key.pem
+  #     - plugins.security.ssl.transport.pemtrustedcas_filepath=root-ca.pem
+  #     - plugins.security.ssl.transport.enforce_hostname_verification=false
+  #     - plugins.security.ssl.http.enabled=true
+  #     - plugins.security.ssl.http.pemcert_filepath=node1.pem
+  #     - plugins.security.ssl.http.pemkey_filepath=node1-key.pem
+  #     - plugins.security.ssl.http.pemtrustedcas_filepath=root-ca.pem
+  #   volumes:
+  #     - ./certs/node1.pem:/usr/share/opensearch/config/node1.pem  # Mount the certificates
+  #     - ./certs/node1-key.pem:/usr/share/opensearch/config/node1-key.pem
+  #     - ./certs/root-ca.pem:/usr/share/opensearch/config/root-ca.pem
+  #   #command: tail -f /dev/null
+  #   #tty: true
+  #   ulimits:
+  #     memlock:
+  #       soft: -1
+  #       hard: -1
+  #   ports:
+  #     - 9200:9200
+  #     - 9600:9600  # REST API
+
+  # opensearch-dashboards:
+  #   image: opensearchproject/opensearch-dashboards:latest
+  #   container_name: opensearch-dashboards
+  #   environment:
+  #     - OPENSEARCH_HOSTS=https://opensearch:9200
+  #   ports:
+  #     - 5601:5601
+  #   depends_on:
+  #     - opensearch
+
+  # logstash:
+  #   #image: docker.elastic.co/logstash/logstash:8.14.1
+  #   image: opensearchproject/logstash-oss-with-opensearch-output-plugin:latest
+  #   container_name: logstash
+  #   volumes:
+  #     - /Users/fbaig/Downloads/iguide-ux/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+  #     - /Users/fbaig/Downloads/iguide-ux/neo4j-jdbc/neo4j-jdbc-bolt-5.0.0.jar:/usr/share/logstash/logstash-core/lib/jars/neo4j-jdbc-bolt-5.0.0.jar  # Mount the JDBC driver
+  #     - ./certs:/usr/share/logstash/config/certs  # Mount the certificates
+  #   ports:
+  #     - 5044:5044
+  #   depends_on:
+  #     - neo4j
+  #     - opensearch
+
+  node:
+    image: node:lts-alpine3.20
+    container_name: node
+    environment:
+      - NEO4J_CONNECTION_STRING=neo4j://${NEO4J_HOSTNAME}:7687
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_DB=${NEO4J_DB}
+    volumes:
+      - ${NODE_CODE_DIR}:/code
+    working_dir: /code
+    # Run once started `npm i neo4j-driver`
+    command: tail -f /dev/null
+    tty: true
