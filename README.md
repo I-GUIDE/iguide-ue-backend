@@ -17,9 +17,14 @@ This project is currently under development.
 git clone https://github.com/I-GUIDE/iguide-ue-backend .git
 ```
 
-### Run thebackend server:
+### Config the environment variables
 ```bash
 cd backend_scripts
+```
+make a ".env" file under the backen according to the ".env.example" file to fillin the information for the Opensearch, SSL certificate, and JWT secrets.
+
+### Run the backend server:
+```bash
 node server.js
 ```
 Then the endpoints should be available at port 5000
