@@ -1515,7 +1515,7 @@ app.post('/api/element', jwtCorsMiddleware, authenticateJWT, async (req, res) =>
 		refresh: true,
 	    });
 	    console.log(response['body']['result']);
-	    res.status(200).json({ message: 'Resource registered successfully' });
+	    res.status(200).json({ message: 'Resource registered successfully', elementId: element_id });
 	} else {
 	    console.log('Error registering resource ...');
 	    res.status(500).json({ error: 'Error registering resource' });
