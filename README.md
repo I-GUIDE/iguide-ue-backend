@@ -14,12 +14,12 @@ This project is currently under development.
 ## Installation
 ### Clone the repo from GitHub:
 ```bash
-git clone https://github.com/I-GUIDE/iguide-ue-backend .git
+git clone https://github.com/I-GUIDE/iguide-ue-backend.git
 ```
 
 ### Run thebackend server:
 ```bash
 cd backend_scripts
-node server.js
+node server_neo4j.js
 ```
-Then the endpoints should be available at port 5000
+Then the endpoints should be available at the port specified in .env.
