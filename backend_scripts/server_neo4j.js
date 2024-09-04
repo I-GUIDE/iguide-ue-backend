@@ -1661,7 +1661,7 @@ app.get('/api/users/:id/role', cors(), async (req, res) => {
 
 /**
  * @swagger
- * /api/users/{id}/exists:
+ * /api/users/{id}/valid:
  *   get:
  *     summary: Check if a user exists given the openid
  *     tags: ['users']
@@ -1678,8 +1678,8 @@ app.get('/api/users/:id/role', cors(), async (req, res) => {
  *       500:
  *         description: Error checking the user
  */
-app.options('/api/users/:id/exists', cors());
-app.get('/api/users/:id/exists', cors(), async (req, res) => {
+app.options('/api/users/:id/valid', cors());
+app.get('/api/users/:id/valid', cors(), async (req, res) => {
     const openid = decodeURIComponent(req.params.id);
 
     console.log('Check user ...' + openid);
