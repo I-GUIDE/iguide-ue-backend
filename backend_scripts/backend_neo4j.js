@@ -212,8 +212,10 @@ async function getElementByID(id){
 	    }
 	}
 
+	console.log('Testing ...' + this_elem['resource-type']);
+	
 	// External links for OERs
-	if (this_elem['element_type'] == ElementType.OER){
+	if (this_elem['resource-type'] == ElementType.OER.toLowerCase()){
 	    var {'oer_elink_types': oer_elink_types,
 		 'oer_elink_titles': oer_elink_titles,
 		 'oer_elink_urls': oer_elink_urls,
@@ -230,13 +232,19 @@ async function getElementByID(id){
 		    ret['oer-external-links'].push(oer_elink);
 		}
 	    }
+	} else if (this_elem['resource-type'] == ElementType.PUBLICATION.toLowerCase()) {
+	    // External link for Publication
+	    console.log('Fixing external link for publication');
+	    var {'external_link': external_doi_link,
+		 ...ret} = this_elem;
+	    ret['external-link-publication'] = external_doi_link;
 	} else {
 	    var ret = this_elem;
 	}
-
+	
 	// handle 64-bit numbers returned from neo4j
 	if (ret['click_count']){
-	    console.log(ret['click_count']);
+	    //console.log(ret['click_count']);
 	    let res = ret['click_count']['high'];
 	    for (let i=0; i<32; i++) {
 		res *= 2;
