@@ -94,6 +94,22 @@ async function removeRelation(from_id, to_id, relation_type){
     // something went wrong
     return false;
 }
+
+/**
+ * Determine type of element given type string
+ */
+async function parseElementType(type){
+    const element_type = type[0].toUpperCase() + type.slice(1);
+    switch(element_type){
+
+    case ElementType.NOTEBOOK: return ElementType.NOTEBOOK;
+    case ElementType.DATASET: return ElementType.DATASET;
+    case ElementType.PUBLICATION: return ElementType.PUBLICATION;
+    case ElementType.OER: return ElementType.OER;
+    default:
+	throw Error('Server Neo4j: Element type ('+ element_type  +') not implemented');
+    }
+}
 /********************************/
 async function createLinkNotebook2Dataset(nb_id, ds_id){
     return createRelation(nb_id, ds_id, Relations.USES);
@@ -176,26 +192,28 @@ async function getElementByID(id){
 	// [ToDo] Change `rel_elem.id` to return everything for related elem
 	for (elem of related_elements){
 	    if (elem['id'] == null || elem['resource-type'] == null) continue;
-	    switch(elem['resource-type']){
-	    case ElementType.DATASET.toLowerCase():{
+	    const element_type = await parseElementType(elem['resource-type']);
+	    
+	    switch(element_type){
+	    case ElementType.DATASET:{
 		let {element_type:_, ...rel_elem} = elem;
 		//this_elem['related-datasets'].push(rel_elem['id']);
 		this_elem['related-datasets'].push(rel_elem);
 		break;
 	    }
-	    case ElementType.NOTEBOOK.toLowerCase():{
+	    case ElementType.NOTEBOOK:{
 		let {element_type:_, ...rel_elem} = elem;
 		//this_elem['related-notebooks'].push(rel_elem['id']);
 		this_elem['related-notebooks'].push(rel_elem);
 		break;
 	    }
-	    case ElementType.OER.toLowerCase():{
+	    case ElementType.OER:{
 		let {element_type:_, ...rel_elem} = elem;
 		//this_elem['related-oers'].push(rel_elem['id']);
 		this_elem['related-oers'].push(rel_elem);
 		break;
 	    }
-	    case ElementType.PUBLICATION.toLowerCase():{
+	    case ElementType.PUBLICATION:{
 		let {element_type:_, ...rel_elem} = elem;
 		//this_elem['related-publications'].push(rel_elem['id']);
 		this_elem['related-publications'].push(rel_elem);
@@ -206,6 +224,7 @@ async function getElementByID(id){
 		break;
 	    }
 	    default:
+		// should never reach here since error thrown in parseElementType
 		throw Error("Server Neo4j: Related element type not implemented: " +
 			    elem['resource-type']);
 		break;
@@ -213,9 +232,10 @@ async function getElementByID(id){
 	}
 
 	console.log('Testing ...' + this_elem['resource-type']);
-	
+	const this_element_type = await parseElementType(this_elem['resource-type']);
+
 	// External links for OERs
-	if (this_elem['resource-type'] == ElementType.OER.toLowerCase()){
+	if (this_element_type == ElementType.OER){
 	    var {'oer_elink_types': oer_elink_types,
 		 'oer_elink_titles': oer_elink_titles,
 		 'oer_elink_urls': oer_elink_urls,
@@ -232,7 +252,7 @@ async function getElementByID(id){
 		    ret['oer-external-links'].push(oer_elink);
 		}
 	    }
-	} else if (this_elem['resource-type'] == ElementType.PUBLICATION.toLowerCase()) {
+	} else if (this_element_type == ElementType.PUBLICATION) {
 	    // External link for Publication
 	    console.log('Fixing external link for publication');
 	    var {'external_link': external_doi_link,
@@ -241,7 +261,7 @@ async function getElementByID(id){
 	} else {
 	    var ret = this_elem;
 	}
-	
+
 	// handle 64-bit numbers returned from neo4j
 	if (ret['click_count']){
 	    //console.log(ret['click_count']);
@@ -298,17 +318,17 @@ async function getElementByID(id){
  */
 async function getElementsByType(type, from, size){
 
-    // capitalize first letter of data type
-    const node_type = type[0].toUpperCase() + type.slice(1);
-    if (node_type == ElementType.NOTEBOOK ||
-	node_type == ElementType.DATASET ||
-	node_type == ElementType.PUBLICATION ||
-	node_type == ElementType.OER
-       ){
-	// legit element type
-    } else {
-	throw Error("Server Neo4j: Element type not implemented");
-    }
+    // // capitalize first letter of data type
+    // const node_type = type[0].toUpperCase() + type.slice(1);
+    // if (node_type == ElementType.NOTEBOOK ||
+    // 	node_type == ElementType.DATASET ||
+    // 	node_type == ElementType.PUBLICATION ||
+    // 	node_type == ElementType.OER
+    //    ){
+    // 	// legit element type
+    // } else {
+    // 	throw Error("Server Neo4j: Element type not implemented");
+    // }
 
     // [ToDo] Just to make things work with frontend (should be removed)
     // const query_str = "MATCH (n:"+ node_type +")-[:CONTRIBUTED]-(r) " +
@@ -317,13 +337,17 @@ async function getElementsByType(type, from, size){
     // 	  "SKIP $from " +
     // 	  "LIMIT $size";
 
-    const query_str = "MATCH (n:"+ node_type +") " +
-	  "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors } " +
-	  "ORDER BY n.title " +
-	  "SKIP $from " +
-	  "LIMIT $size";
-
     try{
+
+	const node_type = await parseElementType(type);
+	
+	const query_str = "MATCH (n:"+ node_type +") " +
+	      "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors } " +
+	      "ORDER BY n.title " +
+	      "SKIP $from " +
+	      "LIMIT $size";
+	
+
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
 					{from: neo4j.int(from), size: neo4j.int(size)},
@@ -351,21 +375,24 @@ async function getElementsByType(type, from, size){
  */
 async function getElementsCountByType(type){
 
-    // capitalize first letter of data type
-    const node_type = type[0].toUpperCase() + type.slice(1);
-    if (node_type == ElementType.NOTEBOOK ||
-	node_type == ElementType.DATASET ||
-	node_type == ElementType.PUBLICATION ||
-	node_type == ElementType.OER
-       ){
-	// legit element type
-    } else {
-	throw Error("Server Neo4j: Element type not implemented");
-    }
+    // // capitalize first letter of data type
+    // const node_type = type[0].toUpperCase() + type.slice(1);
+    // if (node_type == ElementType.NOTEBOOK ||
+    // 	node_type == ElementType.DATASET ||
+    // 	node_type == ElementType.PUBLICATION ||
+    // 	node_type == ElementType.OER
+    //    ){
+    // 	// legit element type
+    // } else {
+    // 	throw Error("Server Neo4j: Element type not implemented");
+    // }
 
-    const query_str = "MATCH (n:"+ node_type +") " +
-	  "RETURN COUNT(n)";
     try{
+
+	const node_type = await parseElementType(type);
+	const query_str = "MATCH (n:"+ node_type +") " +
+	      "RETURN COUNT(n)";
+	
 	const {records, summary} =
 	      await driver.executeQuery(query_str, {database: process.env.NEO4J_DB});
 	if (records.length <= 0){
@@ -555,6 +582,40 @@ async function getFeaturedElements(){
 	// }
 	// return ret;
 	return records[0]['_fields'][0];
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return [];
+}
+/**
+ * Get all featured elements.
+ * @retrurn {Object[]} Array of featured objects. Empty array if no featrued elements found or error
+ */
+async function getFeaturedElementsByType(type, limit){
+
+    // For dynamically loading featured/highlight elements
+    const rel_count = 2; // threshold number of related elements for a given element to determine if it is featured
+
+    try{
+	const element_type = await parseElementType(type);
+	const query_str =
+	      "MATCH(n:"+ element_type +")-[r:RELATED]-() WITH n, COUNT(r) as rel_count " +
+	      "WHERE rel_count>$rel_count " +
+	      "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0])}, rand() as random ORDER BY random LIMIT $limit";
+
+	const {records, summary} =
+	      await driver.executeQuery(query_str,
+					{rel_count:rel_count, limit:neo4j.int(limit)},
+					{database: process.env.NEO4J_DB});
+	if (records.length <= 0){
+	    // No featured elements found
+	    return [];
+	}
+	var ret = []
+	for (record of records){
+	    element = record['_fields'][0];
+	    ret.push(element);
+	}
+	return {elements: ret};
     } catch(err){console.log('Error in query: '+ err);}
     // something went wrong
     return [];
@@ -763,30 +824,31 @@ async function updateElement(id, element){
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
 
-    let {node, node_type, related_elements} = await elementToNode(element, generate_id=false);
-    node_type = node_type[0].toUpperCase() + node_type.slice(1);
-
-    const this_element_match = "MATCH (n:"+node_type+"{id:$id}) ";
-    var this_element_set = "";
-    const this_element_query_params = {id: id};
-
-    // update this element
-    let i=0;
-    for (const [key, value] of Object.entries(node)) {
-	this_element_set += "SET n." + key + "=$attr" + i + " ";
-	this_element_query_params['attr' + i] = value;
-	i+=1;
-    }
-
-    // handle related elements
-    var {query_match, query_merge, query_params} =
-	await generateQueryStringForRelatedElements(related_elements);
-
-    // combine all query parameters
-    query_params = {...query_params, ...this_element_query_params};
-
-    const query_str = this_element_match + query_match + this_element_set + query_merge;
     try{
+	const {node, node_type, related_elements} =
+	      await elementToNode(element, generate_id=false);
+
+	const this_element_match = "MATCH (n:"+node_type+"{id:$id}) ";
+	var this_element_set = "";
+	const this_element_query_params = {id: id};
+
+	// update this element
+	let i=0;
+	for (const [key, value] of Object.entries(node)) {
+	    this_element_set += "SET n." + key + "=$attr" + i + " ";
+	    this_element_query_params['attr' + i] = value;
+	    i+=1;
+	}
+	
+	// handle related elements
+	var {query_match, query_merge, query_params} =
+	    await generateQueryStringForRelatedElements(related_elements);
+	
+	// combine all query parameters
+	query_params = {...query_params, ...this_element_query_params};
+	
+	const query_str = this_element_match + query_match + this_element_set + query_merge;
+
 	let ret = false;
 	// first remove all existing relations
 	await tx.run("MATCH (n:"+node_type+"{id:$id})-[r:RELATED]-(e) DELETE r",
@@ -862,7 +924,8 @@ async function elementToNode(element, generate_id=true){
 	...node
        } = element;
 
-    node_type = node_type[0].toUpperCase() + node_type.slice(1);
+    //node_type = node_type[0].toUpperCase() + node_type.slice(1);
+    node_type = await parseElementType(node_type);
     node['thumbnail_image'] = thumbnail;
 
     // (1) generate id (UUID)
@@ -895,7 +958,7 @@ async function elementToNode(element, generate_id=true){
 
     // for every element initialize click_count
     node['click_count'] = neo4j.int(0);
-    
+
     return {node:node, node_type:node_type, related_elements:related_elements};
 }
 
@@ -1003,6 +1066,7 @@ exports.getElementsCountByTag = getElementsCountByTag;
 exports.getElementsCountByType = getElementsCountByType;
 exports.setElementFeaturedForID = setElementFeaturedForID;
 exports.getElementsByContributor = getElementsByContributor;
+exports.getFeaturedElementsByType = getFeaturedElementsByType;
 exports.createLinkNotebook2Dataset = createLinkNotebook2Dataset;
 exports.getElementsCountByContributor = getElementsCountByContributor;
 

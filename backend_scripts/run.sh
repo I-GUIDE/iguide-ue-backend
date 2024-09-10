@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ ! -f "backend_neo4j.cjs" ]; then
-    mv backend_neo4j.js backend_neo4j.cjs
+    ln backend_neo4j.js backend_neo4j.cjs
 fi
 #mv backend_neo4j.js backend_neo4j.cjs
 

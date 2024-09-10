@@ -644,6 +644,20 @@ app.get('/api/elements/titles', cors(), async (req, res) => {
  *   get:
  *     summary: Fetch elements to show on homepage (featured etc.)
  *     tags: ['elements']
+ *     parameters:
+ *       - in: query
+ *         name: element-type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [dataset, notebook, publication, oer]
+ *         description: Type of featured elements to get
+  *       - in: query
+ *         name: limit
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Maximum number of featured elements
  *     responses:
  *       200:
  *         description: A list of featured resources
@@ -654,9 +668,12 @@ app.get('/api/elements/titles', cors(), async (req, res) => {
  */
 app.options('/api/elements/homepage', cors());
 app.get('/api/elements/homepage', cors(), async (req, res) => {
+    let { 'element-type': element_type,
+	  'limit': limit} = req.query;
     // [Done] Neo4j
     try {
-	const resources = await n4j.getFeaturedElements();
+	const resources = await n4j.getFeaturedElementsByType(element_type, limit);
+	      //await n4j.getFeaturedElements();
 	res.json(resources);
     } catch (error) {
 	console.error('Error querying OpenSearch:', error);
@@ -664,32 +681,32 @@ app.get('/api/elements/homepage', cors(), async (req, res) => {
     }
 });
 
-/**
- * @swagger
- * /api/featured-resources:
- *   get:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Fetch elements to show on homepage (featured etc.). (Replaced with '/api/elements/homepage')
- *     responses:
- *       200:
- *         description: A list of featured resources
- *       404:
- *         description: No featured resource found
- *       500:
- *         description: Internal server error
- */
-app.options('/api/featured-resources', cors());
-app.get('/api/featured-resources', cors(), async (req, res) => {
-    // [Done] Neo4j
-    try {
-	const resources = await n4j.getFeaturedElements();
-	res.json(resources);
-    } catch (error) {
-	console.error('Error querying OpenSearch:', error);
-	res.status(500).json({ message: 'Internal server error' });
-    }
-});
+// /**
+//  * @swagger
+//  * /api/featured-resources:
+//  *   get:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Fetch elements to show on homepage (featured etc.). (Replaced with '/api/elements/homepage')
+//  *     responses:
+//  *       200:
+//  *         description: A list of featured resources
+//  *       404:
+//  *         description: No featured resource found
+//  *       500:
+//  *         description: Internal server error
+//  */
+// app.options('/api/featured-resources', cors());
+// app.get('/api/featured-resources', cors(), async (req, res) => {
+//     // [Done] Neo4j
+//     try {
+// 	const resources = await n4j.getFeaturedElements();
+// 	res.json(resources);
+//     } catch (error) {
+// 	console.error('Error querying OpenSearch:', error);
+// 	res.status(500).json({ message: 'Internal server error' });
+//     }
+// });
 
 /**
  * @swagger
