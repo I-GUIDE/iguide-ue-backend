@@ -599,8 +599,8 @@ async function getFeaturedElementsByType(type, limit){
 	const element_type = await parseElementType(type);
 	const query_str =
 	      "MATCH(n:"+ element_type +")-[r:RELATED]-() WITH n, COUNT(r) as rel_count " +
-	      "WHERE rel_count>$rel_count " +
-	      "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0])}, rand() as random ORDER BY random LIMIT $limit";
+	      "WHERE rel_count>=$rel_count " +
+	      "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), contents:n.contents}, rand() as random ORDER BY random LIMIT $limit";
 
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
