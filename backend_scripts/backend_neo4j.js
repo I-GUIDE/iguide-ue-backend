@@ -145,7 +145,7 @@ async function getElementByID(id){
     const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
 	  "OPTIONAL MATCH (n)-[:RELATED]-(r) " +
 	  "WITH COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) as related_elems, n, c  " +
-	  "RETURN n{.*, related_elements: related_elems, `resource-type`:TOLOWER(LABELS(n)[0]), `contributor-id`:c.openid, `contributor-name`:[(c.first_name + ' ' + c.last_name)]}";
+	  "RETURN n{.*, related_elements: related_elems, `resource-type`:TOLOWER(LABELS(n)[0]), contributor: {id:c.openid, name:(c.first_name + ' ' + c.last_name), `avatar-url`:c.avatar_url}}";
 
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
@@ -277,8 +277,8 @@ async function getElementByID(id){
 	}
 
 	// [ToDo] should be removed
-	ret['_id'] = ret['id']
-	delete ret['id'];
+	//ret['_id'] = ret['id']
+	//delete ret['id'];
 	//ret['resource-type'] = ret['element_type'].toLowerCase();
 	//delete ret['element_type'];
 	ret['thumbnail-image'] = ret['thumbnail_image'];
@@ -342,7 +342,7 @@ async function getElementsByType(type, from, size){
 	const node_type = await parseElementType(type);
 	
 	const query_str = "MATCH (n:"+ node_type +") " +
-	      "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors } " +
+	      "RETURN n{id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors } " +
 	      "ORDER BY n.title " +
 	      "SKIP $from " +
 	      "LIMIT $size";
@@ -415,7 +415,7 @@ async function getElementsCountByType(type){
 async function getElementsByContributor(openid, from, size){
     // [ToDo]
     const query_str = "MATCH (c:Contributor{openid:$openid})-[:CONTRIBUTED]-(r) " +
-	  "RETURN {_id:r.id, tags: r.tags, title:r.title, contents:r.contents, tags:r.tags, `resource-type`:LABELS(r)[0], `thumbnail-image`:r.thumbnail_image, contents:r.contents, authors: r.authors} " +
+	  "RETURN {id:r.id, tags: r.tags, title:r.title, contents:r.contents, tags:r.tags, `resource-type`:LABELS(r)[0], `thumbnail-image`:r.thumbnail_image, contents:r.contents, authors: r.authors} " +
 	  "ORDER BY r.title " +
 	  "SKIP $from " +
 	  "LIMIT $size";
@@ -483,7 +483,7 @@ async function getElementsByTag(tag, from, size){
 
     const query_str = "MATCH (n) " +
 	  "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) )" +
-	  "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors } " +
+	  "RETURN n{id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors } " +
 	  "ORDER BY n.title " +
 	  "SKIP $from " +
 	  "LIMIT $size";
@@ -553,16 +553,16 @@ async function getFeaturedElements(){
     // For dynamically loading featured/highlight elements
     const rel_count = 2; // threshold number of related elements for a given element to determine if it is featured
     const query_str = "CALL {MATCH(n:Notebook)-[r:RELATED]-() WITH n, COUNT(r) as rel_count WHERE rel_count>$rel_count " +
-	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0])} AS featured, rand() as random ORDER BY random LIMIT 1 " +
+	  "RETURN n{id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0])} AS featured, rand() as random ORDER BY random LIMIT 1 " +
 	  "UNION " +
 	  "MATCH(n:Dataset)-[r:RELATED]-() WITH n, COUNT(r) as rel_count WHERE rel_count>$rel_count " +
-	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0])} AS featured, rand() as random ORDER BY random LIMIT 1 " +
+	  "RETURN n{id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0])} AS featured, rand() as random ORDER BY random LIMIT 1 " +
 	  "UNION " +
 	  "MATCH(n:Publication)-[r:RELATED]-() WITH n, COUNT(r) as rel_count WHERE rel_count>$rel_count " +
-	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0])} AS featured, rand() as random ORDER BY random LIMIT 1 " +
+	  "RETURN n{id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0])} AS featured, rand() as random ORDER BY random LIMIT 1 " +
 	  "UNION " +
 	  "MATCH(n:Oer)-[r:RELATED]-() WITH n, COUNT(r) as rel_count WHERE rel_count>$rel_count " +
-	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0])} AS featured, rand() as random ORDER BY random LIMIT 1 " +
+	  "RETURN n{id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0])} AS featured, rand() as random ORDER BY random LIMIT 1 " +
 	  "}RETURN COLLECT(featured) AS featured";
 
     try{
@@ -600,7 +600,7 @@ async function getFeaturedElementsByType(type, limit){
 	const query_str =
 	      "MATCH(n:"+ element_type +")-[r:RELATED]-() WITH n, COUNT(r) as rel_count " +
 	      "WHERE rel_count>=$rel_count " +
-	      "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), contents:n.contents}, rand() as random ORDER BY random LIMIT $limit";
+	      "RETURN n{id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), contents:n.contents}, rand() as random ORDER BY random LIMIT $limit";
 
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
