@@ -39,13 +39,16 @@ export const authenticateJWT = (req, res, next) => {
 
 
 // Middleware to check if the user has the required role
-export const authorizeRole = (role) => (req, res, next) => {
-  if (req.user && req.user.role === role) {
+export const authorizeRole = (requiredRole) => (req, res, next) => {
+  if (req.user && req.user.role <= requiredRole) {
+    // User's role is less than or equal to the required role
     next();
   } else {
+    // User does not have sufficient permissions
     res.status(403).json({ message: 'Forbidden' });
   }
 };
+
 
 // Store refresh token in OpenSearch
 export const storeRefreshToken = async (token, user_id) => {
