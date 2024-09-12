@@ -41,6 +41,13 @@ const Relations = Object.freeze({
     USES: "USES", // e.g. Notebook USES Dataset
 });
 
+const SortBy = Object.freeze({
+    CLICK_COUNT: "click_count",
+    CREATION_TIME: "created_at",
+    TITLE: "title",
+});
+exports.SortBy = SortBy;
+
 async function testServerConnection() {
     try {
 	const serverInfo = await driver.getServerInfo();
@@ -98,7 +105,7 @@ async function removeRelation(from_id, to_id, relation_type){
 /**
  * Determine type of element given type string
  */
-async function parseElementType(type){
+function parseElementType(type){
     const element_type = type[0].toUpperCase() + type.slice(1);
     switch(element_type){
 
@@ -109,6 +116,51 @@ async function parseElementType(type){
     default:
 	throw Error('Server Neo4j: Element type ('+ element_type  +') not implemented');
     }
+}
+
+function parseSortBy(sort_by){
+    switch (sort_by){
+    case SortBy.CLICK_COUNT:
+    case SortBy.CLICK_COUNT.toLowerCase():
+	return SortBy.CLICK_COUNT;
+    case SortBy.CREATION_TIME:
+    case "creation_time":
+	return SortBy.CREATION_TIME;
+    case SortBy.TITLE: return SortBy.TITLE;
+    default:
+	throw Error('Server Neo4j: SortBy ('+ sort_by  +') not implemented');
+    }
+}
+/**
+ * Neo4j always returns 64-bit numbers. Needs to be handled explicitly
+ */
+function parse64BitNumber(num_64){
+    let res = num_64['high'];
+    for (let i=0; i<32; i++) {
+	res *= 2;
+    }
+    return num_64['low'] + res;
+}
+/**
+ * Reference: https://stackoverflow.com/questions/62671936/javascript-neo4j-driver-how-to-convert-datetime-into-string
+ * Convert neo4j date objects in to a parsed javascript date object
+ * @param dateString - the neo4j date object
+ * @returns Date
+ */
+function parseDate(neo4jDateTime){
+    const { year, month, day, hour, minute, second, nanosecond } = neo4jDateTime;
+
+    const date = new Date(
+	year.toInt(),
+	month.toInt() - 1, // neo4j dates start at 1, js dates start at 0
+	day.toInt(),
+	hour.toInt(),
+	minute.toInt(),
+	second.toInt(),
+	nanosecond.toInt() / 1000000 // js dates use milliseconds
+    );
+    
+    return date;
 }
 /********************************/
 async function createLinkNotebook2Dataset(nb_id, ds_id){
@@ -168,10 +220,11 @@ async function getElementByID(id){
 	let {related_elements: related_elements, ...this_elem} = result;
 
 	// set/increment click count for this element
-	await tx.run("MATCH(n:"+result['element_type']+"{id:$id_param}) WITH n, CASE n.click_count WHEN IS NULL THEN 0 ELSE n.click_count END AS click_count SET n.click_count = click_count+1" ,
+	const this_element_type = parseElementType(result['resource-type']);
+	await tx.run("MATCH(n:"+this_element_type+"{id:$id_param}) WITH n, CASE n.click_count WHEN IS NULL THEN 0 ELSE n.click_count END AS click_count SET n.click_count = click_count+1" ,
 		     {id_param: id},
 		     {database: process.env.NEO4J_DB});
-
+	
 	await tx.commit();
 	// Original
 	// ret['related_nb'] = []
@@ -192,8 +245,8 @@ async function getElementByID(id){
 	// [ToDo] Change `rel_elem.id` to return everything for related elem
 	for (elem of related_elements){
 	    if (elem['id'] == null || elem['resource-type'] == null) continue;
-	    const element_type = await parseElementType(elem['resource-type']);
-	    
+	    const element_type = parseElementType(elem['resource-type']);
+
 	    switch(element_type){
 	    case ElementType.DATASET:{
 		let {element_type:_, ...rel_elem} = elem;
@@ -231,8 +284,8 @@ async function getElementByID(id){
 	    }
 	}
 
-	console.log('Testing ...' + this_elem['resource-type']);
-	const this_element_type = await parseElementType(this_elem['resource-type']);
+	//console.log('Testing ...' + this_elem['resource-type']);
+	//const this_element_type = parseElementType(this_elem['resource-type']);
 
 	// External links for OERs
 	if (this_element_type == ElementType.OER){
@@ -264,18 +317,18 @@ async function getElementByID(id){
 
 	// handle 64-bit numbers returned from neo4j
 	if (ret['click_count']){
-	    //console.log(ret['click_count']);
-	    let res = ret['click_count']['high'];
-	    for (let i=0; i<32; i++) {
-		res *= 2;
-	    }
-	    ret['click_count'] = ret['click_count']['low'] + res;
+	    ret['click_count'] = parse64BitNumber(ret['click_count']);
 	} else {
 	    // to handle corner cases, when click_count is not set. May happen for legacy elements added before summer school 2024
 	    // for all such elements, this will happen the first time only
+	    // Sept, 2024: Should NEVER reach here
 	    ret['click_count'] = 0;
 	}
-
+	// handle datetime value for created_at property
+	ret['created-at'] = parseDate(ret['created_at']);
+	delete ret['created_at'];
+	
+	
 	// [ToDo] should be removed
 	//ret['_id'] = ret['id']
 	//delete ret['id'];
@@ -314,9 +367,11 @@ async function getElementByID(id){
  * @param {string} type
  * @param {int}    from For pagintion, get elements from this number
  * @param {int}    size For pagintion, get this number of elements
+ * @param {Enum}   sort_by Enum for sorting the results. Default is by title
+ * @param {Enum}   order Enum for order of sorting the results. Default is DESC
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
-async function getElementsByType(type, from, size){
+async function getElementsByType(type, from, size, sort_by=SortBy.TITLE, order="DESC"){
 
     // // capitalize first letter of data type
     // const node_type = type[0].toUpperCase() + type.slice(1);
@@ -338,30 +393,30 @@ async function getElementsByType(type, from, size){
     // 	  "LIMIT $size";
 
     try{
+	const node_type = parseElementType(type);
+	const order_by = parseSortBy(sort_by);
 
-	const node_type = await parseElementType(type);
-	
 	const query_str = "MATCH (n:"+ node_type +") " +
-	      "RETURN n{id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors } " +
-	      "ORDER BY n.title " +
+	      "RETURN n{id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), authors:n.authors } " +
+	      "ORDER BY n." + order_by + " " + order + " " +
 	      "SKIP $from " +
 	      "LIMIT $size";
-	
+
 
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
 					{from: neo4j.int(from), size: neo4j.int(size)},
 					{database: process.env.NEO4J_DB});
 	if (records.length <= 0){
-	    // No featured elements found
+	    // No elements found
 	    return [];
 	}
 	var ret = []
 	for (record of records){
-	    //ret.push(record['_fields'][0]);
-	    element = record['_fields'][0];
-	    element['resource-type'] = element['resource-type'].toLowerCase();
-	    ret.push(element);
+	    ret.push(record['_fields'][0]);
+	    // element = record['_fields'][0];
+	    // element['resource-type'] = element['resource-type'].toLowerCase();
+	    // ret.push(element);
 	}
 	return ret;
     } catch(err){console.log('getElementsByType() Error in query: '+ err);}
@@ -389,10 +444,10 @@ async function getElementsCountByType(type){
 
     try{
 
-	const node_type = await parseElementType(type);
+	const node_type = parseElementType(type);
 	const query_str = "MATCH (n:"+ node_type +") " +
 	      "RETURN COUNT(n)";
-	
+
 	const {records, summary} =
 	      await driver.executeQuery(query_str, {database: process.env.NEO4J_DB});
 	if (records.length <= 0){
@@ -410,17 +465,20 @@ async function getElementsCountByType(type){
  * @param {string} openid ID of the contributor
  * @param {int}    from For pagintion, get elements from this number
  * @param {int}    size For pagintion, get this number of elements
+ * @param {Enum}   sort_by Enum for sorting the results. Default is by title
+ * @param {Enum}   order Enum for order of sorting the results. Default is DESC
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
-async function getElementsByContributor(openid, from, size){
-    // [ToDo]
-    const query_str = "MATCH (c:Contributor{openid:$openid})-[:CONTRIBUTED]-(r) " +
-	  "RETURN {id:r.id, tags: r.tags, title:r.title, contents:r.contents, tags:r.tags, `resource-type`:LABELS(r)[0], `thumbnail-image`:r.thumbnail_image, contents:r.contents, authors: r.authors} " +
-	  "ORDER BY r.title " +
-	  "SKIP $from " +
-	  "LIMIT $size";
+async function getElementsByContributor(openid, from, size, sort_by=SortBy.TITLE, order="DESC"){
 
     try{
+	const order_by = parseSortBy(sort_by);
+	const query_str = "MATCH (c:Contributor{openid:$openid})-[:CONTRIBUTED]-(r) " +
+	      "RETURN {id:r.id, tags: r.tags, title:r.title, contents:r.contents, tags:r.tags, `resource-type`:LABELS(r)[0], `thumbnail-image`:r.thumbnail_image, contents:r.contents, authors: r.authors} " +
+	      "ORDER BY r." + order_by + " " + order + " " +
+	      "SKIP $from " +
+	      "LIMIT $size";
+
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
 					{openid: openid,
@@ -471,9 +529,11 @@ async function getElementsCountByContributor(openid){
  * @param {string} tag Tag string for case-insensitive match
  * @param {int}    from For pagintion, get elements from this number
  * @param {int}    size For pagintion, get this number of elements
+ * @param {Enum}   sort_by Enum for sorting the results. Default is by title
+ * @param {Enum}   order Enum for order of sorting the results. Default is DESC
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
-async function getElementsByTag(tag, from, size){
+async function getElementsByTag(tag, from, size, sort_by=SortBy.TITLE, order="DESC"){
     // const query_str = "MATCH (n)-[:CONTRIBUTED]-(r) " +
     // 	  "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) )" +
     // 	  "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)] } " +
@@ -481,14 +541,15 @@ async function getElementsByTag(tag, from, size){
     // 	  "SKIP $from " +
     // 	  "LIMIT $size";
 
-    const query_str = "MATCH (n) " +
-	  "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) )" +
-	  "RETURN n{id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors } " +
-	  "ORDER BY n.title " +
-	  "SKIP $from " +
-	  "LIMIT $size";
-
     try{
+	const order_by = parseSortBy(sort_by);
+	const query_str = "MATCH (n) " +
+	      "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) )" +
+	      "RETURN n{id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors } " +
+	      "ORDER BY n." + order_by + " " + order + " " +
+	      "SKIP $from " +
+	      "LIMIT $size";
+
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
 					{tag_str: tag,
@@ -596,7 +657,7 @@ async function getFeaturedElementsByType(type, limit){
     const rel_count = 2; // threshold number of related elements for a given element to determine if it is featured
 
     try{
-	const element_type = await parseElementType(type);
+	const element_type = parseElementType(type);
 	const query_str =
 	      "MATCH(n:"+ element_type +")-[r:RELATED]-() WITH n, COUNT(r) as rel_count " +
 	      "WHERE rel_count>=$rel_count " +
@@ -839,14 +900,14 @@ async function updateElement(id, element){
 	    this_element_query_params['attr' + i] = value;
 	    i+=1;
 	}
-	
+
 	// handle related elements
 	var {query_match, query_merge, query_params} =
 	    await generateQueryStringForRelatedElements(related_elements);
-	
+
 	// combine all query parameters
 	query_params = {...query_params, ...this_element_query_params};
-	
+
 	const query_str = this_element_match + query_match + this_element_set + query_merge;
 
 	let ret = false;
@@ -925,7 +986,7 @@ async function elementToNode(element, generate_id=true){
        } = element;
 
     //node_type = node_type[0].toUpperCase() + node_type.slice(1);
-    node_type = await parseElementType(node_type);
+    node_type = parseElementType(node_type);
     node['thumbnail_image'] = thumbnail;
 
     // (1) generate id (UUID)
@@ -958,7 +1019,9 @@ async function elementToNode(element, generate_id=true){
 
     // for every element initialize click_count
     node['click_count'] = neo4j.int(0);
-
+    // for every element initialize creation time
+    node['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
+    
     return {node:node, node_type:node_type, related_elements:related_elements};
 }
 
@@ -971,7 +1034,7 @@ async function elementToNode(element, generate_id=true){
 async function registerElement(contributor_id, element){
 
     // (1) and (2)
-    const {node, node_type, related_elements} = await elementToNode(element);
+    let {node, node_type, related_elements} = await elementToNode(element);
 
     // (3) create relations based on related-elements
     var {query_match, query_merge, query_params} =

@@ -963,8 +963,7 @@ app.get('/api/resources/:field/:values', cors(), async (req, res) => {
 app.get('/api/elements/:id', cors(), async (req, res) => {
 
     const element_id = decodeURIComponent(req.params['id']);
-
-    console.log('getElementByID(): ' + element_id);
+    //console.log('getElementByID(): ' + element_id);
     try {
 	const element = await n4j.getElementByID(element_id);
 	if (JSON.stringify(element) === '{}'){
@@ -1208,6 +1207,7 @@ app.get('/api/elements/retrieve', cors(), async (req, res) => {
  *         required: false
  *         schema:
  *           type: string
+ *           enum: [click_count, creation_time, title]
  *         description: The field to sort the elements by
  *       - in: query
  *         name: order
@@ -1333,6 +1333,7 @@ app.get('/api/elements', cors(), async (req, res) => {
 		    throw Error('Neo4j not implemented Count:' + element_type + ', ' + match_value);
 		}
 	    } else {
+		// [ToDo] Should be removed since '_id' is not used anymore???
 		if (field_name == '_id'){
 		    const resources = [];
 		    let total_count = 0;
@@ -1347,7 +1348,11 @@ app.get('/api/elements', cors(), async (req, res) => {
 		    const resources = [];
 		    let total_count = 0;
 		    for (let val of match_value){
-			let resource = await n4j.getElementsByContributor(val, from, size);
+			let resource = await n4j.getElementsByContributor(val,
+									  from,
+									  size,
+									  sort_by,
+									  order);
 			total_count += await n4j.getElementsCountByContributor(val);
 			resources.push(...resource);
 		    }
@@ -1357,7 +1362,7 @@ app.get('/api/elements', cors(), async (req, res) => {
 		    const resources = [];
 		    let total_count = 0;
 		    for (let val of match_value){
-			let resource = await n4j.getElementsByTag(val, from, size);
+			let resource = await n4j.getElementsByTag(val, from, size, sort_by, order);
 			resources.push(...resource);
 			total_count += await n4j.getElementsCountByTag(val);
 		    }
@@ -1382,7 +1387,7 @@ app.get('/api/elements', cors(), async (req, res) => {
 		const resources = [];
 		let total_count = 0;
 		for (let val of element_type){
-		    let resource = await n4j.getElementsByType(val, from, size);
+		    let resource = await n4j.getElementsByType(val, from, size, sort_by, order);
 		    if (resource.length > 0){
 			resources.push(...resource);
 		    }
@@ -2055,7 +2060,7 @@ app.post('/api/users/:id/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvat
     try {
 	const { openid } = req.params.id;
 	const newAvatarFile = req.file;
-	
+
 	if (!openid || !newAvatarFile) {
 	    return res.status(400).json({ message: 'OpenID and new avatar file are required' });
 	}
