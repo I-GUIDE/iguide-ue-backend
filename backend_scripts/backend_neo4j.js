@@ -317,12 +317,13 @@ async function getElementByID(id){
 
 	// handle 64-bit numbers returned from neo4j
 	if (ret['click_count']){
-	    ret['click_count'] = parse64BitNumber(ret['click_count']);
+	    ret['click-count'] = parse64BitNumber(ret['click_count']);
+	    delete ret['click_count'];
 	} else {
 	    // to handle corner cases, when click_count is not set. May happen for legacy elements added before summer school 2024
 	    // for all such elements, this will happen the first time only
 	    // Sept, 2024: Should NEVER reach here
-	    ret['click_count'] = 0;
+	    ret['click-count'] = 0;
 	}
 	// handle datetime value for created_at property
 	ret['created-at'] = parseDate(ret['created_at']);
