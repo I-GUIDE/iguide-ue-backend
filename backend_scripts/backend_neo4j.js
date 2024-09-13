@@ -718,6 +718,8 @@ async function registerContributor(contributor){
     //contributor.id = new_id;
     // (2) insert element as a new node with id and other fileds from element param
 
+    // default role for every contributor (0: super admin, 10: untrusted user)
+    contributor['role'] = neo4j.int(10);
     const query_str = "CREATE (c: Contributor $contr_param)";
     try{
 	const {_, summary} =
@@ -852,7 +854,10 @@ async function getContributorByID(openid){
 	    // should never reach here since ID is unique
 	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID:" + openid);
 	}
-	return records[0]['_fields'][0];
+	const contributor = records[0]['_fields'][0];
+	contributor['role'] = parse64BitNumber(contributor['role']);
+	return contributor;
+	//return records[0]['_fields'][0];
     } catch(err){console.log('Error in query: '+ err);}
     // something went wrong
     return {};
