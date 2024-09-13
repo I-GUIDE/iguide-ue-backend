@@ -409,8 +409,6 @@ async function getElementsByType(type, from, size, sort_by=SortBy.TITLE, order="
 					{from: neo4j.int(from), size: neo4j.int(size)},
 					{database: process.env.NEO4J_DB});
 
-	console.log(summary['query']);
-
 	if (records.length <= 0){
 	    // No elements found
 	    return [];
