@@ -1438,62 +1438,73 @@ app.get('/api/elements', cors(), async (req, res) => {
  *         description: Resource registered successfully
  *       500:
  *         description: Internal server error
+ *       403:
+ *         description: The user does not have the permission to make the contribution
  */
 //app.options('/api/elements', jwtCorsMiddleware);
 app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
-    // [Done] Neo4j
     const resource = req.body;
 
     try {
-	if (resource['resource-type'] === 'notebook' &&
-	    resource['notebook-repo'] &&
-	    resource['notebook-file']) {
-	    const htmlNotebookPath =
-		  await convertNotebookToHtml(resource['notebook-repo'],
-					      resource['notebook-file'], notebookHtmlDir);
-	    if (htmlNotebookPath) {
-		resource['html-notebook'] =
-		    `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
-	    }
-	}
+        // Check if the resource type is "oer" and user's role is greater than 10
+        if (resource['resource-type'] === 'oer' && req.user.role > 10) {
+            return res.status(403).json({ message: 'Forbidden: You do not have permission to submit OER elements.' });
+        }
 
-	const contributor_id = resource['metadata']['created_by'];
-	//const response = await n4j.registerElement(contributor_id, resource);
-	const {response, element_id} = await n4j.registerElement(contributor_id, resource);
-	if (response){
-	    // Insert/index searchable part to OpenSearch
-	    let os_element = {};
-	    //os_element['id'] = element_id;
-	    os_element['title'] = resource['title'];
-	    os_element['contents'] = resource['contents'];
-	    os_element['authors'] = resource['authors'];
-	    os_element['tags'] = resource['tags'];
-	    os_element['resource-type'] = resource['resource-type'];
-	    os_element['thumbnail-image'] = resource['thumbnail-image'];
-	    console.log('Getting contributor name');
-	    // set contributor name
-	    let contributor = await n4j.getContributorByID(contributor_id);
-	    let contributor_name = '';
-	    if ('first_name' in contributor || 'last_name' in contributor) {
-		contributor_name = contributor['first_name'] + ' ' + contributor['last_name'];
-	    }
-	    os_element['contributor'] = contributor_name;
+        // Handle notebook resource type
+        if (resource['resource-type'] === 'notebook' &&
+            resource['notebook-repo'] &&
+            resource['notebook-file']) {
+            const htmlNotebookPath =
+                await convertNotebookToHtml(resource['notebook-repo'],
+                                            resource['notebook-file'], notebookHtmlDir);
+            if (htmlNotebookPath) {
+                resource['html-notebook'] =
+                    `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+            }
+        }
 
-	    console.log('indexing element: ' + os_element);
-	    const response = await client.index({
-		id: element_id,
-		index: os_index,
-		body: os_element,
-		refresh: true,
-	    });
-	    console.log(response['body']['result']);
-	    res.status(200).json({ message: 'Resource registered successfully', elementId: element_id });
-	} else {
-	    console.log('Error registering resource ...');
-	    res.status(500).json({ error: 'Error registering resource' });
-	}
+        const contributor_id = resource['metadata']['created_by'];
+
+        // Register element in Neo4j
+        const {response, element_id} = await n4j.registerElement(contributor_id, resource);
+
+        if (response) {
+            // Insert/index searchable part to OpenSearch
+            let os_element = {
+                title: resource['title'],
+                contents: resource['contents'],
+                authors: resource['authors'],
+                tags: resource['tags'],
+                'resource-type': resource['resource-type'],
+                'thumbnail-image': resource['thumbnail-image']
+            };
+
+            console.log('Getting contributor name');
+            // Set contributor name
+            let contributor = await n4j.getContributorByID(contributor_id);
+            let contributor_name = '';
+            if ('first_name' in contributor || 'last_name' in contributor) {
+                contributor_name = `${contributor['first_name']} ${contributor['last_name']}`;
+            }
+            os_element['contributor'] = contributor_name;
+
+            console.log('Indexing element: ' + os_element);
+            const response = await client.index({
+                id: element_id,
+                index: os_index,
+                body: os_element,
+                refresh: true,
+            });
+
+            console.log(response['body']['result']);
+            res.status(200).json({ message: 'Resource registered successfully', elementId: element_id });
+        } else {
+            console.log('Error registering resource ...');
+            res.status(500).json({ error: 'Error registering resource' });
+        }
     } catch (error) {
-	res.status(500).json({ error: error.message });
+        res.status(500).json({ error: error.message });
     }
 });
 
