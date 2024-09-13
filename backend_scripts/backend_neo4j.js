@@ -159,7 +159,7 @@ function parseDate(neo4jDateTime){
 	second.toInt(),
 	nanosecond.toInt() / 1000000 // js dates use milliseconds
     );
-    
+
     return date;
 }
 /********************************/
@@ -224,7 +224,7 @@ async function getElementByID(id){
 	await tx.run("MATCH(n:"+this_element_type+"{id:$id_param}) WITH n, CASE n.click_count WHEN IS NULL THEN 0 ELSE n.click_count END AS click_count SET n.click_count = click_count+1" ,
 		     {id_param: id},
 		     {database: process.env.NEO4J_DB});
-	
+
 	await tx.commit();
 	// Original
 	// ret['related_nb'] = []
@@ -328,8 +328,8 @@ async function getElementByID(id){
 	// handle datetime value for created_at property
 	ret['created-at'] = parseDate(ret['created_at']);
 	delete ret['created_at'];
-	
-	
+
+
 	// [ToDo] should be removed
 	//ret['_id'] = ret['id']
 	//delete ret['id'];
@@ -398,7 +398,7 @@ async function getElementsByType(type, from, size, sort_by=SortBy.TITLE, order="
 	const order_by = parseSortBy(sort_by);
 
 	const query_str = "MATCH (n:"+ node_type +") " +
-	      "RETURN n{id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), authors:n.authors } " +
+	      "RETURN n{id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), authors:n.authors, created_at:TOSTRING(n.created_at), click_count:n.click_count} " +
 	      "ORDER BY n." + order_by + " " + order + " " +
 	      "SKIP $from " +
 	      "LIMIT $size";
@@ -408,6 +408,9 @@ async function getElementsByType(type, from, size, sort_by=SortBy.TITLE, order="
 	      await driver.executeQuery(query_str,
 					{from: neo4j.int(from), size: neo4j.int(size)},
 					{database: process.env.NEO4J_DB});
+
+	console.log(summary['query']);
+
 	if (records.length <= 0){
 	    // No elements found
 	    return [];
@@ -475,7 +478,7 @@ async function getElementsByContributor(openid, from, size, sort_by=SortBy.TITLE
     try{
 	const order_by = parseSortBy(sort_by);
 	const query_str = "MATCH (c:Contributor{openid:$openid})-[:CONTRIBUTED]-(r) " +
-	      "RETURN {id:r.id, tags: r.tags, title:r.title, contents:r.contents, tags:r.tags, `resource-type`:LABELS(r)[0], `thumbnail-image`:r.thumbnail_image, contents:r.contents, authors: r.authors} " +
+	      "RETURN {id:r.id, tags: r.tags, title:r.title, contents:r.contents, tags:r.tags, `resource-type`:LABELS(r)[0], `thumbnail-image`:r.thumbnail_image, contents:r.contents, authors: r.authors, created_at:TOSTRING(r.created_at), click_count:r.click_count} " +
 	      "ORDER BY r." + order_by + " " + order + " " +
 	      "SKIP $from " +
 	      "LIMIT $size";
@@ -546,7 +549,7 @@ async function getElementsByTag(tag, from, size, sort_by=SortBy.TITLE, order="DE
 	const order_by = parseSortBy(sort_by);
 	const query_str = "MATCH (n) " +
 	      "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) )" +
-	      "RETURN n{id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors } " +
+	      "RETURN n{id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors, created_at:TOSTRING(n.created_at), click_count:n.click_count } " +
 	      "ORDER BY n." + order_by + " " + order + " " +
 	      "SKIP $from " +
 	      "LIMIT $size";
@@ -1022,7 +1025,7 @@ async function elementToNode(element, generate_id=true){
     node['click_count'] = neo4j.int(0);
     // for every element initialize creation time
     node['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
-    
+
     return {node:node, node_type:node_type, related_elements:related_elements};
 }
 
