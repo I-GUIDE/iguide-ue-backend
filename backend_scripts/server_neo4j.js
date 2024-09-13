@@ -1447,7 +1447,7 @@ app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, async (req, res) =
 
     try {
         // Check if the resource type is "oer" and user's role is greater than 10
-        if (resource['resource-type'] === 'oer' && req.user.role > 10) {
+        if (resource['resource-type'] === 'oer' && req.user.role > 4) {
             return res.status(403).json({ message: 'Forbidden: You do not have permission to submit OER elements.' });
         }
 
