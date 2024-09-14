@@ -3,6 +3,10 @@ import swaggerUi from 'swagger-ui-express';
 import dotenv from 'dotenv';
 dotenv.config();
 
+const HOST = process.env.DOMAIN;
+const PORT = process.env.PORT;
+const HTTP_PORT = parseInt(PORT, 10)+1;
+
 const options = {
   definition: {
     openapi: '3.0.0',
@@ -13,14 +17,14 @@ const options = {
     },
     servers: [
       {
-        url: 'http://backend-dev.i-guide.io:5001',
+          url: `https://${HOST}:${PORT}`,
       },
-      {
-        url: 'https://backend-dev.i-guide.io:5000',
+	{
+          url: `http://${HOST}:${HTTP_PORT}`, 
       },
     ],
   },
-  apis: ['./server_dev.js'], // Path to the API docs
+  apis: ['./server_neo4j.js'], // Path to the API docs
 };
 
 const specs = swaggerJsdoc(options);
