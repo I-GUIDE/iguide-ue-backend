@@ -52,7 +52,7 @@ dotenv.config();
 const os_node = process.env.OPENSEARCH_NODE;
 const os_usr = process.env.OPENSEARCH_USERNAME;
 const os_pswd = process.env.OPENSEARCH_PASSWORD;
-const os_index = 'neo4j-elements-dev'; process.env.OPENSEARCH_INDEX;
+const os_index = process.env.OPENSEARCH_INDEX; //'neo4j-elements-dev';
 const target_domain = process.env.JWT_TARGET_DOMAIN;
 
 const SSLOptions = {
