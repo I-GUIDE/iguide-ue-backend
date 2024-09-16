@@ -655,15 +655,30 @@ async function getFeaturedElements(){
  */
 async function getFeaturedElementsByType(type, limit){
 
-    // For dynamically loading featured/highlight elements
-    const rel_count = 2; // threshold number of related elements for a given element to determine if it is featured
-
     try{
 	const element_type = parseElementType(type);
-	const query_str =
-	      "MATCH(n:"+ element_type +")-[r:RELATED]-() WITH n, COUNT(r) as rel_count " +
+	const rel_count = (() => {
+	    if (element_type == ElementType.OER) return 0;
+	    else if (element_type == ElementType.PUBLICATION) return 1;
+	    else return 2;
+	})();
+
+	const query_str = (() => {
+	    // since we have a limited number of OERs at this point, relax the connectivity check
+	    // for featured elements for now
+	    if (element_type == ElementType.OER) {
+		return "MATCH(n:"+ element_type +") " +
+	      "RETURN n{id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), contents:n.contents}, rand() as random ORDER BY random LIMIT $limit";
+	    } else {
+		return "MATCH(n:"+ element_type +")-[r:RELATED]-() WITH n, COUNT(r) as rel_count " +
 	      "WHERE rel_count>=$rel_count " +
 	      "RETURN n{id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), contents:n.contents}, rand() as random ORDER BY random LIMIT $limit";
+	    }
+	})();
+
+	// "MATCH(n:"+ element_type +")-[r:RELATED]-() WITH n, COUNT(r) as rel_count " +
+	// "WHERE rel_count>=$rel_count " +
+	// "RETURN n{id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), contents:n.contents}, rand() as random ORDER BY random LIMIT $limit";
 
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
