@@ -397,8 +397,8 @@ async function getElementsByType(type, from, size, sort_by=SortBy.TITLE, order="
 	const node_type = parseElementType(type);
 	const order_by = parseSortBy(sort_by);
 
-	const query_str = "MATCH (n:"+ node_type +") " +
-	      "RETURN n{id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), authors:n.authors, created_at:TOSTRING(n.created_at), click_count:n.click_count} " +
+	const query_str = "MATCH (n:"+ node_type +")-[:CONTRIBUTED]-(c) " +
+	      "RETURN n{id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), authors:n.authors, created_at:TOSTRING(n.created_at), click_count:n.click_count, contributor: {id:c.openid, name:(c.first_name + ' ' + c.last_name), `avatar-url`:c.avatar_url}} " +
 	      "ORDER BY n." + order_by + " " + order + " " +
 	      "SKIP $from " +
 	      "LIMIT $size";
@@ -476,7 +476,7 @@ async function getElementsByContributor(openid, from, size, sort_by=SortBy.TITLE
     try{
 	const order_by = parseSortBy(sort_by);
 	const query_str = "MATCH (c:Contributor{openid:$openid})-[:CONTRIBUTED]-(r) " +
-	      "RETURN {id:r.id, tags: r.tags, title:r.title, contents:r.contents, tags:r.tags, `resource-type`:LABELS(r)[0], `thumbnail-image`:r.thumbnail_image, contents:r.contents, authors: r.authors, created_at:TOSTRING(r.created_at), click_count:r.click_count} " +
+	      "RETURN {id:r.id, tags: r.tags, title:r.title, contents:r.contents, tags:r.tags, `resource-type`:LABELS(r)[0], `thumbnail-image`:r.thumbnail_image, contents:r.contents, authors: r.authors, created_at:TOSTRING(r.created_at), click_count:r.click_count, contributor: {id:c.openid, name:(c.first_name + ' ' + c.last_name), `avatar-url`:c.avatar_url}} " +
 	      "ORDER BY r." + order_by + " " + order + " " +
 	      "SKIP $from " +
 	      "LIMIT $size";
@@ -545,9 +545,9 @@ async function getElementsByTag(tag, from, size, sort_by=SortBy.TITLE, order="DE
 
     try{
 	const order_by = parseSortBy(sort_by);
-	const query_str = "MATCH (n) " +
+	const query_str = "MATCH (n)-[:CONTRIBUTED]-(c) " +
 	      "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) )" +
-	      "RETURN n{id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors, created_at:TOSTRING(n.created_at), click_count:n.click_count } " +
+	      "RETURN n{id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:n.authors, created_at:TOSTRING(n.created_at), click_count:n.click_count, contributor: {id:c.openid, name:(c.first_name + ' ' + c.last_name), `avatar-url`:c.avatar_url} } " +
 	      "ORDER BY n." + order_by + " " + order + " " +
 	      "SKIP $from " +
 	      "LIMIT $size";

@@ -1335,6 +1335,8 @@ app.get('/api/elements', cors(), async (req, res) => {
 	    } else {
 		// [ToDo] Should be removed since '_id' is not used anymore???
 		if (field_name == '_id'){
+		    throw Error('GET /api/elements field_name=_id: Should not be used');
+
 		    const resources = [];
 		    let total_count = 0;
 		    for (let val of match_value){
