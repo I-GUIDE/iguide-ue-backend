@@ -187,7 +187,7 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 
 
 app.options('/api/check-tokens', jwtCorsMiddleware);
-app.get('/api/check-tokens', jwtCorsMiddleware, authenticateJWT, async (req, res) => {res.json(true);});
+app.get('/api/check-tokens', jwtCorsMiddleware, authenticateJWT, async (req, res) => {res.json(req.user.role);});
 
 /****************************************************************************
  * General Helper Functions
