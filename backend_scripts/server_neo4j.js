@@ -2168,7 +2168,6 @@ app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('f
     });
 });
 
-
 /**
  * @swagger
  * /api/resources/{id}:

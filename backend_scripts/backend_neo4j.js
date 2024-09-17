@@ -30,6 +30,7 @@ const ElementType = Object.freeze({
     DATASET: "Dataset",
     PUBLICATION: "Publication",
     OER: "Oer", // Open Educational Content
+    MAP: "Map",
 });
 exports.ElementType = ElementType;
 
@@ -113,6 +114,7 @@ function parseElementType(type){
     case ElementType.DATASET: return ElementType.DATASET;
     case ElementType.PUBLICATION: return ElementType.PUBLICATION;
     case ElementType.OER: return ElementType.OER;
+    case ElementType.MAP: return ElementType.MAP;
     default:
 	throw Error('Server Neo4j: Element type ('+ element_type  +') not implemented');
     }
@@ -726,13 +728,23 @@ async function setElementFeaturedForID(id){
  */
 async function registerContributor(contributor){
 
-    // (1) No need to generate id (UUID). For users, openid will be unique
-    //new_id = uuidv4();
-    //contributor.id = new_id;
-    // (2) insert element as a new node with id and other fileds from element param
+    // (1) generate id (UUID).
+    contributor['id'] = uuidv4();
 
-    // default role for every contributor (0: super admin, 10: untrusted user)
-    contributor['role'] = neo4j.int(10);
+    // (2) assign roles for new contributor
+    contributor['role'] = (() => {
+	// 0: super admin
+	// 2: admin
+	// 4: premium users
+	// 6: trusted users
+	// 10: untrusted user
+	if (contributor['email'].endsWith('edu')) {
+	    // Trusted users
+	    return neo4j.int(6);
+	}
+	// default role i.e. Untrusted user
+	return neo4j.int(10);
+	})();
     const query_str = "CREATE (c: Contributor $contr_param)";
     try{
 	const {_, summary} =
@@ -868,7 +880,10 @@ async function getContributorByID(openid){
 	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID:" + openid);
 	}
 	const contributor = records[0]['_fields'][0];
-	contributor['role'] = parse64BitNumber(contributor['role']);
+	// remove role attribute
+	//contributor['role'] = parse64BitNumber(contributor['role']);
+	//delete contributor['role'];
+	
 	return contributor;
 	//return records[0]['_fields'][0];
     } catch(err){console.log('Error in query: '+ err);}
