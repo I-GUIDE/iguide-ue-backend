@@ -882,7 +882,7 @@ async function getContributorByID(openid){
 	const contributor = records[0]['_fields'][0];
 	// remove role attribute
 	//contributor['role'] = parse64BitNumber(contributor['role']);
-	//delete contributor['role'];
+	delete contributor['role'];
 	
 	return contributor;
 	//return records[0]['_fields'][0];
