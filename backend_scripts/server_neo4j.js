@@ -17,6 +17,7 @@ import { specs } from './swagger.js';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import * as n4j from './backend_neo4j.cjs'
+import llm_routes from './llm_routes.js';
 
 
 import { authenticateJWT, authorizeRole, generateAccessToken } from './jwtUtils.js';
@@ -48,6 +49,9 @@ const jwtCorsMiddleware = (req, res, next) => {
 app.use(express.json());
 app.use(cookieParser());
 dotenv.config();
+
+// Use the LLM-based conversational search route
+app.use('/beta', llm_routes);
 
 const os_node = process.env.OPENSEARCH_NODE;
 const os_usr = process.env.OPENSEARCH_USERNAME;

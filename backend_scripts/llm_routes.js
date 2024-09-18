@@ -1,6 +1,7 @@
 import express from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import axios from 'axios';
+import cors from 'cors';
 
 const router = express.Router();
 
@@ -17,7 +18,8 @@ const client = new Client({
 });
 
 // Endpoint for LLM-based conversational search
-router.post('/beta/llm-search', async (req, res) => {
+router.options('/llm-search', cors());
+router.post('/llm-search', cors(), async (req, res) => {
     const { userQuery } = req.body;
 
     try {
