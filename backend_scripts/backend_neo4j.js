@@ -511,7 +511,7 @@ async function getElementsByContributor(id, from, size, sort_by=SortBy.TITLE, or
 
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
-					{id: id,
+					{contrib_id: id,
 					 from: neo4j.int(from),
 					 size: neo4j.int(size)},
 					{database: process.env.NEO4J_DB});
