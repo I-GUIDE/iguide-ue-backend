@@ -18,7 +18,6 @@ import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import * as n4j from './backend_neo4j.cjs'
 
-
 import { authenticateJWT, authorizeRole, generateAccessToken } from './jwtUtils.js';
 
 const app = express();
@@ -44,7 +43,6 @@ const jwtCorsMiddleware = (req, res, next) => {
     next();
 };
 
-//app.use('/api/users/:openid', cors(jwtCORSOptions));
 app.use(express.json());
 app.use(cookieParser());
 dotenv.config();
@@ -292,231 +290,9 @@ app.use((err, req, res, next) => {
     next();
 });
 
-/****************************************************************************/
-
-/**
- * @swagger
- * /api/resources:
- *   get:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Fetch documents by resource type. (Replaced with '/api/elements')
- *     parameters:
- *       - in: query
- *         name: data_name
- *         required: true
- *         schema:
- *           type: string
- *         description: The type of resource to fetch
- *       - in: query
- *         name: sort_by
- *         required: false
- *         schema:
- *           type: string
- *         description: The field to sort by
- *       - in: query
- *         name: order
- *         required: false
- *         schema:
- *           type: string
- *           enum: [asc, desc]
- *         description: The sort order
- *       - in: query
- *         name: from
- *         required: false
- *         schema:
- *           type: integer
- *         description: The starting index of the results
- *       - in: query
- *         name: size
- *         required: false
- *         schema:
- *           type: integer
- *         description: The number of results to fetch
- *     responses:
- *       200:
- *         description: A list of resources
- *       404:
- *         description: No resource found
- *       500:
- *         description: Internal server error
- */
-app.options('/api/resources', cors());
-app.get('/api/resources', cors(), async (req, res) => {
-    // [Done] Neo4j
-    const type = req.query.data_name;
-    //let sortBy = req.query.sort_by || '_score'; // Default to '_score' for relevance sorting
-    //const order = req.query.order || 'desc'; // Default to 'desc' for descending order
-    const from = parseInt(req.query.from, 10) || 0; // Default to 0 (start from the beginning)
-    const size = parseInt(req.query.size, 10) || 15; // Default to 15 results
-
-    try {
-	// Note: Neo4j query always orders by title, needs to be updated if required otherwise
-	const resources = await n4j.getElementsByType(type, from, size);
-	if (resources.length == 0){
-	    res.status(404).json({ message: 'No resource found' });
-	    return;
-	}
-	res.json(resources);
-    } catch (error) {
-	console.error('Error querying OpenSearch:', error);
-	res.status(500).json({ message: 'Internal server error' });
-    }
-});
-
 /****************************************************************************
  * Misc. Endpoints
  ****************************************************************************/
-
-/**
- * @swagger
- * /api/search:
- *   post:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Search for resources. (Replaced with 'GET /api/search')
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               keyword:
- *                 type: string
- *               resource_type:
- *                 type: string
- *               sort_by:
- *                 type: string
- *               order:
- *                 type: string
- *                 enum: [asc, desc]
- *               from:
- *                 type: integer
- *               size:
- *                 type: integer
- *     responses:
- *       200:
- *         description: A list of search results
- *       500:
- *         description: Error querying OpenSearch
- */
-app.options('/api/search', cors());
-app.post('/api/search', cors(), async (req, res) => {
-    // [Done] Neo4j not required. All searching shoud be from OS
-    const { keyword, resource_type, sort_by = '_score', order = 'desc', from = 0, size = 15 } = req.body;
-
-    let query = {
-	multi_match: {
-	    query: keyword,
-	    fields: [
-		'title^3',    // Boost title matches
-		'authors^3',  // Boost author matches
-		'tags^2',     // Slightly boost tag matches
-		'contents'    // Normal weight for content matches
-	    ],
-	},
-    };
-
-    if (resource_type && resource_type !== 'any') {
-	query = {
-	    bool: {
-		must: [
-		    {
-			multi_match: {
-			    query: keyword,
-			    fields: [
-				'title^3',
-				'authors^3',
-				'tags^2',
-				'contents'
-			    ],
-			},
-		    },
-		    { term: { 'resource-type': resource_type } },
-		],
-	    },
-	};
-    }
-
-    // Replace title and authors with their keyword sub-fields for sorting
-    let sortBy = sort_by;
-    if (sortBy === 'title') {
-	sortBy = 'title.keyword';
-    } else if (sortBy === 'authors') {
-	sortBy = 'authors.keyword';
-    }
-
-    try {
-	const searchParams = {
-	    index: os_index,
-	    body: {
-		from: from,
-		size: size,
-		query: query,
-	    },
-	};
-
-	// Add sorting unless sort_by is "prioritize_title_author"
-	if (sort_by !== 'prioritize_title_author') {
-	    searchParams.body.sort = [
-		{
-		    [sortBy]: {
-			order: order,
-		    },
-		},
-	    ];
-	}
-
-	const searchResponse = await client.search(searchParams);
-	const results = searchResponse.body.hits.hits.map(hit => {
-	    const { _id, _source } = hit;
-	    const { metadata, ...rest } = _source; // Remove metadata
-	    return { _id, ...rest };
-	});
-	//res.json(results);
-	res.json({elements: results, total_count:searchResponse.body.hits.total.value});
-    } catch (error) {
-	console.error('Error querying OpenSearch:', error);
-	res.status(500).json({ error: 'Error querying OpenSearch' });
-    }
-});
-
-/**
- * @swagger
- * /api/upload-dataset:
- *   post:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Upload a dataset (CSV or ZIP). (Replaced with '/api/elements/datasets')
- *     consumes:
- *       - multipart/form-data
- *     parameters:
- *       - in: formData
- *         name: file
- *         type: file
- *         description: The dataset file to upload
- *     responses:
- *       200:
- *         description: Dataset uploaded successfully
- *       400:
- *         description: No file uploaded or invalid file type (.csv or .zip)
- */
-app.options('/api/upload-dataset', jwtCorsMiddleware);
-app.post('/api/upload-dataset', jwtCorsMiddleware, authenticateJWT, upload.single('file'), (req, res) => {
-    // [Done] Neo4j not required
-    if (!req.file) {
-	return res.status(400).json({
-	    message: 'No file uploaded or invalid file type (.csv or .zip)!'
-	});
-    }
-    res.json({
-	message: 'Dataset uploaded successfully',
-	url: req.file.location,
-	bucket: process.env.AWS_BUCKET_NAME,
-	key: req.file.key,
-    });
-});
 
 /**
  * @swagger
@@ -681,263 +457,6 @@ app.get('/api/elements/homepage', cors(), async (req, res) => {
     }
 });
 
-// /**
-//  * @swagger
-//  * /api/featured-resources:
-//  *   get:
-//  *     deprecated: true
-//  *     tags: ['outdated']
-//  *     summary: Fetch elements to show on homepage (featured etc.). (Replaced with '/api/elements/homepage')
-//  *     responses:
-//  *       200:
-//  *         description: A list of featured resources
-//  *       404:
-//  *         description: No featured resource found
-//  *       500:
-//  *         description: Internal server error
-//  */
-// app.options('/api/featured-resources', cors());
-// app.get('/api/featured-resources', cors(), async (req, res) => {
-//     // [Done] Neo4j
-//     try {
-// 	const resources = await n4j.getFeaturedElements();
-// 	res.json(resources);
-//     } catch (error) {
-// 	console.error('Error querying OpenSearch:', error);
-// 	res.status(500).json({ message: 'Internal server error' });
-//     }
-// });
-
-/**
- * @swagger
- * /api/resource-count:
- *   post:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Get the count of documents by resource-type or search keywords. (Will be removed)
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               resourceType:
- *                 type: string
- *               keywords:
- *                 type: string
- *     responses:
- *       200:
- *         description: The count of documents
- *       400:
- *         description: Either resourceType or keywords are required
- *       500:
- *         description: Internal server error
- */
-app.options('/api/resource-count', cors());
-app.post('/api/resource-count', cors(), async (req, res) => {
-    // [Done] Neo4j + Search from OS
-    const { resourceType, keywords } = req.body;
-
-    if (!resourceType && !keywords) {
-	return res.status(400).send({ error: 'Either resourceType or keywords are required' });
-    }
-
-    if (keywords) {
-	// Mainly used for searching so should be from OpenSearch
-	//console.log('Resource count keywords ...' + keywords);
-	const query = {
-	    bool: {
-		must: []
-	    }
-	};
-	query.bool.must.push({
-	    multi_match: {
-		query: keywords,
-		fields: ['title', 'authors', 'contents','tags']
-	    }
-	});
-	try {
-	    const response = await client.count({
-		index: os_index,
-		body: {
-		    query: query
-		}
-	    });
-
-	    res.send({ count: response.body.count });
-	} catch (error) {
-	    console.error('Error querying OpenSearch:', error);
-	    res.status(500).send({ error: 'OS: Error occurred fetching resource count' });
-	}
-    }
-    else{
-	// Non-search count for a given element type should be from Neo4j
-	try {
-	    const response = await n4j.getElementsCountByType(resourceType);
-	    if (response < 0){
-		res.status(500).send({ error: 'Neo4j: Error occurred fetching resource count' });
-		return;
-	    }
-	    res.send({ count: response });
-	} catch (error) {
-	    console.error('Error querying Neo4j:', error);
-	    res.status(500).send({ error: 'Neo4j: Error occurred fetching resource count' });
-	}
-    }
-});
-
-/**
- * @swagger
- * /api/resources:
- *   put:
- *     summary: Register a resource. (Replaced with '/api/elements')
- *     deprecated: true
- *     tags: ['outdated']
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               resource-type:
- *                 type: string
- *               notebook-repo:
- *                 type: string
- *               notebook-file:
- *                 type: string
- *               related-resources:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     type:
- *                       type: string
- *                     title:
- *                       type: string
- *     responses:
- *       200:
- *         description: Resource registered successfully
- *       500:
- *         description: Internal server error
- */
-app.put('/api/resources', async (req, res) => {
-    // DERECATED ....
-    console.warn('/api/resources is DEPRECATED. Should NOT be used');
-    // [Done] Neo4j
-    const resource = req.body;
-
-    try {
-	if (resource['resource-type'] === 'notebook' &&
-	    resource['notebook-repo'] &&
-	    resource['notebook-file']) {
-	    const htmlNotebookPath =
-		  await convertNotebookToHtml(resource['notebook-repo'],
-					      resource['notebook-file'], notebookHtmlDir);
-	    if (htmlNotebookPath) {
-		resource['html-notebook'] =
-		    `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
-	    }
-	}
-
-	const contributor_id = resource['metadata']['created_by'];
-	//const response = await n4j.registerElement(contributor_id, resource);
-	const {response, element_id} = await n4j.registerElement(contributor_id, resource);
-	if (response){
-	    // Insert/index searchable part to OpenSearch
-	    let os_element = {};
-	    //os_element['id'] = element_id;
-	    os_element['title'] = resource['title'];
-	    os_element['contents'] = resource['contents'];
-	    os_element['authors'] = resource['authors'];
-	    os_element['tags'] = resource['tags'];
-	    os_element['resource-type'] = resource['resource-type'];
-	    os_element['thumbnail-image'] = resource['thumbnail-image'];
-	    console.log('Getting contributor name');
-	    // set contributor name
-	    let contributor = await n4j.getContributorByID(contributor_id);
-	    let contributor_name = '';
-	    if ('first_name' in contributor || 'last_name' in contributor) {
-		contributor_name = contributor['first_name'] + ' ' + contributor['last_name'];
-	    }
-	    os_element['contributor'] = contributor_name;
-
-	    console.log('indexing element: ' + os_element);
-	    const response = await client.index({
-		id: element_id,
-		index: os_index,
-		body: os_element,
-		refresh: true,
-	    });
-	    console.log(response['body']['result']);
-	    res.status(200).json({ message: 'Resource registered successfully' });
-	} else {
-	    console.log('Error registering resource ...');
-	    res.status(500).json({ error: 'Error registering resource' });
-	}
-    } catch (error) {
-	res.status(500).json({ error: error.message });
-    }
-});
-
-/**
- * @swagger
- * /api/resources/{field}/{values}:
- *   get:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Retrieve resources by field and values for exact match. (Will be removed)
- *     parameters:
- *       - in: path
- *         name: field
- *         required: true
- *         schema:
- *           type: string
- *         description: The field to match
- *       - in: path
- *         name: values
- *         required: true
- *         schema:
- *           type: string
- *         description: The values to match (comma-separated)
- *     responses:
- *       200:
- *         description: A list of resources
- *       404:
- *         description: No resources found
- *       500:
- *         description: Internal server error
- */
-app.options('/api/resources/:field/:values', cors());
-app.get('/api/resources/:field/:values', cors(), async (req, res) => {
-    const { field, values } = req.params;
-    const valueArray = values.split(',').map(value => decodeURIComponent(value)); //Decompose to handle openid as url
-
-    try {
-	if (field == '_id') {
-	    //console.log('getElemnetByID from Neo4j ID: ' + valueArray);
-	    const resources = [];
-	    for (let val of valueArray){
-		let resource = await n4j.getElementByID(val);
-		resources.push(resource);
-	    }
-	    //console.log(resources);
-	    res.json(resources);
-	    return;
-	} else {
-	    console.log('getElemnetByID from OS field: ' + field);
-	}
-
-	// Should never reach here ...
-	throw Error('Neo4j getElementByID not implemented');
-
-    } catch (error) {
-	console.error('Error querying OpenSearch:', error);
-	res.status(500).json({ message: 'Internal server error' });
-    }
-});
-
 /**
  * @swagger
  * /api/elements/{id}:
@@ -972,206 +491,6 @@ app.get('/api/elements/:id', cors(), async (req, res) => {
 	res.json(element);
     } catch (error) {
 	console.error('/api/resources/:id Error querying OpenSearch:', error);
-	res.status(500).json({ message: 'Internal server error' });
-    }
-});
-
-/**
- * @swagger
- * /api/resources/count/{field}/{values}:
- *   get:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Return the number of hits by field and id. (Will be removed)
- *     parameters:
- *       - in: path
- *         name: field
- *         required: true
- *         schema:
- *           type: string
- *         description: The field to match
- *       - in: path
- *         name: values
- *         required: true
- *         schema:
- *           type: string
- *         description: The values to match (comma-separated)
- *     responses:
- *       200:
- *         description: The number of hits
- *       500:
- *         description: Internal server error
- */
-app.options('/api/resources/count/:field/:values', cors());
-app.get('/api/resources/count/:field/:values', cors(), async (req, res) => {
-    const { field, values } = req.params;
-    const valueArray = values.split(',').map(value => decodeURIComponent(value)); // Decompose to handle openid as URL
-
-    console.log('/api/resource/count');
-
-    try{
-	if (field == 'contributor'){
-	    if (valueArray.length > 1){
-		throw Error('Neo4j /api/resources/count/ not implemented for multiple values');
-	    }
-	    const response = await n4j.getElementsCountByContributor(valueArray[0]);
-	    if (response < 0){
-		res.status(500).send({ error: 'Error occurred while fetching resource count by contributor' });
-		return;
-	    }
-	    res.json({count: response});
-
-	} else {
-	    throw Error('Neo4j Not Implemented - /api/resource/count: ' + field + ', ' + values);
-	}
-    } catch (error) {
-	console.error('Error querying OpenSearch:', error);
-	res.status(500).json({ message: 'Internal server error' });
-    }
-});
-
-/**
- * @swagger
- * /api/elements/retrieve:
- *   get:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Retrieve elements by field and value. (Replaced with '/api/elements')
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               field_name:
- *                 type: string
- *               match_value:
- *                 type: array
- *                 items:
- *                   type: string
- *               element_type:
- *                 type: array
- *                 items:
- *                   type: string
- *               sort_by:
- *                 type: string
- *               order:
- *                 type: string
- *                 enum: [asc, desc]
- *               from:
- *                 type: integer
- *               size:
- *                 type: integer
- *               count_only:
- *                 type: boolean
- *     responses:
- *       200:
- *         description: A list of elements or count of elements
- *       500:
- *         description: Internal server error
- */
-app.options('/api/elements/retrieve', cors());
-app.get('/api/elements/retrieve', cors(), async (req, res) => {
-    // [Done] Neo4j
-    const { field_name, match_value, element_type, sort_by = '_score', order = 'desc', from = '0', size = '10', count_only = false } = req.body;
-
-    //console.log('Neo4j /api/elements/retrieve - '+ element_type + ', ' + match_value);
-
-    // Check if match_value or element_type is an empty array
-    if (Array.isArray(match_value) && match_value.length === 0) {
-	return res.json(count_only ? 0 : []);
-    }
-    if (Array.isArray(element_type) && element_type.length === 0) {
-	return res.json(count_only ? 0 : []);
-    }
-    let sortBy = sort_by;
-    if (sortBy === 'title') {
-	sortBy = 'title.keyword';
-    } else if (sortBy === 'authors') {
-	sortBy = 'authors.keyword';
-    }
-
-    try{
-	if (match_value !== null){
-	    if (element_type !== null){
-		throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
-	    } else if (count_only) {
-		if (field_name == 'contributor') {
-		    let total_count = 0;
-		    for (let val of match_value){
-			let response = await n4j.getElementsCountByContributor(val);
-			total_count += response;
-		    }
-		    res.json(total_count);
-		    return;
-		} else if (field_name == 'tags') {
-		    let total_count = 0;
-		    for (let val of match_value){
-			let response = await n4j.getElementsCountByTag(val);
-			total_count += response;
-		    }
-		    res.json(total_count);
-		    return;
-		} else {
-		    throw Error('Neo4j not implemented Count:' + element_type + ', ' + match_value);
-		}
-	    } else {
-		if (field_name == '_id'){
-		    const resources = [];
-		    for (let val of match_value){
-			let resource = await n4j.getElementByID(val);
-			resources.push(resource);
-		    }
-		    res.json(resources);
-		    return;
-		} else if (field_name == 'contributor') {
-		    const resources = [];
-		    for (let val of match_value){
-			let resource = await n4j.getElementsByContributor(val, from, size);
-			resources.push(...resource);
-		    }
-		    res.json(resources);
-		    return;
-		} else if (field_name == 'tags') {
-		    const resources = [];
-		    for (let val of match_value){
-			let resource = await n4j.getElementsByTag(val, from, size);
-			resources.push(...resource);
-		    }
-		    res.json(resources);
-		    return;
-		} else {
-		    throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
-		}
-	    }
-	} else if (element_type !== null){
-	    if (match_value !== null){
-		// should never reach here
-		throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
-	    } else if (count_only) {
-		let total_count = 0;
-		for (let val of element_type){
-		    let response = await n4j.getElementsCountByType(val);
-		    total_count += response;
-		}
-		res.json(total_count);
-	    } else {
-		const resources = [];
-		for (let val of element_type){
-		    let resource = await n4j.getElementsByType(val, from, size);
-		    if (resource.length > 0){
-			resources.push(...resource);
-		    }
-		}
-		res.json(resources);
-		return;
-	    }
-	} else {
-	    throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
-	}
-    } catch (error) {
-	console.error('Error retrieving elements:', error);
 	res.status(500).json({ message: 'Internal server error' });
     }
 });
@@ -1618,6 +937,38 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
     }
 });
 
+/**
+ * @swagger
+ * /api/elements/thumbnail:
+ *   post:
+ *     summary: Upload a thumbnail image
+ *     tags: ['elements']
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: formData
+ *         name: file
+ *         type: file
+ *         description: The thumbnail file to upload
+ *     responses:
+ *       200:
+ *         description: Thumbnail uploaded successfully
+ *       400:
+ *         description: No file uploaded
+ */
+app.options('/api/elements/thumbnail', jwtCorsMiddleware);
+app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('file'), authenticateJWT, (req, res) => {
+    if (!req.file) {
+	return res.status(400).json({ message: 'No file uploaded' });
+    }
+    // [ToDo] Change filename to user ID
+    const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${req.file.filename}`;
+    res.json({
+	message: 'Thumbnail uploaded successfully',
+	url: filePath,
+    });
+});
+
 /****************************************************************************
  * User/Contributor Endpoints
  ****************************************************************************/
@@ -1625,7 +976,7 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
  * @swagger
  * /api/users/{id}:
  *   get:
- *     summary: Return the user document given the openid
+ *     summary: Return the user document given the id
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -1633,7 +984,7 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
  *         required: true
  *         schema:
  *           type: string
- *         description: The OpenID of the user
+ *         description: The ID of the user
  *     responses:
  *       200:
  *         description: The user document
@@ -1644,12 +995,14 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
  */
 //app.options('/api/users/:id', cors());
 app.get('/api/users/:id', cors(), async (req, res) => {
-    const openid = decodeURIComponent(req.params.id);
+    const id = decodeURIComponent(req.params.id);
     try {
-	const response = await n4j.getContributorByID(openid);
+	const response = await n4j.getContributorByID(id);
 	if (response.size == 0){
 	    return res.status(404).json({ message: 'User not found' });
 	}
+	// remove role attribute
+	delete response['role'];
 	res.json(response);
     } catch (error) {
 	console.error('Error fetching user:', error);
@@ -1661,7 +1014,7 @@ app.get('/api/users/:id', cors(), async (req, res) => {
  * @swagger
  * /api/users/{id}/role:
  *   get:
- *     summary: Return the user role given the openid
+ *     summary: Return the user role given the id
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -1669,7 +1022,7 @@ app.get('/api/users/:id', cors(), async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *         description: The OpenID of the user
+ *         description: The ID of the user
  *     responses:
  *       200:
  *         description: The user role i.e. admin, user
@@ -1680,9 +1033,9 @@ app.get('/api/users/:id', cors(), async (req, res) => {
  */
 app.options('/api/users/:id/role', cors());
 app.get('/api/users/:id/role', cors(), async (req, res) => {
-    const openid = decodeURIComponent(req.params.id);
+    const id = decodeURIComponent(req.params.id);
     try {
-	const response = await n4j.getContributorByID(openid);
+	const response = await n4j.getContributorByID(id);
 	if (response.size == 0){
 	    return res.status(404).json({ message: 'User not found' });
 	}
@@ -1698,7 +1051,7 @@ app.get('/api/users/:id/role', cors(), async (req, res) => {
  * @swagger
  * /api/users/{id}/valid:
  *   get:
- *     summary: Check if a user exists given the openid
+ *     summary: Check if a user exists given the id
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -1706,7 +1059,7 @@ app.get('/api/users/:id/role', cors(), async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *         description: The OpenID of the user
+ *         description: The ID of the user
  *     responses:
  *       200:
  *         description: True if user exists, false otherwise
@@ -1715,12 +1068,12 @@ app.get('/api/users/:id/role', cors(), async (req, res) => {
  */
 app.options('/api/users/:id/valid', cors());
 app.get('/api/users/:id/valid', cors(), async (req, res) => {
-    const openid = decodeURIComponent(req.params.id);
+    const id = decodeURIComponent(req.params.id);
 
-    console.log('Check user ...' + openid);
+    console.log('Check user ...' + id);
     // [ToDo] Return {true, version_num} OR {false, -1}
     try {
-	const response = await n4j.checkContributorByID(openid);
+	const response = await n4j.checkContributorByID(id);
 	res.json(response);
     } catch (error) {
 	console.error('Error checking user:', error);
@@ -1766,46 +1119,6 @@ app.get('/api/users/:id/valid', cors(), async (req, res) => {
 
 /**
  * @swagger
- * /api/retrieve-title:
- *   get:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Retrieve the title of a URL. (Replaced with '/api/url-title/{url}')
- *     parameters:
- *       - in: query
- *         name: url
- *         required: true
- *         schema:
- *           type: string
- *         description: The URL to retrieve the title from
- *     responses:
- *       200:
- *         description: The title of the URL
- *       404:
- *         description: Title not found
- *       500:
- *         description: Failed to retrieve title
- */
-app.options('/api/retrieve-title', cors());
-app.get('/api/retrieve-title', cors(), async (req, res) => {
-    // [Done] Neo4j not required
-    const url = req.query.url;
-    try {
-	const response = await axios.get(url);
-	const matches = response.data.match(/<title>(.*?)<\/title>/);
-	if (matches) {
-	    res.json({ title: matches[1] });
-	} else {
-	    res.status(404).json({ error: 'Title not found' });
-	}
-    } catch (error) {
-	console.log(error);
-	res.status(500).json({ error: 'Failed to retrieve title' });
-    }
-});
-
-/**
- * @swagger
  * /api/url-title:
  *   get:
  *     summary: Retrieve the title of a URL
@@ -1844,95 +1157,6 @@ app.get('/api/url-title', cors(), async (req, res) => {
 
 /**
  * @swagger
- * /api/searchByCreator:
- *   post:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Search for resources by creator
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               openid:
- *                 type: string
- *               sort_by:
- *                 type: string
- *               order:
- *                 type: string
- *                 enum: [asc, desc]
- *               from:
- *                 type: integer
- *               size:
- *                 type: integer
- *     responses:
- *       200:
- *         description: A list of search results
- *       400:
- *         description: openid is required
- *       500:
- *         description: Error querying OpenSearch
- */
-app.options('/api/searchByCreator', cors());
-app.post('/api/searchByCreator', cors(), async (req, res) => {
-    const { openid, sort_by = '_score', order = 'desc', from = 0, size = 15 } = req.body;
-
-    if (!openid) {
-	return res.status(400).json({ error: 'openid is required' });
-    }
-
-    console.log('searchByCreator:' + openid);
-    try {
-	// Note: Neo4j query always orders by title, needs to be updated if required otherwise
-	const response = await n4j.getElementsByContributor(openid, from, size);
-	res.json(response);
-
-    } catch (error) {
-	console.error('Error querying OpenSearch:', error);
-	res.status(500).json({ error: 'Error querying OpenSearch' });
-    }
-});
-
-
-//app.use(cors({ credentials: true, origin: `https://${process.env.FRONTEND_DOMAIN}` }));
-/**
- * @swagger
- * /api/upload-avatar:
- *   post:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Upload an avatar image for the user profile. (Replaced with '/api/users/avatar')
- *     consumes:
- *       - multipart/form-data
- *     parameters:
- *       - in: formData
- *         name: file
- *         type: file
- *         description: The avatar file to upload
- *     responses:
- *       200:
- *         description: Avatar uploaded successfully
- *       400:
- *         description: No file uploaded
- */
-app.options('/api/upload-avatar', jwtCorsMiddleware);
-app.post('/api/upload-avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), (req, res) => {
-    // [Done] Neo4j Not required
-    if (!req.file) {
-	return res.status(400).json({ message: 'No file uploaded' });
-    }
-
-    const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${req.file.filename}`;
-    res.json({
-	message: 'Avatar uploaded successfully',
-	url: filePath,
-    });
-});
-
-/**
- * @swagger
  * /api/users/avatar:
  *   post:
  *     summary: Upload an avatar image for the user profile
@@ -1966,76 +1190,6 @@ app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.s
 
 /**
  * @swagger
- * /api/update-avatar:
- *   post:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Update the user's avatar. (Replaced with '/api/users/{id}/avatar')
- *     consumes:
- *       - multipart/form-data
- *     parameters:
- *       - in: formData
- *         name: file
- *         type: file
- *         description: The new avatar file to upload
- *       - in: body
- *         name: openid
- *         description: The OpenID of the user
- *         schema:
- *           type: object
- *           required:
- *             - openid
- *           properties:
- *             openid:
- *               type: string
- *     responses:
- *       200:
- *         description: Avatar updated successfully
- *       400:
- *         description: OpenID and new avatar file are required
- *       404:
- *         description: User not found
- *       500:
- *         description: Internal server error
- */
-app.options('/api/update-avatar', jwtCorsMiddleware);
-app.post('/api/update-avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
-    // [Done] Neo4j
-    try {
-	const { openid } = req.body;
-	const newAvatarFile = req.file;
-
-	if (!openid || !newAvatarFile) {
-	    return res.status(400).json({ message: 'OpenID and new avatar file are required' });
-	}
-
-	// Update the user's avatar URL with the new file URL
-	const newAvatarUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${newAvatarFile.filename}`;
-
-	const {result, oldAvatarUrl} = await n4j.setContributorAvatar(openid, newAvatarUrl);
-	if (result == false){
-	    return res.status(404).json({ message: 'User not found' });
-	}
-	if (oldAvatarUrl) {
-	    // Delete the old avatar file
-	    const oldAvatarFilePath = path.join(avatarDir, path.basename(oldAvatarUrl));
-	    if (fs.existsSync(oldAvatarFilePath)) {
-		fs.unlinkSync(oldAvatarFilePath);
-	    }
-	}
-
-	res.json({
-	    message: 'Avatar updated successfully',
-	    url: newAvatarUrl,
-	});
-    } catch (error) {
-	console.error('Error updating avatar:', error);
-	res.status(500).json({ message: 'Internal server error' });
-    }
-});
-
-/**
- * @swagger
  * /api/users/{id}/avatar:
  *   post:
  *     summary: Update the user's avatar
@@ -2049,19 +1203,19 @@ app.post('/api/update-avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.
  *         description: The new avatar file to upload
  *       - in: body
  *         name: id
- *         description: The OpenID of the user
+ *         description: The ID of the user
  *         schema:
  *           type: object
  *           required:
- *             - openid
+ *             - id
  *           properties:
- *             openid:
+ *             id:
  *               type: string
  *     responses:
  *       200:
  *         description: Avatar updated successfully
  *       400:
- *         description: OpenID and new avatar file are required
+ *         description: ID and new avatar file are required
  *       404:
  *         description: User not found
  *       500:
@@ -2071,17 +1225,17 @@ app.options('/api/users/:id/avatar', jwtCorsMiddleware);
 app.post('/api/users/:id/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
     // [Done] Neo4j
     try {
-	const { openid } = req.params.id;
+	const { id } = req.params.id;
 	const newAvatarFile = req.file;
 
-	if (!openid || !newAvatarFile) {
-	    return res.status(400).json({ message: 'OpenID and new avatar file are required' });
+	if (!id || !newAvatarFile) {
+	    return res.status(400).json({ message: 'ID and new avatar file are required' });
 	}
 
 	// Update the user's avatar URL with the new file URL
 	const newAvatarUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${newAvatarFile.filename}`;
 
-	const {result, oldAvatarUrl} = await n4j.setContributorAvatar(openid, newAvatarUrl);
+	const {result, oldAvatarUrl} = await n4j.setContributorAvatar(id, newAvatarUrl);
 	if (result == false){
 	    return res.status(404).json({ message: 'User not found' });
 	}
@@ -2102,117 +1256,6 @@ app.post('/api/users/:id/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvat
 	res.status(500).json({ message: 'Internal server error' });
     }
 });
-
-/**
- * @swagger
- * /api/upload-thumbnail:
- *   post:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Upload a thumbnail image. (Replaced with '/api/elements/thumbnail')
- *     consumes:
- *       - multipart/form-data
- *     parameters:
- *       - in: formData
- *         name: file
- *         type: file
- *         description: The thumbnail file to upload
- *     responses:
- *       200:
- *         description: Thumbnail uploaded successfully
- *       400:
- *         description: No file uploaded
- */
-app.options('/api/upload-thumbnail', jwtCorsMiddleware);
-app.post('/api/upload-thumbnail', jwtCorsMiddleware, uploadThumbnail.single('file'), authenticateJWT, (req, res) => {
-    if (!req.file) {
-	return res.status(400).json({ message: 'No file uploaded' });
-    }
-    // [ToDo] Change filename to user ID
-    const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${req.file.filename}`;
-    res.json({
-	message: 'Thumbnail uploaded successfully',
-	url: filePath,
-    });
-});
-
-/**
- * @swagger
- * /api/elements/thumbnail:
- *   post:
- *     summary: Upload a thumbnail image
- *     tags: ['elements']
- *     consumes:
- *       - multipart/form-data
- *     parameters:
- *       - in: formData
- *         name: file
- *         type: file
- *         description: The thumbnail file to upload
- *     responses:
- *       200:
- *         description: Thumbnail uploaded successfully
- *       400:
- *         description: No file uploaded
- */
-app.options('/api/elements/thumbnail', jwtCorsMiddleware);
-app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('file'), authenticateJWT, (req, res) => {
-    if (!req.file) {
-	return res.status(400).json({ message: 'No file uploaded' });
-    }
-    // [ToDo] Change filename to user ID
-    const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${req.file.filename}`;
-    res.json({
-	message: 'Thumbnail uploaded successfully',
-	url: filePath,
-    });
-});
-
-/**
- * @swagger
- * /api/resources/{id}:
- *   delete:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Delete a resource by ID. (Replaced with '/api/elements/{element-id}')
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Resource deleted successfully
- *       500:
- *         description: Internal server error
- */
-app.options('/api/resources/:id', jwtCorsMiddleware);
-app.delete('/api/resources/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
-    const resourceId = req.params.id;
-
-    console.log('Deleting element: ' +  resourceId);
-    try {
-	const response = await n4j.deleteElementByID(resourceId);
-	if (response) {
-	    // Delete from OpenSearch
-	    const response = await client.delete({
-		index: os_index,
-		id: resourceId
-	    });
-	    console.log(response['body']['result']);
-	    await client.indices.refresh({ index: os_index });
-
-	    res.status(200).json({ message: 'Resource deleted successfully' });
-	} else {
-	    res.status(500).json({ error: 'Resource still exists after deletion' });
-	}
-    } catch (error) {
-	console.error('Error deleting resource:', error.message);
-	res.status(500).json({ error: error.message });
-    }
-});
-
 
 /**
  * @swagger
@@ -2227,7 +1270,7 @@ app.delete('/api/resources/:id', jwtCorsMiddleware, authenticateJWT, async (req,
  *           schema:
  *             type: object
  *             properties:
- *               openid:
+ *               id:
  *                 type: string
  *               name:
  *                 type: string
@@ -2246,13 +1289,13 @@ app.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
     //console.log(user);
 
     try {
-	const openid = user['openid'];
+	const id = user['id'];
 	const response = await n4j.registerContributor(user);
 	if (response){
-	    res.status(201).json({ message: 'User added successfully', id: openid });
+	    res.status(201).json({ message: 'User added successfully', id: id });
 	} else {
-	    res.status(201).json({ message: 'User already exists', id: openid });
-	    console.log('User already exists with openid: ' + openid);
+	    res.status(201).json({ message: 'User already exists', id: id });
+	    console.log('User already exists with id: ' + id);
 	}
 	// [ToDo] Add contributor name to OpenSearch
 
@@ -2281,7 +1324,7 @@ app.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *         description: The OpenID of the user
+ *         description: The ID of the user
  *     requestBody:
  *       required: true
  *       content:
@@ -2310,13 +1353,13 @@ app.options('/api/users/:id', (req, res) => {
     res.sendStatus(204); // No content
 });
 app.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
-    const openid = decodeURIComponent(req.params.id);
+    const id = decodeURIComponent(req.params.id);
     const updates = req.body;
 
     console.log('Updating user ...');
 
     try {
-	const response = await n4j.updateContributor(openid, updates);
+	const response = await n4j.updateContributor(id, updates);
 	if (response) {
 	    res.json({ message: 'User updated successfully', result: response });
 	} else {
@@ -2344,3 +1387,963 @@ https.createServer(SSLOptions, app).listen(process.env.PORT, () => {
 
 // Serve Swagger docs
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+
+
+/****************************************************************************
+ * Ourdated/Deprecated Endpoints
+ ****************************************************************************/
+
+// /**
+//  * @swagger
+//  * /api/featured-resources:
+//  *   get:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Fetch elements to show on homepage (featured etc.). (Replaced with '/api/elements/homepage')
+//  *     responses:
+//  *       200:
+//  *         description: A list of featured resources
+//  *       404:
+//  *         description: No featured resource found
+//  *       500:
+//  *         description: Internal server error
+//  */
+// app.options('/api/featured-resources', cors());
+// app.get('/api/featured-resources', cors(), async (req, res) => {
+//     // [Done] Neo4j
+//     try {
+// 	const resources = await n4j.getFeaturedElements();
+// 	res.json(resources);
+//     } catch (error) {
+// 	console.error('Error querying OpenSearch:', error);
+// 	res.status(500).json({ message: 'Internal server error' });
+//     }
+// });
+
+// /**
+//  * @swagger
+//  * /api/retrieve-title:
+//  *   get:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Retrieve the title of a URL. (Replaced with '/api/url-title/{url}')
+//  *     parameters:
+//  *       - in: query
+//  *         name: url
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *         description: The URL to retrieve the title from
+//  *     responses:
+//  *       200:
+//  *         description: The title of the URL
+//  *       404:
+//  *         description: Title not found
+//  *       500:
+//  *         description: Failed to retrieve title
+//  */
+// app.options('/api/retrieve-title', cors());
+// app.get('/api/retrieve-title', cors(), async (req, res) => {
+//     // [Done] Neo4j not required
+//     const url = req.query.url;
+//     try {
+// 	const response = await axios.get(url);
+// 	const matches = response.data.match(/<title>(.*?)<\/title>/);
+// 	if (matches) {
+// 	    res.json({ title: matches[1] });
+// 	} else {
+// 	    res.status(404).json({ error: 'Title not found' });
+// 	}
+//     } catch (error) {
+// 	console.log(error);
+// 	res.status(500).json({ error: 'Failed to retrieve title' });
+//     }
+// });
+
+// /**
+//  * @swagger
+//  * /api/searchByCreator:
+//  *   post:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Search for resources by creator
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             properties:
+//  *               openid:
+//  *                 type: string
+//  *               sort_by:
+//  *                 type: string
+//  *               order:
+//  *                 type: string
+//  *                 enum: [asc, desc]
+//  *               from:
+//  *                 type: integer
+//  *               size:
+//  *                 type: integer
+//  *     responses:
+//  *       200:
+//  *         description: A list of search results
+//  *       400:
+//  *         description: openid is required
+//  *       500:
+//  *         description: Error querying OpenSearch
+//  */
+// app.options('/api/searchByCreator', cors());
+// app.post('/api/searchByCreator', cors(), async (req, res) => {
+//     const { openid, sort_by = '_score', order = 'desc', from = 0, size = 15 } = req.body;
+
+//     if (!openid) {
+// 	return res.status(400).json({ error: 'openid is required' });
+//     }
+
+//     console.log('searchByCreator:' + openid);
+//     try {
+// 	// Note: Neo4j query always orders by title, needs to be updated if required otherwise
+// 	const response = await n4j.getElementsByContributor(openid, from, size);
+// 	res.json(response);
+
+//     } catch (error) {
+// 	console.error('Error querying OpenSearch:', error);
+// 	res.status(500).json({ error: 'Error querying OpenSearch' });
+//     }
+// });
+
+// //app.use(cors({ credentials: true, origin: `https://${process.env.FRONTEND_DOMAIN}` }));
+// /**
+//  * @swagger
+//  * /api/upload-avatar:
+//  *   post:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Upload an avatar image for the user profile. (Replaced with '/api/users/avatar')
+//  *     consumes:
+//  *       - multipart/form-data
+//  *     parameters:
+//  *       - in: formData
+//  *         name: file
+//  *         type: file
+//  *         description: The avatar file to upload
+//  *     responses:
+//  *       200:
+//  *         description: Avatar uploaded successfully
+//  *       400:
+//  *         description: No file uploaded
+//  */
+// app.options('/api/upload-avatar', jwtCorsMiddleware);
+// app.post('/api/upload-avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), (req, res) => {
+//     // [Done] Neo4j Not required
+//     if (!req.file) {
+// 	return res.status(400).json({ message: 'No file uploaded' });
+//     }
+
+//     const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${req.file.filename}`;
+//     res.json({
+// 	message: 'Avatar uploaded successfully',
+// 	url: filePath,
+//     });
+// });
+
+// /**
+//  * @swagger
+//  * /api/upload-thumbnail:
+//  *   post:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Upload a thumbnail image. (Replaced with '/api/elements/thumbnail')
+//  *     consumes:
+//  *       - multipart/form-data
+//  *     parameters:
+//  *       - in: formData
+//  *         name: file
+//  *         type: file
+//  *         description: The thumbnail file to upload
+//  *     responses:
+//  *       200:
+//  *         description: Thumbnail uploaded successfully
+//  *       400:
+//  *         description: No file uploaded
+//  */
+// app.options('/api/upload-thumbnail', jwtCorsMiddleware);
+// app.post('/api/upload-thumbnail', jwtCorsMiddleware, uploadThumbnail.single('file'), authenticateJWT, (req, res) => {
+//     if (!req.file) {
+// 	return res.status(400).json({ message: 'No file uploaded' });
+//     }
+//     // [ToDo] Change filename to user ID
+//     const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${req.file.filename}`;
+//     res.json({
+// 	message: 'Thumbnail uploaded successfully',
+// 	url: filePath,
+//     });
+// });
+
+// /**
+//  * @swagger
+//  * /api/resources/{id}:
+//  *   delete:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Delete a resource by ID. (Replaced with '/api/elements/{element-id}')
+//  *     parameters:
+//  *       - in: path
+//  *         name: id
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *     responses:
+//  *       200:
+//  *         description: Resource deleted successfully
+//  *       500:
+//  *         description: Internal server error
+//  */
+// app.options('/api/resources/:id', jwtCorsMiddleware);
+// app.delete('/api/resources/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+//     const resourceId = req.params.id;
+
+//     console.log('Deleting element: ' +  resourceId);
+//     try {
+// 	const response = await n4j.deleteElementByID(resourceId);
+// 	if (response) {
+// 	    // Delete from OpenSearch
+// 	    const response = await client.delete({
+// 		index: os_index,
+// 		id: resourceId
+// 	    });
+// 	    console.log(response['body']['result']);
+// 	    await client.indices.refresh({ index: os_index });
+
+// 	    res.status(200).json({ message: 'Resource deleted successfully' });
+// 	} else {
+// 	    res.status(500).json({ error: 'Resource still exists after deletion' });
+// 	}
+//     } catch (error) {
+// 	console.error('Error deleting resource:', error.message);
+// 	res.status(500).json({ error: error.message });
+//     }
+// });
+
+// /**
+//  * @swagger
+//  * /api/update-avatar:
+//  *   post:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Update the user's avatar. (Replaced with '/api/users/{id}/avatar')
+//  *     consumes:
+//  *       - multipart/form-data
+//  *     parameters:
+//  *       - in: formData
+//  *         name: file
+//  *         type: file
+//  *         description: The new avatar file to upload
+//  *       - in: body
+//  *         name: openid
+//  *         description: The OpenID of the user
+//  *         schema:
+//  *           type: object
+//  *           required:
+//  *             - openid
+//  *           properties:
+//  *             openid:
+//  *               type: string
+//  *     responses:
+//  *       200:
+//  *         description: Avatar updated successfully
+//  *       400:
+//  *         description: OpenID and new avatar file are required
+//  *       404:
+//  *         description: User not found
+//  *       500:
+//  *         description: Internal server error
+//  */
+// app.options('/api/update-avatar', jwtCorsMiddleware);
+// app.post('/api/update-avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
+//     // [Done] Neo4j
+//     try {
+// 	const { openid } = req.body;
+// 	const newAvatarFile = req.file;
+
+// 	if (!openid || !newAvatarFile) {
+// 	    return res.status(400).json({ message: 'OpenID and new avatar file are required' });
+// 	}
+
+// 	// Update the user's avatar URL with the new file URL
+// 	const newAvatarUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${newAvatarFile.filename}`;
+
+// 	const {result, oldAvatarUrl} = await n4j.setContributorAvatar(openid, newAvatarUrl);
+// 	if (result == false){
+// 	    return res.status(404).json({ message: 'User not found' });
+// 	}
+// 	if (oldAvatarUrl) {
+// 	    // Delete the old avatar file
+// 	    const oldAvatarFilePath = path.join(avatarDir, path.basename(oldAvatarUrl));
+// 	    if (fs.existsSync(oldAvatarFilePath)) {
+// 		fs.unlinkSync(oldAvatarFilePath);
+// 	    }
+// 	}
+
+// 	res.json({
+// 	    message: 'Avatar updated successfully',
+// 	    url: newAvatarUrl,
+// 	});
+//     } catch (error) {
+// 	console.error('Error updating avatar:', error);
+// 	res.status(500).json({ message: 'Internal server error' });
+//     }
+// });
+
+// /**
+//  * @swagger
+//  * /api/resources:
+//  *   get:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Fetch documents by resource type. (Replaced with '/api/elements')
+//  *     parameters:
+//  *       - in: query
+//  *         name: data_name
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *         description: The type of resource to fetch
+//  *       - in: query
+//  *         name: sort_by
+//  *         required: false
+//  *         schema:
+//  *           type: string
+//  *         description: The field to sort by
+//  *       - in: query
+//  *         name: order
+//  *         required: false
+//  *         schema:
+//  *           type: string
+//  *           enum: [asc, desc]
+//  *         description: The sort order
+//  *       - in: query
+//  *         name: from
+//  *         required: false
+//  *         schema:
+//  *           type: integer
+//  *         description: The starting index of the results
+//  *       - in: query
+//  *         name: size
+//  *         required: false
+//  *         schema:
+//  *           type: integer
+//  *         description: The number of results to fetch
+//  *     responses:
+//  *       200:
+//  *         description: A list of resources
+//  *       404:
+//  *         description: No resource found
+//  *       500:
+//  *         description: Internal server error
+//  */
+// app.options('/api/resources', cors());
+// app.get('/api/resources', cors(), async (req, res) => {
+//     // [Done] Neo4j
+//     const type = req.query.data_name;
+//     //let sortBy = req.query.sort_by || '_score'; // Default to '_score' for relevance sorting
+//     //const order = req.query.order || 'desc'; // Default to 'desc' for descending order
+//     const from = parseInt(req.query.from, 10) || 0; // Default to 0 (start from the beginning)
+//     const size = parseInt(req.query.size, 10) || 15; // Default to 15 results
+
+//     try {
+// 	// Note: Neo4j query always orders by title, needs to be updated if required otherwise
+// 	const resources = await n4j.getElementsByType(type, from, size);
+// 	if (resources.length == 0){
+// 	    res.status(404).json({ message: 'No resource found' });
+// 	    return;
+// 	}
+// 	res.json(resources);
+//     } catch (error) {
+// 	console.error('Error querying OpenSearch:', error);
+// 	res.status(500).json({ message: 'Internal server error' });
+//     }
+// });
+
+// /**
+//  * @swagger
+//  * /api/search:
+//  *   post:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Search for resources. (Replaced with 'GET /api/search')
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             properties:
+//  *               keyword:
+//  *                 type: string
+//  *               resource_type:
+//  *                 type: string
+//  *               sort_by:
+//  *                 type: string
+//  *               order:
+//  *                 type: string
+//  *                 enum: [asc, desc]
+//  *               from:
+//  *                 type: integer
+//  *               size:
+//  *                 type: integer
+//  *     responses:
+//  *       200:
+//  *         description: A list of search results
+//  *       500:
+//  *         description: Error querying OpenSearch
+//  */
+// app.options('/api/search', cors());
+// app.post('/api/search', cors(), async (req, res) => {
+//     // [Done] Neo4j not required. All searching shoud be from OS
+//     const { keyword, resource_type, sort_by = '_score', order = 'desc', from = 0, size = 15 } = req.body;
+
+//     let query = {
+// 	multi_match: {
+// 	    query: keyword,
+// 	    fields: [
+// 		'title^3',    // Boost title matches
+// 		'authors^3',  // Boost author matches
+// 		'tags^2',     // Slightly boost tag matches
+// 		'contents'    // Normal weight for content matches
+// 	    ],
+// 	},
+//     };
+
+//     if (resource_type && resource_type !== 'any') {
+// 	query = {
+// 	    bool: {
+// 		must: [
+// 		    {
+// 			multi_match: {
+// 			    query: keyword,
+// 			    fields: [
+// 				'title^3',
+// 				'authors^3',
+// 				'tags^2',
+// 				'contents'
+// 			    ],
+// 			},
+// 		    },
+// 		    { term: { 'resource-type': resource_type } },
+// 		],
+// 	    },
+// 	};
+//     }
+
+//     // Replace title and authors with their keyword sub-fields for sorting
+//     let sortBy = sort_by;
+//     if (sortBy === 'title') {
+// 	sortBy = 'title.keyword';
+//     } else if (sortBy === 'authors') {
+// 	sortBy = 'authors.keyword';
+//     }
+
+//     try {
+// 	const searchParams = {
+// 	    index: os_index,
+// 	    body: {
+// 		from: from,
+// 		size: size,
+// 		query: query,
+// 	    },
+// 	};
+
+// 	// Add sorting unless sort_by is "prioritize_title_author"
+// 	if (sort_by !== 'prioritize_title_author') {
+// 	    searchParams.body.sort = [
+// 		{
+// 		    [sortBy]: {
+// 			order: order,
+// 		    },
+// 		},
+// 	    ];
+// 	}
+
+// 	const searchResponse = await client.search(searchParams);
+// 	const results = searchResponse.body.hits.hits.map(hit => {
+// 	    const { _id, _source } = hit;
+// 	    const { metadata, ...rest } = _source; // Remove metadata
+// 	    return { _id, ...rest };
+// 	});
+// 	//res.json(results);
+// 	res.json({elements: results, total_count:searchResponse.body.hits.total.value});
+//     } catch (error) {
+// 	console.error('Error querying OpenSearch:', error);
+// 	res.status(500).json({ error: 'Error querying OpenSearch' });
+//     }
+// });
+
+// /**
+//  * @swagger
+//  * /api/upload-dataset:
+//  *   post:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Upload a dataset (CSV or ZIP). (Replaced with '/api/elements/datasets')
+//  *     consumes:
+//  *       - multipart/form-data
+//  *     parameters:
+//  *       - in: formData
+//  *         name: file
+//  *         type: file
+//  *         description: The dataset file to upload
+//  *     responses:
+//  *       200:
+//  *         description: Dataset uploaded successfully
+//  *       400:
+//  *         description: No file uploaded or invalid file type (.csv or .zip)
+//  */
+// app.options('/api/upload-dataset', jwtCorsMiddleware);
+// app.post('/api/upload-dataset', jwtCorsMiddleware, authenticateJWT, upload.single('file'), (req, res) => {
+//     // [Done] Neo4j not required
+//     if (!req.file) {
+// 	return res.status(400).json({
+// 	    message: 'No file uploaded or invalid file type (.csv or .zip)!'
+// 	});
+//     }
+//     res.json({
+// 	message: 'Dataset uploaded successfully',
+// 	url: req.file.location,
+// 	bucket: process.env.AWS_BUCKET_NAME,
+// 	key: req.file.key,
+//     });
+// });
+
+
+// /**
+//  * @swagger
+//  * /api/resource-count:
+//  *   post:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Get the count of documents by resource-type or search keywords. (Will be removed)
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             properties:
+//  *               resourceType:
+//  *                 type: string
+//  *               keywords:
+//  *                 type: string
+//  *     responses:
+//  *       200:
+//  *         description: The count of documents
+//  *       400:
+//  *         description: Either resourceType or keywords are required
+//  *       500:
+//  *         description: Internal server error
+//  */
+// app.options('/api/resource-count', cors());
+// app.post('/api/resource-count', cors(), async (req, res) => {
+//     // [Done] Neo4j + Search from OS
+//     const { resourceType, keywords } = req.body;
+
+//     if (!resourceType && !keywords) {
+// 	return res.status(400).send({ error: 'Either resourceType or keywords are required' });
+//     }
+
+//     if (keywords) {
+// 	// Mainly used for searching so should be from OpenSearch
+// 	//console.log('Resource count keywords ...' + keywords);
+// 	const query = {
+// 	    bool: {
+// 		must: []
+// 	    }
+// 	};
+// 	query.bool.must.push({
+// 	    multi_match: {
+// 		query: keywords,
+// 		fields: ['title', 'authors', 'contents','tags']
+// 	    }
+// 	});
+// 	try {
+// 	    const response = await client.count({
+// 		index: os_index,
+// 		body: {
+// 		    query: query
+// 		}
+// 	    });
+
+// 	    res.send({ count: response.body.count });
+// 	} catch (error) {
+// 	    console.error('Error querying OpenSearch:', error);
+// 	    res.status(500).send({ error: 'OS: Error occurred fetching resource count' });
+// 	}
+//     }
+//     else{
+// 	// Non-search count for a given element type should be from Neo4j
+// 	try {
+// 	    const response = await n4j.getElementsCountByType(resourceType);
+// 	    if (response < 0){
+// 		res.status(500).send({ error: 'Neo4j: Error occurred fetching resource count' });
+// 		return;
+// 	    }
+// 	    res.send({ count: response });
+// 	} catch (error) {
+// 	    console.error('Error querying Neo4j:', error);
+// 	    res.status(500).send({ error: 'Neo4j: Error occurred fetching resource count' });
+// 	}
+//     }
+// });
+
+// /**
+//  * @swagger
+//  * /api/resources:
+//  *   put:
+//  *     summary: Register a resource. (Replaced with '/api/elements')
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             properties:
+//  *               resource-type:
+//  *                 type: string
+//  *               notebook-repo:
+//  *                 type: string
+//  *               notebook-file:
+//  *                 type: string
+//  *               related-resources:
+//  *                 type: array
+//  *                 items:
+//  *                   type: object
+//  *                   properties:
+//  *                     type:
+//  *                       type: string
+//  *                     title:
+//  *                       type: string
+//  *     responses:
+//  *       200:
+//  *         description: Resource registered successfully
+//  *       500:
+//  *         description: Internal server error
+//  */
+// app.put('/api/resources', async (req, res) => {
+//     // DERECATED ....
+//     console.warn('/api/resources is DEPRECATED. Should NOT be used');
+//     // [Done] Neo4j
+//     const resource = req.body;
+
+//     try {
+// 	if (resource['resource-type'] === 'notebook' &&
+// 	    resource['notebook-repo'] &&
+// 	    resource['notebook-file']) {
+// 	    const htmlNotebookPath =
+// 		  await convertNotebookToHtml(resource['notebook-repo'],
+// 					      resource['notebook-file'], notebookHtmlDir);
+// 	    if (htmlNotebookPath) {
+// 		resource['html-notebook'] =
+// 		    `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+// 	    }
+// 	}
+
+// 	const contributor_id = resource['metadata']['created_by'];
+// 	//const response = await n4j.registerElement(contributor_id, resource);
+// 	const {response, element_id} = await n4j.registerElement(contributor_id, resource);
+// 	if (response){
+// 	    // Insert/index searchable part to OpenSearch
+// 	    let os_element = {};
+// 	    //os_element['id'] = element_id;
+// 	    os_element['title'] = resource['title'];
+// 	    os_element['contents'] = resource['contents'];
+// 	    os_element['authors'] = resource['authors'];
+// 	    os_element['tags'] = resource['tags'];
+// 	    os_element['resource-type'] = resource['resource-type'];
+// 	    os_element['thumbnail-image'] = resource['thumbnail-image'];
+// 	    console.log('Getting contributor name');
+// 	    // set contributor name
+// 	    let contributor = await n4j.getContributorByID(contributor_id);
+// 	    let contributor_name = '';
+// 	    if ('first_name' in contributor || 'last_name' in contributor) {
+// 		contributor_name = contributor['first_name'] + ' ' + contributor['last_name'];
+// 	    }
+// 	    os_element['contributor'] = contributor_name;
+
+// 	    console.log('indexing element: ' + os_element);
+// 	    const response = await client.index({
+// 		id: element_id,
+// 		index: os_index,
+// 		body: os_element,
+// 		refresh: true,
+// 	    });
+// 	    console.log(response['body']['result']);
+// 	    res.status(200).json({ message: 'Resource registered successfully' });
+// 	} else {
+// 	    console.log('Error registering resource ...');
+// 	    res.status(500).json({ error: 'Error registering resource' });
+// 	}
+//     } catch (error) {
+// 	res.status(500).json({ error: error.message });
+//     }
+// });
+
+// /**
+//  * @swagger
+//  * /api/resources/{field}/{values}:
+//  *   get:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Retrieve resources by field and values for exact match. (Will be removed)
+//  *     parameters:
+//  *       - in: path
+//  *         name: field
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *         description: The field to match
+//  *       - in: path
+//  *         name: values
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *         description: The values to match (comma-separated)
+//  *     responses:
+//  *       200:
+//  *         description: A list of resources
+//  *       404:
+//  *         description: No resources found
+//  *       500:
+//  *         description: Internal server error
+//  */
+// app.options('/api/resources/:field/:values', cors());
+// app.get('/api/resources/:field/:values', cors(), async (req, res) => {
+//     const { field, values } = req.params;
+//     const valueArray = values.split(',').map(value => decodeURIComponent(value)); //Decompose to handle openid as url
+
+//     try {
+// 	if (field == '_id') {
+// 	    //console.log('getElemnetByID from Neo4j ID: ' + valueArray);
+// 	    const resources = [];
+// 	    for (let val of valueArray){
+// 		let resource = await n4j.getElementByID(val);
+// 		resources.push(resource);
+// 	    }
+// 	    //console.log(resources);
+// 	    res.json(resources);
+// 	    return;
+// 	} else {
+// 	    console.log('getElemnetByID from OS field: ' + field);
+// 	}
+
+// 	// Should never reach here ...
+// 	throw Error('Neo4j getElementByID not implemented');
+
+//     } catch (error) {
+// 	console.error('Error querying OpenSearch:', error);
+// 	res.status(500).json({ message: 'Internal server error' });
+//     }
+// });
+
+// /**
+//  * @swagger
+//  * /api/resources/count/{field}/{values}:
+//  *   get:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Return the number of hits by field and id. (Will be removed)
+//  *     parameters:
+//  *       - in: path
+//  *         name: field
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *         description: The field to match
+//  *       - in: path
+//  *         name: values
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *         description: The values to match (comma-separated)
+//  *     responses:
+//  *       200:
+//  *         description: The number of hits
+//  *       500:
+//  *         description: Internal server error
+//  */
+// app.options('/api/resources/count/:field/:values', cors());
+// app.get('/api/resources/count/:field/:values', cors(), async (req, res) => {
+//     const { field, values } = req.params;
+//     const valueArray = values.split(',').map(value => decodeURIComponent(value)); // Decompose to handle openid as URL
+
+//     console.log('/api/resource/count');
+
+//     try{
+// 	if (field == 'contributor'){
+// 	    if (valueArray.length > 1){
+// 		throw Error('Neo4j /api/resources/count/ not implemented for multiple values');
+// 	    }
+// 	    const response = await n4j.getElementsCountByContributor(valueArray[0]);
+// 	    if (response < 0){
+// 		res.status(500).send({ error: 'Error occurred while fetching resource count by contributor' });
+// 		return;
+// 	    }
+// 	    res.json({count: response});
+
+// 	} else {
+// 	    throw Error('Neo4j Not Implemented - /api/resource/count: ' + field + ', ' + values);
+// 	}
+//     } catch (error) {
+// 	console.error('Error querying OpenSearch:', error);
+// 	res.status(500).json({ message: 'Internal server error' });
+//     }
+// });
+
+// /**
+//  * @swagger
+//  * /api/elements/retrieve:
+//  *   get:
+//  *     deprecated: true
+//  *     tags: ['outdated']
+//  *     summary: Retrieve elements by field and value. (Replaced with '/api/elements')
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             properties:
+//  *               field_name:
+//  *                 type: string
+//  *               match_value:
+//  *                 type: array
+//  *                 items:
+//  *                   type: string
+//  *               element_type:
+//  *                 type: array
+//  *                 items:
+//  *                   type: string
+//  *               sort_by:
+//  *                 type: string
+//  *               order:
+//  *                 type: string
+//  *                 enum: [asc, desc]
+//  *               from:
+//  *                 type: integer
+//  *               size:
+//  *                 type: integer
+//  *               count_only:
+//  *                 type: boolean
+//  *     responses:
+//  *       200:
+//  *         description: A list of elements or count of elements
+//  *       500:
+//  *         description: Internal server error
+//  */
+// app.options('/api/elements/retrieve', cors());
+// app.get('/api/elements/retrieve', cors(), async (req, res) => {
+//     // [Done] Neo4j
+//     const { field_name, match_value, element_type, sort_by = '_score', order = 'desc', from = '0', size = '10', count_only = false } = req.body;
+
+//     //console.log('Neo4j /api/elements/retrieve - '+ element_type + ', ' + match_value);
+
+//     // Check if match_value or element_type is an empty array
+//     if (Array.isArray(match_value) && match_value.length === 0) {
+// 	return res.json(count_only ? 0 : []);
+//     }
+//     if (Array.isArray(element_type) && element_type.length === 0) {
+// 	return res.json(count_only ? 0 : []);
+//     }
+//     let sortBy = sort_by;
+//     if (sortBy === 'title') {
+// 	sortBy = 'title.keyword';
+//     } else if (sortBy === 'authors') {
+// 	sortBy = 'authors.keyword';
+//     }
+
+//     try{
+// 	if (match_value !== null){
+// 	    if (element_type !== null){
+// 		throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
+// 	    } else if (count_only) {
+// 		if (field_name == 'contributor') {
+// 		    let total_count = 0;
+// 		    for (let val of match_value){
+// 			let response = await n4j.getElementsCountByContributor(val);
+// 			total_count += response;
+// 		    }
+// 		    res.json(total_count);
+// 		    return;
+// 		} else if (field_name == 'tags') {
+// 		    let total_count = 0;
+// 		    for (let val of match_value){
+// 			let response = await n4j.getElementsCountByTag(val);
+// 			total_count += response;
+// 		    }
+// 		    res.json(total_count);
+// 		    return;
+// 		} else {
+// 		    throw Error('Neo4j not implemented Count:' + element_type + ', ' + match_value);
+// 		}
+// 	    } else {
+// 		if (field_name == '_id'){
+// 		    const resources = [];
+// 		    for (let val of match_value){
+// 			let resource = await n4j.getElementByID(val);
+// 			resources.push(resource);
+// 		    }
+// 		    res.json(resources);
+// 		    return;
+// 		} else if (field_name == 'contributor') {
+// 		    const resources = [];
+// 		    for (let val of match_value){
+// 			let resource = await n4j.getElementsByContributor(val, from, size);
+// 			resources.push(...resource);
+// 		    }
+// 		    res.json(resources);
+// 		    return;
+// 		} else if (field_name == 'tags') {
+// 		    const resources = [];
+// 		    for (let val of match_value){
+// 			let resource = await n4j.getElementsByTag(val, from, size);
+// 			resources.push(...resource);
+// 		    }
+// 		    res.json(resources);
+// 		    return;
+// 		} else {
+// 		    throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
+// 		}
+// 	    }
+// 	} else if (element_type !== null){
+// 	    if (match_value !== null){
+// 		// should never reach here
+// 		throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
+// 	    } else if (count_only) {
+// 		let total_count = 0;
+// 		for (let val of element_type){
+// 		    let response = await n4j.getElementsCountByType(val);
+// 		    total_count += response;
+// 		}
+// 		res.json(total_count);
+// 	    } else {
+// 		const resources = [];
+// 		for (let val of element_type){
+// 		    let resource = await n4j.getElementsByType(val, from, size);
+// 		    if (resource.length > 0){
+// 			resources.push(...resource);
+// 		    }
+// 		}
+// 		res.json(resources);
+// 		return;
+// 	    }
+// 	} else {
+// 	    throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
+// 	}
+//     } catch (error) {
+// 	console.error('Error retrieving elements:', error);
+// 	res.status(500).json({ message: 'Internal server error' });
+//     }
+// });
+/****************************************************************************/
