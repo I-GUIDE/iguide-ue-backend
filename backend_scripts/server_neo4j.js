@@ -767,9 +767,14 @@ app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, async (req, res) =
     const resource = req.body;
 
     try {
+        console.log(resource['resource-type']);
+	console.log(req.user);
         // Check if the resource type is "oer" and user's role is greater than 10
-        if (resource['resource-type'] === 'oer' && req.user.role > 4) {
+        if (resource['resource-type'] === 'oer' && !(req.user.role <= 4)) {
+            console.log(req.user, " blocked by role")
             return res.status(403).json({ message: 'Forbidden: You do not have permission to submit OER elements.' });
+        }else{
+            console.log(req.user, " is allowed to submit oers")
         }
 
         // Handle notebook resource type
