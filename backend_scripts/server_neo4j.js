@@ -329,7 +329,119 @@ app.post('/api/elements/datasets', jwtCorsMiddleware, authenticateJWT, upload.si
     });
 });
 
+/**
+ * @swagger
+ * /api/search:
+ *   post:
+ *     deprecated: true
+ *     tags: ['outdated']
+ *     summary: Search for resources. (Replaced with 'GET /api/search')
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               keyword:
+ *                 type: string
+ *               resource_type:
+ *                 type: string
+ *               sort_by:
+ *                 type: string
+ *               order:
+ *                 type: string
+ *                 enum: [asc, desc]
+ *               from:
+ *                 type: integer
+ *               size:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: A list of search results
+ *       500:
+ *         description: Error querying OpenSearch
+ */
+app.options('/api/search', cors());
+app.post('/api/search', cors(), async (req, res) => {
+    // [Done] Neo4j not required. All searching shoud be from OS
+    const { keyword, resource_type, sort_by = '_score', order = 'desc', from = 0, size = 15 } = req.body;
 
+    let query = {
+	multi_match: {
+	    query: keyword,
+	    fields: [
+		'title^3',    // Boost title matches
+		'authors^3',  // Boost author matches
+		'tags^2',     // Slightly boost tag matches
+		'contents'    // Normal weight for content matches
+	    ],
+	},
+    };
+
+    if (resource_type && resource_type !== 'any') {
+	query = {
+	    bool: {
+		must: [
+		    {
+			multi_match: {
+			    query: keyword,
+			    fields: [
+				'title^3',
+				'authors^3',
+				'tags^2',
+				'contents'
+			    ],
+			},
+		    },
+		    { term: { 'resource-type': resource_type } },
+		],
+	    },
+	};
+    }
+
+    // Replace title and authors with their keyword sub-fields for sorting
+    let sortBy = sort_by;
+    if (sortBy === 'title') {
+	sortBy = 'title.keyword';
+    } else if (sortBy === 'authors') {
+	sortBy = 'authors.keyword';
+    }
+
+    try {
+	const searchParams = {
+	    index: os_index,
+	    body: {
+		from: from,
+		size: size,
+		query: query,
+	    },
+	};
+
+	// Add sorting unless sort_by is "prioritize_title_author"
+	if (sort_by !== 'prioritize_title_author') {
+	    searchParams.body.sort = [
+		{
+		    [sortBy]: {
+			order: order,
+		    },
+		},
+	    ];
+	}
+
+	const searchResponse = await client.search(searchParams);
+	const results = searchResponse.body.hits.hits.map(hit => {
+	    const { _id, _source } = hit;
+	    const { metadata, ...rest } = _source; // Remove metadata
+	    return { _id, ...rest };
+	});
+	//res.json(results);
+	res.json({elements: results, total_count:searchResponse.body.hits.total.value});
+    } catch (error) {
+	console.error('Error querying OpenSearch:', error);
+	res.status(500).json({ error: 'Error querying OpenSearch' });
+    }
+});
 /****************************************************************************
  * Elements Endpoints
  ****************************************************************************/
@@ -1164,7 +1276,7 @@ app.get('/api/url-title', cors(), async (req, res) => {
  * @swagger
  * /api/users/avatar:
  *   post:
- *     summary: Upload an avatar image for the user profile
+ *     summary: Upload/update an avatar image for the user profile
  *     tags: ['users']
  *     consumes:
  *       - multipart/form-data
@@ -1173,6 +1285,10 @@ app.get('/api/url-title', cors(), async (req, res) => {
  *         name: file
  *         type: file
  *         description: The avatar file to upload
+ *       - in: formData
+ *         name: id
+ *         type: string
+ *         description: The user ID
  *     responses:
  *       200:
  *         description: Avatar uploaded successfully
@@ -1181,56 +1297,19 @@ app.get('/api/url-title', cors(), async (req, res) => {
  */
 app.options('/api/users/avatar', jwtCorsMiddleware);
 app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), (req, res) => {
-    // [Done] Neo4j Not required
-    if (!req.file) {
-	return res.status(400).json({ message: 'No file uploaded' });
-    }
+    // if (!req.file) {
+    // 	return res.status(400).json({ message: 'No file uploaded' });
+    // }
 
-    const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${req.file.filename}`;
-    res.json({
-	message: 'Avatar uploaded successfully',
-	url: filePath,
-    });
-});
+    // const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${req.file.filename}`;
 
-/**
- * @swagger
- * /api/users/{id}/avatar:
- *   post:
- *     summary: Update the user's avatar
- *     tags: ['users']
- *     consumes:
- *       - multipart/form-data
- *     parameters:
- *       - in: formData
- *         name: file
- *         type: file
- *         description: The new avatar file to upload
- *       - in: body
- *         name: id
- *         description: The ID of the user
- *         schema:
- *           type: object
- *           required:
- *             - id
- *           properties:
- *             id:
- *               type: string
- *     responses:
- *       200:
- *         description: Avatar updated successfully
- *       400:
- *         description: ID and new avatar file are required
- *       404:
- *         description: User not found
- *       500:
- *         description: Internal server error
- */
-app.options('/api/users/:id/avatar', jwtCorsMiddleware);
-app.post('/api/users/:id/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
-    // [Done] Neo4j
+    // res.json({
+    // 	message: 'Avatar uploaded successfully',
+    // 	url: filePath,
+    // });
+
     try {
-	const { id } = req.params.id;
+	const { id } = req.body.id;
 	const newAvatarFile = req.file;
 
 	if (!id || !newAvatarFile) {
@@ -1250,16 +1329,20 @@ app.post('/api/users/:id/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvat
 	    if (fs.existsSync(oldAvatarFilePath)) {
 		fs.unlinkSync(oldAvatarFilePath);
 	    }
+	    var ret_message = 'Avatar updated successfully'
+	} else {
+	    var ret_message = 'Avatar uploaded successfully'
 	}
 
 	res.json({
-	    message: 'Avatar updated successfully',
+	    message: ret_message,
 	    url: newAvatarUrl,
 	});
     } catch (error) {
 	console.error('Error updating avatar:', error);
 	res.status(500).json({ message: 'Internal server error' });
     }
+
 });
 
 /**
@@ -1397,6 +1480,75 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 /****************************************************************************
  * Ourdated/Deprecated Endpoints
  ****************************************************************************/
+
+// /**
+//  * @swagger
+//  * /api/users/{id}/avatar:
+//  *   post:
+//  *     summary: Update the user's avatar
+//  *     tags: ['users']
+//  *     consumes:
+//  *       - multipart/form-data
+//  *     parameters:
+//  *       - in: formData
+//  *         name: file
+//  *         type: file
+//  *         description: The new avatar file to upload
+//  *       - in: body
+//  *         name: id
+//  *         description: The ID of the user
+//  *         schema:
+//  *           type: object
+//  *           required:
+//  *             - id
+//  *           properties:
+//  *             id:
+//  *               type: string
+//  *     responses:
+//  *       200:
+//  *         description: Avatar updated successfully
+//  *       400:
+//  *         description: ID and new avatar file are required
+//  *       404:
+//  *         description: User not found
+//  *       500:
+//  *         description: Internal server error
+//  */
+// app.options('/api/users/:id/avatar', jwtCorsMiddleware);
+// app.post('/api/users/:id/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
+//     // [Done] Neo4j
+//     try {
+// 	const { id } = req.params.id;
+// 	const newAvatarFile = req.file;
+
+// 	if (!id || !newAvatarFile) {
+// 	    return res.status(400).json({ message: 'ID and new avatar file are required' });
+// 	}
+
+// 	// Update the user's avatar URL with the new file URL
+// 	const newAvatarUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${newAvatarFile.filename}`;
+
+// 	const {result, oldAvatarUrl} = await n4j.setContributorAvatar(id, newAvatarUrl);
+// 	if (result == false){
+// 	    return res.status(404).json({ message: 'User not found' });
+// 	}
+// 	if (oldAvatarUrl) {
+// 	    // Delete the old avatar file
+// 	    const oldAvatarFilePath = path.join(avatarDir, path.basename(oldAvatarUrl));
+// 	    if (fs.existsSync(oldAvatarFilePath)) {
+// 		fs.unlinkSync(oldAvatarFilePath);
+// 	    }
+// 	}
+
+// 	res.json({
+// 	    message: 'Avatar updated successfully',
+// 	    url: newAvatarUrl,
+// 	});
+//     } catch (error) {
+// 	console.error('Error updating avatar:', error);
+// 	res.status(500).json({ message: 'Internal server error' });
+//     }
+// });
 
 // /**
 //  * @swagger
@@ -1768,120 +1920,6 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 //     } catch (error) {
 // 	console.error('Error querying OpenSearch:', error);
 // 	res.status(500).json({ message: 'Internal server error' });
-//     }
-// });
-
-// /**
-//  * @swagger
-//  * /api/search:
-//  *   post:
-//  *     deprecated: true
-//  *     tags: ['outdated']
-//  *     summary: Search for resources. (Replaced with 'GET /api/search')
-//  *     requestBody:
-//  *       required: true
-//  *       content:
-//  *         application/json:
-//  *           schema:
-//  *             type: object
-//  *             properties:
-//  *               keyword:
-//  *                 type: string
-//  *               resource_type:
-//  *                 type: string
-//  *               sort_by:
-//  *                 type: string
-//  *               order:
-//  *                 type: string
-//  *                 enum: [asc, desc]
-//  *               from:
-//  *                 type: integer
-//  *               size:
-//  *                 type: integer
-//  *     responses:
-//  *       200:
-//  *         description: A list of search results
-//  *       500:
-//  *         description: Error querying OpenSearch
-//  */
-// app.options('/api/search', cors());
-// app.post('/api/search', cors(), async (req, res) => {
-//     // [Done] Neo4j not required. All searching shoud be from OS
-//     const { keyword, resource_type, sort_by = '_score', order = 'desc', from = 0, size = 15 } = req.body;
-
-//     let query = {
-// 	multi_match: {
-// 	    query: keyword,
-// 	    fields: [
-// 		'title^3',    // Boost title matches
-// 		'authors^3',  // Boost author matches
-// 		'tags^2',     // Slightly boost tag matches
-// 		'contents'    // Normal weight for content matches
-// 	    ],
-// 	},
-//     };
-
-//     if (resource_type && resource_type !== 'any') {
-// 	query = {
-// 	    bool: {
-// 		must: [
-// 		    {
-// 			multi_match: {
-// 			    query: keyword,
-// 			    fields: [
-// 				'title^3',
-// 				'authors^3',
-// 				'tags^2',
-// 				'contents'
-// 			    ],
-// 			},
-// 		    },
-// 		    { term: { 'resource-type': resource_type } },
-// 		],
-// 	    },
-// 	};
-//     }
-
-//     // Replace title and authors with their keyword sub-fields for sorting
-//     let sortBy = sort_by;
-//     if (sortBy === 'title') {
-// 	sortBy = 'title.keyword';
-//     } else if (sortBy === 'authors') {
-// 	sortBy = 'authors.keyword';
-//     }
-
-//     try {
-// 	const searchParams = {
-// 	    index: os_index,
-// 	    body: {
-// 		from: from,
-// 		size: size,
-// 		query: query,
-// 	    },
-// 	};
-
-// 	// Add sorting unless sort_by is "prioritize_title_author"
-// 	if (sort_by !== 'prioritize_title_author') {
-// 	    searchParams.body.sort = [
-// 		{
-// 		    [sortBy]: {
-// 			order: order,
-// 		    },
-// 		},
-// 	    ];
-// 	}
-
-// 	const searchResponse = await client.search(searchParams);
-// 	const results = searchResponse.body.hits.hits.map(hit => {
-// 	    const { _id, _source } = hit;
-// 	    const { metadata, ...rest } = _source; // Remove metadata
-// 	    return { _id, ...rest };
-// 	});
-// 	//res.json(results);
-// 	res.json({elements: results, total_count:searchResponse.body.hits.total.value});
-//     } catch (error) {
-// 	console.error('Error querying OpenSearch:', error);
-// 	res.status(500).json({ error: 'Error querying OpenSearch' });
 //     }
 // });
 
