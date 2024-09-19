@@ -1132,7 +1132,7 @@ async function registerElement(contributor_id, element){
     // }
 
     // (4) create CONTRIBUTED_BY relation with contributor_id
-    query_match += contributorMatchQuery(id)+" "; //"MATCH(c:Contributor{id:$contrib_id}) ";
+    query_match += contributorMatchQuery(contributor_id)+" "; //"MATCH(c:Contributor{id:$contrib_id}) ";
     query_merge += "MERGE (c)-[:CONTRIBUTED]->(n) ";
     query_params['contrib_id'] = contributor_id;
 
