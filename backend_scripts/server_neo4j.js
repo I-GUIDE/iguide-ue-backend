@@ -1296,7 +1296,7 @@ app.get('/api/url-title', cors(), async (req, res) => {
  *         description: No file uploaded
  */
 app.options('/api/users/avatar', jwtCorsMiddleware);
-app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), (req, res) => {
+app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
     // if (!req.file) {
     // 	return res.status(400).json({ message: 'No file uploaded' });
     // }
@@ -1311,11 +1311,11 @@ app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.s
     try {
 	const { id } = req.body.id;
 	const newAvatarFile = req.file;
-
+	
 	if (!id || !newAvatarFile) {
 	    return res.status(400).json({ message: 'ID and new avatar file are required' });
 	}
-
+	
 	// Update the user's avatar URL with the new file URL
 	const newAvatarUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${newAvatarFile.filename}`;
 
@@ -1333,7 +1333,7 @@ app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.s
 	} else {
 	    var ret_message = 'Avatar uploaded successfully'
 	}
-
+	
 	res.json({
 	    message: ret_message,
 	    url: newAvatarUrl,
@@ -1342,7 +1342,7 @@ app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.s
 	console.error('Error updating avatar:', error);
 	res.status(500).json({ message: 'Internal server error' });
     }
-
+    
 });
 
 /**
