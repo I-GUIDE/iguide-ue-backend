@@ -17,7 +17,8 @@ import { specs } from './swagger.js';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import * as n4j from './backend_neo4j.cjs'
-import llm_routes from './llm_routes.js';
+import llm_routes from './routes/llm_routes.js';
+import search_routes from './routes/search_routes.js';
 
 
 import { authenticateJWT, authorizeRole, generateAccessToken } from './jwtUtils.js';
@@ -52,6 +53,8 @@ dotenv.config();
 
 // Use the LLM-based conversational search route
 app.use('/beta', llm_routes);
+// Use the advanced search route
+app.use('/beta', search_routes);
 
 const os_node = process.env.OPENSEARCH_NODE;
 const os_usr = process.env.OPENSEARCH_USERNAME;
