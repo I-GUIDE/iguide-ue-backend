@@ -352,10 +352,11 @@ async function getElementByID(id){
 	    // Sept, 2024: Should NEVER reach here
 	    ret['click-count'] = 0;
 	}
-	// handle datetime value for created_at property
+	// handle datetime values for created_at and updated_at properties
 	ret['created-at'] = parseDate(ret['created_at']);
 	delete ret['created_at'];
-
+	ret['updated-at'] = parseDate(ret['updated_at']);
+	delete ret['updated_at'];
 
 	// [ToDo] should be removed
 	//ret['_id'] = ret['id']
