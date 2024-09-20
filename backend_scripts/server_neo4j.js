@@ -1012,6 +1012,8 @@ app.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
  *     responses:
  *       200:
  *         description: User updated successfully
+ *       403:
+ *         description: The user does not have the permission to edit this element
  *       500:
  *         description: Internal server error
  */
@@ -1021,9 +1023,29 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
     const updates = req.body;
 
     console.log('Updating element with id: ' + id);
-    //console.log(updates);
 
     try {
+	// only allow updating if
+	// (1) this element is owned by the user sending update request
+	// (2) user sending update request is admin or super admin
+	const element_owner = await n4j.getContributorIdForElement(id);
+	const can_edit = (() => {
+	    if (req.user.id == element_owner['id'] || req.user.id == element_owner['openid']){
+		console.log('This element is owned by the user');
+		// this element is owned by the user sending update request
+		return true;
+	    } else if (req.user.role >=2) {
+		console.log('This update request is from an admin or super-admin');
+		// user sending update request is admin or super admin
+		return true;
+	    }
+	    return false;
+	})();
+
+	if (!can_edit){
+	    res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
+	}
+
 	const response = await n4j.updateElement(id, updates);
 	if (response) {
 	    // Update in OpenSearch
@@ -1311,11 +1333,11 @@ app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.s
     try {
 	const { id } = req.body.id;
 	const newAvatarFile = req.file;
-	
+
 	if (!id || !newAvatarFile) {
 	    return res.status(400).json({ message: 'ID and new avatar file are required' });
 	}
-	
+
 	// Update the user's avatar URL with the new file URL
 	const newAvatarUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${newAvatarFile.filename}`;
 
@@ -1333,7 +1355,7 @@ app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.s
 	} else {
 	    var ret_message = 'Avatar uploaded successfully'
 	}
-	
+
 	res.json({
 	    message: ret_message,
 	    url: newAvatarUrl,
@@ -1342,7 +1364,7 @@ app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.s
 	console.error('Error updating avatar:', error);
 	res.status(500).json({ message: 'Internal server error' });
     }
-    
+
 });
 
 /**

@@ -1174,6 +1174,30 @@ async function deleteElementByID(id){
     return false;
 }
 
+/**
+ * Get contributor ID for the element
+ * @param {string} e_id Element ID
+ * @return {Object} Contributors {id, openid}
+ */
+async function getContributorIdForElement(e_id){
+    const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
+	  "RETURN {id:c.id, openid:c.openid}";
+    try {
+	const {records, summary} =
+	      await driver.executeQuery(query_str,
+					{id_param: e_id},
+					{database: process.env.NEO4J_DB});
+
+	if (records.length <= 0){
+	    // No contributor found for given element
+	    return {id:null, openid:null};
+	}
+	return records[0]['_fields'][0];
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return false;
+}
+
 exports.updateElement = updateElement;
 exports.getElementByID = getElementByID;
 exports.registerElement = registerElement;
@@ -1192,6 +1216,7 @@ exports.setElementFeaturedForID = setElementFeaturedForID;
 exports.getElementsByContributor = getElementsByContributor;
 exports.getFeaturedElementsByType = getFeaturedElementsByType;
 exports.createLinkNotebook2Dataset = createLinkNotebook2Dataset;
+exports.getContributorIdForElement = getContributorIdForElement;
 exports.getElementsCountByContributor = getElementsCountByContributor;
 
 exports.testServerConnection = testServerConnection;
