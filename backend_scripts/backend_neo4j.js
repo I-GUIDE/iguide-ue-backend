@@ -1082,11 +1082,6 @@ async function elementToNode(element, generate_id=true){
 	throw Error("Backend Neo4j: elementToNode type not implemented");
     }
 
-    // for every element initialize click_count
-    node['click_count'] = neo4j.int(0);
-    // for every element initialize creation time
-    node['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
-
     return {node:node, node_type:node_type, related_elements:related_elements};
 }
 
@@ -1100,7 +1095,11 @@ async function registerElement(contributor_id, element){
 
     // (1) and (2)
     let {node, node_type, related_elements} = await elementToNode(element);
-
+    // for every element initialize click_count
+    node['click_count'] = neo4j.int(0);
+    // for every element initialize creation time
+    node['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
+    
     // (3) create relations based on related-elements
     var {query_match, query_merge, query_params} =
 	  await generateQueryStringForRelatedElements(related_elements);
