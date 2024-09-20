@@ -1034,7 +1034,7 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
 		console.log('This element is owned by the user');
 		// this element is owned by the user sending update request
 		return true;
-	    } else if (req.user.role >=2) {
+	    } else if (req.user.role <=2) {
 		console.log('This update request is from an admin or super-admin');
 		// user sending update request is admin or super admin
 		return true;

@@ -961,7 +961,10 @@ async function updateElement(id, element){
 	    this_element_query_params['attr' + i] = value;
 	    i+=1;
 	}
-
+	// add 'updated_at' property to this element
+	this_element_set += "SET n.updated_at=$updated_at ";
+	this_element_query_params['updated_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
+	    
 	// handle related elements
 	var {query_match, query_merge, query_params} =
 	    await generateQueryStringForRelatedElements(related_elements);
