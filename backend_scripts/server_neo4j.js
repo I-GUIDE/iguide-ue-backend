@@ -17,6 +17,8 @@ import { specs } from './swagger.js';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import * as n4j from './backend_neo4j.cjs'
+import llm_routes from './routes/llm_routes.js';
+import search_routes from './routes/search_routes.js';
 
 import { authenticateJWT, authorizeRole, generateAccessToken } from './jwtUtils.js';
 
@@ -46,6 +48,11 @@ const jwtCorsMiddleware = (req, res, next) => {
 app.use(express.json());
 app.use(cookieParser());
 dotenv.config();
+
+// Use the LLM-based conversational search route
+app.use('/beta', llm_routes);
+// Use the advanced search route
+app.use('/beta', search_routes);
 
 const os_node = process.env.OPENSEARCH_NODE;
 const os_usr = process.env.OPENSEARCH_USERNAME;
@@ -149,8 +156,8 @@ const uploadAvatar = multer({ storage: avatarStorage });
  *     security:
  *       - cookieAuth: []
  */
-app.options('/api/refresh-token', jwtCorsMiddleware);
-app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
+app.options('/api/refresh-token', cors());
+app.post('/api/refresh-token', cors(), async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
     //console.log("Refresh token", refreshToken);
     if (!refreshToken) {
