@@ -74,7 +74,7 @@ async function performSearchWithMemory(userQuery, memoryId) {
  *     summary: Create a new memory ID for LLM searches
  *     description: Generates a random memory ID with a conversation name for tracking search memory.
  *     tags:
- *       - Memory Management
+ *       - Conversational Search
  *     responses:
  *       200:
  *         description: Successfully created a memory ID
