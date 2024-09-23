@@ -18,7 +18,7 @@ const client = new Client({
  * @swagger
  * /beta/search:
  *   get:
- *     summary: Search for resources
+ *     summary: Search for elements
  *     tags:
  *       - Advanced Search
  *     parameters:
@@ -27,11 +27,11 @@ const client = new Client({
  *         schema:
  *           type: string
  *       - in: query
- *         name: resource_type
+ *         name: resource-type
  *         schema:
  *           type: string
  *       - in: query
- *         name: sort_by
+ *         name: sort-by
  *         schema:
  *           type: string
  *       - in: query
@@ -61,7 +61,7 @@ const client = new Client({
  */
 router.options('/search', cors());
 router.get('/search', async (req, res) => {
-    const { keyword, resource_type, sort_by = '_score', order = 'desc', from = 0, size = 15, ...additionalFields } = req.query;
+    const { keyword, element-type, sort-by = '_score', order = 'desc', from = 0, size = 15, ...additionalFields } = req.query;
 
     let query = {
         multi_match: {
@@ -80,8 +80,8 @@ router.get('/search', async (req, res) => {
         { multi_match: { query: keyword, fields: ['title^3', 'authors^3', 'tags^2', 'contents'] } }
     ];
 
-    if (resource_type && resource_type !== 'any') {
-        mustConditions.push({ term: { 'resource-type': resource_type } });
+    if (element-type && element-type !== 'any') {
+        mustConditions.push({ term: { 'resource-type': element-type } });
     }
 
     // Add additional fields as match conditions
@@ -101,7 +101,7 @@ router.get('/search', async (req, res) => {
     }
 
     // Replace title and authors with their keyword sub-fields for sorting
-    let sortBy = sort_by;
+    let sortBy = sort-by;
     if (sortBy === 'title') {
         sortBy = 'title.keyword';
     } else if (sortBy === 'authors') {
