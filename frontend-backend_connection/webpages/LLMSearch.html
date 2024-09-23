@@ -32,14 +32,28 @@
             border: 1px solid #ddd;
             border-radius: 8px;
         }
+        .form-section {
+            margin-bottom: 15px;
+        }
     </style>
 </head>
 <body>
     <h1>Conversational Search</h1>
     
     <form id="queryForm">
-        <label for="queryInput">Enter your query:</label><br>
-        <input type="text" id="queryInput" name="query" style="width: 300px;" required>
+        
+        
+        <div class="form-section">
+            <label for="memoryIdInput">Memory ID (Optional):</label><br>
+            <input type="text" id="memoryIdInput" name="memoryId" style="width: 300px;" placeholder="Optional Memory ID">
+            <button type="button" onclick="generateMemoryId()">Generate Memory ID</button>
+        </div>
+
+	<div class="form-section">
+            <label for="queryInput">Enter your query:</label><br>
+            <input type="text" id="queryInput" name="query" style="width: 300px;" required>
+        </div>
+
         <button type="submit">Submit</button>
     </form>
     
@@ -55,13 +69,40 @@
     </div>
 
     <script>
-        async function queryConversationalSearch(userQuery) {
+        // Function to generate a new memory ID
+        async function generateMemoryId() {
+            try {
+                const response = await fetch("http://149.165.154.200:3501/beta/create-llm-memory", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                if (data && data.memoryId) {
+                    document.getElementById('memoryIdInput').value = data.memoryId;
+                    alert(`Memory ID generated: ${data.memoryId}`);
+                } else {
+                    alert('Failed to generate memory ID');
+                }
+            } catch (error) {
+                console.error('Error generating memory ID:', error);
+                alert('Error generating memory ID');
+            }
+        }
+
+        // Function to query the conversational search API
+        async function queryConversationalSearch(userQuery, memoryId) {
             const requestBody = {
                 userQuery: userQuery
             };
 
+            if (memoryId) {
+                requestBody.memoryId = memoryId;
+            }
+
             try {
-                const response = await fetch("http://149.165.154.200:5001/beta/llm-search", {
+                const response = await fetch("http://149.165.154.200:3501/beta/llm-search", {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -84,13 +125,14 @@
         document.getElementById('queryForm').addEventListener('submit', async function(event) {
             event.preventDefault();
             const userQuery = document.getElementById('queryInput').value;
+            const memoryId = document.getElementById('memoryIdInput').value;
 
             // Clear previous results and show "Generating response..."
             document.getElementById('answerContent').textContent = 'Generating response...';
             document.getElementById('elementsList').innerHTML = ''; // Clear the knowledge elements
 
             // Query the API
-            const result = await queryConversationalSearch(userQuery);
+            const result = await queryConversationalSearch(userQuery, memoryId);
 
             if (result) {
                 // Display the answer from retrieval_augmented_generation
@@ -150,4 +192,3 @@
     </script>
 </body>
 </html>
-
