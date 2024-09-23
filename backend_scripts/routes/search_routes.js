@@ -60,7 +60,7 @@ const client = new Client({
  *         description: Error querying OpenSearch
  */
 router.options('/search', cors());
-router.get('/search', async (req, res) => {
+router.get('/search', cors(), async (req, res) => {
     const { keyword, 'element-type': element_type, 'sort-by': sort_by = '_score', order = 'desc', from = 0, size = 15, ...additionalFields } = req.query;
 
     let query = {
