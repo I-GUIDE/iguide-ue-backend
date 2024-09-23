@@ -355,8 +355,10 @@ async function getElementByID(id){
 	// handle datetime values for created_at and updated_at properties
 	ret['created-at'] = parseDate(ret['created_at']);
 	delete ret['created_at'];
-	ret['updated-at'] = parseDate(ret['updated_at']);
-	delete ret['updated_at'];
+	if (ret['updated_at']){
+	    ret['updated-at'] = parseDate(ret['updated_at']);
+	    delete ret['updated_at'];
+	}
 
 	// [ToDo] should be removed
 	//ret['_id'] = ret['id']
