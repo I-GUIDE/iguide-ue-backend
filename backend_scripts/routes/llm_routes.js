@@ -67,7 +67,31 @@ async function performSearchWithMemory(userQuery, memoryId) {
     }
 }
 
-// New endpoint to create a memory ID with a random conversation name
+/**
+ * @swagger
+ * /beta/create-llm-memory:
+ *   post:
+ *     summary: Create a new memory ID for LLM searches
+ *     description: Generates a random memory ID with a conversation name for tracking search memory.
+ *     tags:
+ *       - Memory Management
+ *     responses:
+ *       200:
+ *         description: Successfully created a memory ID
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 memoryId:
+ *                   type: string
+ *                   description: The generated memory ID
+ *                 conversationName:
+ *                   type: string
+ *                   description: The name of the conversation
+ *       500:
+ *         description: Error creating memory
+ */
 router.options('/create-llm-memory', cors());
 router.post('/create-llm-memory', cors(), async (req, res) => {
     const conversationName = `conversation-${uuidv4()}`; // Generate random conversation name
@@ -80,7 +104,76 @@ router.post('/create-llm-memory', cors(), async (req, res) => {
     }
 });
 
-// Modified /llm-search to take memoryId as an optional parameter
+/**
+ * @swagger
+ * /beta/llm-search:
+ *   post:
+ *     summary: Perform a conversational search with memory
+ *     description: Performs LLM-based search with optional memory tracking via OpenSearch.
+ *     tags:
+ *       - Conversational Search
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userQuery:
+ *                 type: string
+ *                 description: The query entered by the user for conversational search.
+ *                 example: How is CyberGIS used in the researches
+ *               memoryId:
+ *                 type: string
+ *                 description: The optional memory ID for the search. If not provided, a new memory will be created.
+ *     responses:
+ *       200:
+ *         description: Successful search
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 took:
+ *                   type: integer
+ *                   description: Time taken for the search.
+ *                 timed_out:
+ *                   type: boolean
+ *                   description: Whether the search timed out.
+ *                 hits:
+ *                   type: object
+ *                   description: Search results.
+ *                   properties:
+ *                     total:
+ *                       type: object
+ *                       properties:
+ *                         value:
+ *                           type: integer
+ *                           description: Total number of hits.
+ *                     hits:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _source:
+ *                             type: object
+ *                             properties:
+ *                               title:
+ *                                 type: string
+ *                                 description: Title of the knowledge element.
+ *                               authors:
+ *                                 type: array
+ *                                 items:
+ *                                   type: string
+ *                                 description: Authors of the knowledge element.
+ *                               tags:
+ *                                 type: array
+ *                                 items:
+ *                                   type: string
+ *                                 description: Tags associated with the knowledge element.
+ *       500:
+ *         description: Error performing conversational search
+ */
 router.options('/llm-search', cors());
 router.post('/llm-search', cors(), async (req, res) => {
     const { userQuery, memoryId } = req.body;
@@ -105,4 +198,5 @@ router.post('/llm-search', cors(), async (req, res) => {
         res.status(500).json({ error: 'Error performing conversational search' });
     }
 });
+
 export default router;
