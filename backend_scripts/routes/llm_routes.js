@@ -1,7 +1,6 @@
 import express from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
-import session from 'express-session';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
