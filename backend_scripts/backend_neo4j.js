@@ -31,6 +31,7 @@ const ElementType = Object.freeze({
     PUBLICATION: "Publication",
     OER: "Oer", // Open Educational Content
     MAP: "Map",
+    Documentation: "Documentation",
 });
 exports.ElementType = ElementType;
 
@@ -858,36 +859,36 @@ async function setContributorAvatar(id, avatar_url){
 
     return {result: ret, old_avatar_url:old_url};
 }
-/**
- * DEPRECATED. Use getContributorByID() instead
- * Get contributor profile by OpenID with all related content
- * @param {string} id
- * @return {Object} Map of object with given ID. Empty map if ID not found or error
- */
-async function getContributorProfileByID(openid){
-    // This is not working -
-    // const query_str = "MATCH (c:Contributor{openid:$id_param})-[:CONTRIBUTED]-(r) " +
-    // 	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as contributed_elems, c " +
-    // 	  "RETURN c{.*, contributed_elements: contributed_elems} ";
+// /**
+//  * DEPRECATED. Use getContributorByID() instead
+//  * Get contributor profile by OpenID with all related content
+//  * @param {string} id
+//  * @return {Object} Map of object with given ID. Empty map if ID not found or error
+//  */
+// async function getContributorProfileByID(openid){
+//     // This is not working -
+//     // const query_str = "MATCH (c:Contributor{openid:$id_param})-[:CONTRIBUTED]-(r) " +
+//     // 	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as contributed_elems, c " +
+//     // 	  "RETURN c{.*, contributed_elements: contributed_elems} ";
 
 
-    try {
-	const {records, summary} =
-	      await driver.executeQuery(query_str,
-					{id_param: openid},
-					{database: process.env.NEO4J_DB});
-	if (records.length <= 0){
-	    // Query returned no match for given ID
-	    return {};
-	} else if (records.length > 1){
-	    // should never reach here since ID is unique
-	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID: " + openid);
-	}
-	return records[0]['_fields'][0];
-    } catch(err){console.log('Error in query: '+ err);}
-    // something went wrong
-    return {};
-}
+//     try {
+// 	const {records, summary} =
+// 	      await driver.executeQuery(query_str,
+// 					{id_param: openid},
+// 					{database: process.env.NEO4J_DB});
+// 	if (records.length <= 0){
+// 	    // Query returned no match for given ID
+// 	    return {};
+// 	} else if (records.length > 1){
+// 	    // should never reach here since ID is unique
+// 	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID: " + openid);
+// 	}
+// 	return records[0]['_fields'][0];
+//     } catch(err){console.log('Error in query: '+ err);}
+//     // something went wrong
+//     return {};
+// }
 /**
  * Get contributor by ID without any related information
  * @param {string} id
@@ -967,7 +968,7 @@ async function updateElement(id, element){
 	// add 'updated_at' property to this element
 	this_element_set += "SET n.updated_at=$updated_at ";
 	this_element_query_params['updated_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
-	    
+
 	// handle related elements
 	var {query_match, query_merge, query_params} =
 	    await generateQueryStringForRelatedElements(related_elements);
@@ -1101,7 +1102,7 @@ async function registerElement(contributor_id, element){
     node['click_count'] = neo4j.int(0);
     // for every element initialize creation time
     node['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
-    
+
     // (3) create relations based on related-elements
     var {query_match, query_merge, query_params} =
 	  await generateQueryStringForRelatedElements(related_elements);
@@ -1203,6 +1204,111 @@ async function getContributorIdForElement(e_id){
     return false;
 }
 
+/****************************************************************************
+ * Documentation Functions
+ ****************************************************************************/
+
+/**
+ * Register new documentation
+ * @param {Object} documentation Map with new documentation attributes (name, content)
+ * @return {Boolean, String} {true, documentation_id} on success OR {false, ''} on failure.
+ */
+async function registerDocumentation(documentation){
+    // generate id (UUID)
+    documentation['id'] = uuidv4();
+
+    const query_str = "CREATE (d: Documentation $doc_param)";
+    try{
+	const {_, summary} =
+	      await driver.executeQuery(query_str,
+					{doc_param: documentation},
+					{database: process.env.NEO4J_DB});
+	if (summary.counters.updates()['nodesCreated'] == 1){
+	    return {response:true, documentation_id:documentation['id']};
+	}
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return {response:false, documentation_id:''};
+}
+
+/**
+ * Get documentation by ID without any related information
+ * @param {string} id
+ * @return {Object} Map of object with given ID. Empty map if ID not found or error
+ */
+async function getDocumentationByID(id) {
+    const query_str = "MATCH (d:Documentation{id:$id}) RETURN d{.*} ";
+    try {
+	const {records, summary} =
+	      await driver.executeQuery(query_str,
+					{id: id},
+					{database: process.env.NEO4J_DB});
+	if (records.length <= 0){
+	    // Query returned no match for given ID
+	    return {};
+	} else if (records.length > 1){
+	    // should never reach here since ID is unique
+	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID:" + id);
+	}
+	const documentation = records[0]['_fields'][0];
+	return documentation;
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return {};
+}
+
+/**
+ * Update existing documentation
+ * @param {string} id Documentation id
+ * @param {Object} documentation Map with new documentation attributes (name, content)
+ * @return {Boolean} true for successful registration. false otherwise or in case of error
+ */
+async function updateDocumentation(id, documentation_attributes) {
+    const query_match = "MATCH (d:Documentation{id:$id}) ";
+    var query_set = "";
+    var query_params = {id: id};
+
+    let i=0;
+    for (const [key, value] of Object.entries(documentation_attributes)) {
+	query_set += "SET d." + key + "=$attr" + i + " ";
+	query_params['attr' + i] = value;
+	i+=1;
+    }
+
+    const query_str = query_match + query_set;
+    try{
+	const {_, summary} =
+	      await driver.executeQuery(query_str,
+					query_params,
+					{database: process.env.NEO4J_DB});
+	if (summary.counters.updates()['propertiesSet'] >= 1){
+	    return true;
+	}
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return false;
+}
+
+/**
+ * Delete a documentation given ID
+ * @param {string} id
+ * @return {Object} true if deleted successfully, false otherwise
+ */
+async function deleteDocumentationByID(id){
+    const query_str = "MATCH (d:Documentation{id:$id_param}) DETACH DELETE d";
+    try {
+	const {_, summary} =
+	      await driver.executeQuery(query_str,
+					{id_param: id},
+					{database: process.env.NEO4J_DB});
+	if (summary.counters.updates()['nodesDeleted'] == 1){
+	    return true;
+	}
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return false;
+}
+
 exports.updateElement = updateElement;
 exports.getElementByID = getElementByID;
 exports.registerElement = registerElement;
@@ -1223,6 +1329,11 @@ exports.getFeaturedElementsByType = getFeaturedElementsByType;
 exports.createLinkNotebook2Dataset = createLinkNotebook2Dataset;
 exports.getContributorIdForElement = getContributorIdForElement;
 exports.getElementsCountByContributor = getElementsCountByContributor;
+
+exports.updateDocumentation = updateDocumentation;
+exports.getDocumentationByID = getDocumentationByID;
+exports.registerDocumentation = registerDocumentation;
+exports.deleteDocumentationByID = deleteDocumentationByID;
 
 exports.testServerConnection = testServerConnection;
 
