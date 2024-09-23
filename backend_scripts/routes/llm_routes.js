@@ -69,7 +69,7 @@ async function performSearchWithMemory(userQuery, memoryId) {
 
 /**
  * @swagger
- * /beta/create-llm-memory:
+ * /beta/llm/memory-id:
  *   post:
  *     summary: Create a new memory ID for LLM searches
  *     description: Generates a random memory ID with a conversation name for tracking search memory.
@@ -92,8 +92,8 @@ async function performSearchWithMemory(userQuery, memoryId) {
  *       500:
  *         description: Error creating memory
  */
-router.options('/create-llm-memory', cors());
-router.post('/create-llm-memory', cors(), async (req, res) => {
+router.options('/llm/memory-id', cors());
+router.post('/llm/memory-id', cors(), async (req, res) => {
     const conversationName = `conversation-${uuidv4()}`; // Generate random conversation name
 
     try {
@@ -106,7 +106,7 @@ router.post('/create-llm-memory', cors(), async (req, res) => {
 
 /**
  * @swagger
- * /beta/llm-search:
+ * /beta/llm/search:
  *   post:
  *     summary: Perform a conversational search with memory
  *     description: Performs LLM-based search with optional memory tracking via OpenSearch.
@@ -174,8 +174,8 @@ router.post('/create-llm-memory', cors(), async (req, res) => {
  *       500:
  *         description: Error performing conversational search
  */
-router.options('/llm-search', cors());
-router.post('/llm-search', cors(), async (req, res) => {
+router.options('/llm/search', cors());
+router.post('/llm/search', cors(), async (req, res) => {
     const { userQuery, memoryId } = req.body;
 
     try {
