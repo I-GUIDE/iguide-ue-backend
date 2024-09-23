@@ -1226,7 +1226,8 @@ app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.s
     // });
 
     try {
-	const { id } = req.body.id;
+	const body = JSON.parse(JSON.stringify(req.body));
+	const id = body.id;
 	const newAvatarFile = req.file;
 
 	if (!id || !newAvatarFile) {
