@@ -495,7 +495,7 @@ app.get('/api/elements/:id', cors(), async (req, res) => {
 	if (JSON.stringify(element) === '{}'){
 	    return res.status(404).json({ message: 'Element not found' });
 	}
-	res.json(element);
+	res.status(200).json(element);
     } catch (error) {
 	console.error('/api/resources/:id Error querying OpenSearch:', error);
 	res.status(500).json({ message: 'Internal server error' });
@@ -1037,7 +1037,7 @@ app.get('/api/users/:id', cors(), async (req, res) => {
 	}
 	// remove role attribute
 	delete response['role'];
-	res.json(response);
+	res.status(200).json(response);
     } catch (error) {
 	console.error('Error fetching user:', error);
 	res.status(500).json({ message: 'Error fetching the user' });
@@ -1378,8 +1378,170 @@ app.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) =
     }
 });
 
-/****************************************************************************/
+/****************************************************************************
+ * Documentation Endpoints
+ ****************************************************************************/
+/**
+ * @swagger
+ * /api/documentation/{id}:
+ *   get:
+ *     summary: Retrieve the documentation given ID
+ *     tags: ['documentation']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The URL to retrieve the title from
+ *     responses:
+ *       200:
+ *         description: The title of the URL
+ *       404:
+ *         description: Title not found
+ *       500:
+ *         description: Failed to retrieve title
+ */
+app.get('/api/documentation/:id', async (req, res) => {
+    const doc_id = decodeURIComponent(req.params['id']);
+    try {
+	const documentation = await n4j.getDocumentationByID(doc_id);
+	if (JSON.stringify(documentation) === '{}'){
+	    return res.status(404).json({ message: 'Documentation not found' });
+	}
+	res.status(200).json(documentation);
+    } catch (error) {
+	console.log(error);
+	res.status(500).json({ error: 'Failed to retrieve documentation with id: ' + doc_id});
+    }
+});
 
+/**
+ * @swagger
+ * /api/documentation:
+ *   post:
+ *     summary: Add a new documentation item
+ *     tags: ['documentation']
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               content:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Documentation added successfully
+ *       400:
+ *         description: Error adding documentation in DB
+ *       500:
+ *         description: Internal server error
+ */
+app.post('/api/documentation', async (req, res) => {
+    const documentation = req.body;
+    try {
+	const {response, documentation_id} = await n4j.registerDocumentation(documentation);
+
+	if (response){
+	    res.status(200).json({ message: 'Documentation added successfully',
+				   id: documentation_id });
+	} else {
+	    res.status(400).json({ message: 'Error adding documentation'});
+	}
+    } catch (error) {
+	console.error('Error adding documentation:', error);
+	res.status(500).json({ message: 'Internal server error' });
+    }
+});
+/**
+ * @swagger
+ * /api/documentation/{id}:
+ *   put:
+ *     summary: Update the user document
+ *     tags: ['documentation']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the documentation
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               content:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: User updated successfully
+ *       400:
+ *         description: Error updating documentation
+ *       500:
+ *         description: Internal server error
+ */
+app.put('/api/documentation/:id', async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
+    const updates = req.body;
+
+    try {
+	const response = await n4j.updateDocumentation(id, updates);
+	if (response) {
+	    res.status(200).json({ message: 'Documentation updated successfully', result: response });
+	} else {
+	    console.log('Error updating user');
+	    res.status(400).json({ message: 'Error updating documentation', result: response });
+	}
+    } catch (error) {
+	console.error('Error updating user:', error);
+	res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/documentation/{id}:
+ *   delete:
+ *     summary: Delete a documentation by ID
+ *     tags: ['documentation']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Documentation deleted successfully
+ *       500:
+ *         description: Internal server error
+ */
+app.delete('/api/documentation/:id', async (req, res) => {
+    const doc_id = req.params['id'];
+
+    try {
+	const response = await n4j.deleteDocumentationByID(doc_id);
+	if (response) {
+	    res.status(200).json({ message: 'Documentation deleted successfully' });
+	} else {
+	    res.status(500).json({ error: 'Documentation still exists after deletion' });
+	}
+    } catch (error) {
+	console.error('Error deleting documentation:', error.message);
+	res.status(500).json({ error: error.message });
+    }
+});
+
+/****************************************************************************/
 console.log(`${process.env.SERV_TAG} server is up`);
 
 const HTTP_PORT = parseInt(process.env.PORT, 10)+1; //3501;
