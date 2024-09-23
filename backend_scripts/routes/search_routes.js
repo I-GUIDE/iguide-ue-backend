@@ -16,7 +16,7 @@ const client = new Client({
 });
 /**
  * @swagger
- * /beta/search:
+ * /api/search:
  *   get:
  *     summary: Search for elements
  *     tags:
