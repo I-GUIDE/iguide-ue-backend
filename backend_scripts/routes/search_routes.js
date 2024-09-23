@@ -27,7 +27,7 @@ const client = new Client({
  *         schema:
  *           type: string
  *       - in: query
- *         name: resource-type
+ *         name: element-type
  *         schema:
  *           type: string
  *       - in: query
@@ -48,7 +48,7 @@ const client = new Client({
  *         schema:
  *           type: integer
  *       - in: query
- *         name: additional_fields
+ *         name: additional-fields
  *         schema:
  *           type: object
  *           additionalProperties:
