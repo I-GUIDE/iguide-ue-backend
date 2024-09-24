@@ -1501,11 +1501,11 @@ app.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) =
  *         description: The URL to retrieve the title from
  *     responses:
  *       200:
- *         description: The title of the URL
+ *         description: The documentation object Map with given ID
  *       404:
- *         description: Title not found
+ *         description: Documentation not found
  *       500:
- *         description: Failed to retrieve title
+ *         description: Failed to retrieve documentation
  */
 app.get('/api/documentation/:id', async (req, res) => {
     const doc_id = decodeURIComponent(req.params['id']);
@@ -1518,6 +1518,50 @@ app.get('/api/documentation/:id', async (req, res) => {
     } catch (error) {
 	console.log(error);
 	res.status(500).json({ error: 'Failed to retrieve documentation with id: ' + doc_id});
+    }
+});
+
+/**
+ * @swagger
+ * /api/documentation:
+ *   get:
+ *     summary: Retrieve all documentation filtered by given criteria
+ *     tags: ['documentation']
+ *     parameters:
+ *       - in: query
+ *         name: from
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The offset value for pagination
+ *       - in: query
+ *         name: size
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The limit value for pagination
+ *     responses:
+ *       200:
+ *         description: The list of documentation object with given ID
+ *       404:
+ *         description: Documentation not found
+ *       500:
+ *         description: Failed to retrieve title
+ */
+app.get('/api/documentation', async (req, res) => {
+        let {
+	  'from': from,
+	  'size': size} = req.query;
+
+    try {
+	const documentation = await n4j.getAllDocumentation(from, size);	
+	if (documentation.length == 0){
+	    return res.status(404).json({ message: 'No Documentation found' });
+	}
+	res.status(200).json({documentation:documentation, 'total-count': documentation.length});
+    } catch (error) {
+	console.log(error);
+	res.status(500).json({ error: 'Failed to retrieve documentations'});
     }
 });
 

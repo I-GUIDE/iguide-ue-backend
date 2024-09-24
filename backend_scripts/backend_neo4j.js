@@ -1256,6 +1256,32 @@ async function getDocumentationByID(id) {
     // something went wrong
     return {};
 }
+/**
+ * Get all documentation
+ * @param {int}     from For pagintion, get documentation from this number
+ * @param {int}     size For pagintion, get this number of documents
+ * @return {Object} List of Map of document objects. Empty list if not found or error
+ */
+async function getAllDocumentation(from, size) {
+    const query_str = "MATCH (d:Documentation) RETURN d{.*} SKIP $from LIMIT $size";
+    try {
+	const {records, summary} =
+	      await driver.executeQuery(query_str,
+					{from: neo4j.int(from), size: neo4j.int(size)},
+					{database: process.env.NEO4J_DB});
+	if (records.length <= 0){
+	    // Query returned no Documentation
+	    return [];
+	}
+	var ret = []
+	for (record of records){
+	    ret.push(record['_fields'][0]);
+	}
+	return ret;
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return [];
+}
 
 /**
  * Update existing documentation
@@ -1330,6 +1356,7 @@ exports.createLinkNotebook2Dataset = createLinkNotebook2Dataset;
 exports.getContributorIdForElement = getContributorIdForElement;
 exports.getElementsCountByContributor = getElementsCountByContributor;
 
+exports.getAllDocumentation = getAllDocumentation;
 exports.updateDocumentation = updateDocumentation;
 exports.getDocumentationByID = getDocumentationByID;
 exports.registerDocumentation = registerDocumentation;
