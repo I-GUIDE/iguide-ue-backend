@@ -156,8 +156,8 @@ const uploadAvatar = multer({ storage: avatarStorage });
  *     security:
  *       - cookieAuth: []
  */
-app.options('/api/refresh-token', cors());
-app.post('/api/refresh-token', cors(), async (req, res) => {
+app.options('/api/refresh-token', jwtCorsMiddleware);
+app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
     //console.log("Refresh token", refreshToken);
     if (!refreshToken) {
