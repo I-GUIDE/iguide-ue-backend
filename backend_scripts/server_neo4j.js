@@ -770,7 +770,7 @@ app.get('/api/elements', cors(), async (req, res) => {
  *         description: The user does not have the permission to make the contribution
  */
 //app.options('/api/elements', jwtCorsMiddleware);
-app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, authorizeRole(6), async (req, res) => {
     const resource = req.body;
 
     try {
