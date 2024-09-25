@@ -1050,6 +1050,7 @@ async function elementToNode(element, generate_id=true){
 	size: size,                                     // Dataset
 	'external-link-publication': external_link_pub, // Publication
 	'oer-external-links': oer_external_links,       // OER
+	'map-external-iframe-link': external_link_map,  // MAP
 	...node
        } = element;
 
@@ -1081,8 +1082,10 @@ async function elementToNode(element, generate_id=true){
 		node['oer_elink_types'].push(elink['type']);
 	    }
 	}
+    } else if (node_type == ElementType.MAP){
+	node['external_iframe_link'] = external_link_map;
     } else {
-	throw Error("Backend Neo4j: elementToNode type not implemented");
+	throw Error(`Backend Neo4j: elementToNode type ($node_type) not implemented`);
     }
 
     return {node:node, node_type:node_type, related_elements:related_elements};
