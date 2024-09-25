@@ -713,9 +713,9 @@ async function getFeaturedElementsByType(type, limit){
 	})();
 
 	const query_str = (() => {
-	    // since we have a limited number of OERs at this point, relax the connectivity check
-	    // for featured elements for now
-	    if (element_type == ElementType.OER) {
+	    if (element_type == ElementType.OER || element_type == ElementType.MAP) {
+		// since we have a limited number of OERs and Map elements at this point,
+		// relax the connectivity check for featured elements for now
 		return "MATCH(n:"+ element_type +") " +
 	      "RETURN n{id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), contents:n.contents}, rand() as random ORDER BY random LIMIT $limit";
 	    } else {
@@ -1278,7 +1278,7 @@ async function getDocumentationByID(id) {
  * @return {Object} List of Map of document objects. Empty list if not found or error
  */
 async function getAllDocumentation(from, size) {
-    const query_str = "MATCH (d:Documentation) RETURN d{.*} SKIP $from LIMIT $size";
+    const query_str = "MATCH (d:Documentation) RETURN d{.*} SKIP $from LIMIT $size ORDER BY d.";
     try {
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
