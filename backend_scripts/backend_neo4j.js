@@ -1278,7 +1278,7 @@ async function getDocumentationByID(id) {
  * @return {Object} List of Map of document objects. Empty list if not found or error
  */
 async function getAllDocumentation(from, size) {
-    const query_str = "MATCH (d:Documentation) RETURN d{.*} SKIP $from LIMIT $size ORDER BY d.";
+    const query_str = "MATCH (d:Documentation) RETURN d{.*} ORDER BY d.id SKIP $from LIMIT $size";
     try {
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
