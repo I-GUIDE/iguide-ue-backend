@@ -1519,7 +1519,7 @@ app.get('/api/documentation', cors(), async (req, res) => {
  *       500:
  *         description: Internal server error
  */
-app.post('/api/documentation', authenticateJWT, authorizeRole(2), async (req, res) => {
+app.post('/api/documentation', jwtCorsMiddleware, authenticateJWT, authorizeRole(2), async (req, res) => {
     const documentation = req.body;
     try {
 	const {response, documentation_id} = await n4j.registerDocumentation(documentation);
@@ -1567,7 +1567,7 @@ app.post('/api/documentation', authenticateJWT, authorizeRole(2), async (req, re
  *       500:
  *         description: Internal server error
  */
-app.put('/api/documentation/:id', authenticateJWT, authorizeRole(2), async (req, res) => {
+app.put('/api/documentation/:id', jwtCorsMiddleware, authenticateJWT, authorizeRole(2), async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     const updates = req.body;
 
@@ -1603,7 +1603,7 @@ app.put('/api/documentation/:id', authenticateJWT, authorizeRole(2), async (req,
  *       500:
  *         description: Internal server error
  */
-app.delete('/api/documentation/:id', authenticateJWT, authorizeRole(2), async (req, res) => {
+app.delete('/api/documentation/:id', jwtCorsMiddleware, authenticateJWT, authorizeRole(2), async (req, res) => {
     const doc_id = req.params['id'];
 
     try {
