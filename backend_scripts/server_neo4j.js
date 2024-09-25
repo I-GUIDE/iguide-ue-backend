@@ -1403,6 +1403,7 @@ app.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) =
  *         description: Failed to retrieve documentation
  */
 app.options('/api/documentation', cors());
+app.options('/api/documentation/:id', cors());
 app.get('/api/documentation/:id', cors(), async (req, res) => {
     const doc_id = decodeURIComponent(req.params['id']);
     try {
