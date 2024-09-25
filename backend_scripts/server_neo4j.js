@@ -1507,8 +1507,40 @@ app.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) =
  *       500:
  *         description: Failed to retrieve documentation
  */
-app.options('/api/documentation', cors());
-app.options('/api/documentation/:id', cors());
+app.options('/api/documentation', (req, res) => {
+    const method = req.header('Access-Control-Request-Method');
+    if (method === 'POST') {
+        res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+        res.header('Access-Control-Allow-Methods', 'POST');
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Credentials', 'true');
+    } else {
+        res.header('Access-Control-Allow-Origin', '*');
+        res.header('Access-Control-Allow-Methods', method);
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    }
+    res.sendStatus(204); // No content
+});
+
+app.options('/api/documentation/:id', (req, res) => {
+    const method = req.header('Access-Control-Request-Method');
+    if (method === 'PUT') {
+        res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+        res.header('Access-Control-Allow-Methods', 'PUT');
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Credentials', 'true');
+    } else if (method === 'DELETE') {
+        res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+        res.header('Access-Control-Allow-Methods', 'DELETE');
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Credentials', 'true');
+    }else {
+        res.header('Access-Control-Allow-Origin', '*');
+        res.header('Access-Control-Allow-Methods', method);
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    }
+    res.sendStatus(204); // No content
+});
 app.get('/api/documentation/:id', cors(), async (req, res) => {
     const doc_id = decodeURIComponent(req.params['id']);
     try {
