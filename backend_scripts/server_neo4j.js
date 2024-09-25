@@ -17,6 +17,8 @@ import { specs } from './swagger.js';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import * as n4j from './backend_neo4j.cjs'
+import llm_routes from './routes/llm_routes.js';
+import search_routes from './routes/search_routes.js';
 
 import { authenticateJWT, authorizeRole, generateAccessToken } from './jwtUtils.js';
 
@@ -46,6 +48,11 @@ const jwtCorsMiddleware = (req, res, next) => {
 app.use(express.json());
 app.use(cookieParser());
 dotenv.config();
+
+// Use the LLM-based conversational search route
+// app.use('/beta', llm_routes);
+// Use the advanced search route
+app.use('/api', search_routes);
 
 const os_node = process.env.OPENSEARCH_NODE;
 const os_usr = process.env.OPENSEARCH_USERNAME;
@@ -329,119 +336,7 @@ app.post('/api/elements/datasets', jwtCorsMiddleware, authenticateJWT, upload.si
     });
 });
 
-/**
- * @swagger
- * /api/search:
- *   post:
- *     deprecated: true
- *     tags: ['outdated']
- *     summary: Search for resources. (Replaced with 'GET /api/search')
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               keyword:
- *                 type: string
- *               resource_type:
- *                 type: string
- *               sort_by:
- *                 type: string
- *               order:
- *                 type: string
- *                 enum: [asc, desc]
- *               from:
- *                 type: integer
- *               size:
- *                 type: integer
- *     responses:
- *       200:
- *         description: A list of search results
- *       500:
- *         description: Error querying OpenSearch
- */
-app.options('/api/search', cors());
-app.post('/api/search', cors(), async (req, res) => {
-    // [Done] Neo4j not required. All searching shoud be from OS
-    const { keyword, resource_type, sort_by = '_score', order = 'desc', from = 0, size = 15 } = req.body;
 
-    let query = {
-	multi_match: {
-	    query: keyword,
-	    fields: [
-		'title^3',    // Boost title matches
-		'authors^3',  // Boost author matches
-		'tags^2',     // Slightly boost tag matches
-		'contents'    // Normal weight for content matches
-	    ],
-	},
-    };
-
-    if (resource_type && resource_type !== 'any') {
-	query = {
-	    bool: {
-		must: [
-		    {
-			multi_match: {
-			    query: keyword,
-			    fields: [
-				'title^3',
-				'authors^3',
-				'tags^2',
-				'contents'
-			    ],
-			},
-		    },
-		    { term: { 'resource-type': resource_type } },
-		],
-	    },
-	};
-    }
-
-    // Replace title and authors with their keyword sub-fields for sorting
-    let sortBy = sort_by;
-    if (sortBy === 'title') {
-	sortBy = 'title.keyword';
-    } else if (sortBy === 'authors') {
-	sortBy = 'authors.keyword';
-    }
-
-    try {
-	const searchParams = {
-	    index: os_index,
-	    body: {
-		from: from,
-		size: size,
-		query: query,
-	    },
-	};
-
-	// Add sorting unless sort_by is "prioritize_title_author"
-	if (sort_by !== 'prioritize_title_author') {
-	    searchParams.body.sort = [
-		{
-		    [sortBy]: {
-			order: order,
-		    },
-		},
-	    ];
-	}
-
-	const searchResponse = await client.search(searchParams);
-	const results = searchResponse.body.hits.hits.map(hit => {
-	    const { _id, _source } = hit;
-	    const { metadata, ...rest } = _source; // Remove metadata
-	    return { _id, ...rest };
-	});
-	//res.json(results);
-	res.json({elements: results, total_count:searchResponse.body.hits.total.value});
-    } catch (error) {
-	console.error('Error querying OpenSearch:', error);
-	res.status(500).json({ error: 'Error querying OpenSearch' });
-    }
-});
 /****************************************************************************
  * Elements Endpoints
  ****************************************************************************/
@@ -1624,7 +1519,7 @@ app.get('/api/documentation', cors(), async (req, res) => {
  *       500:
  *         description: Internal server error
  */
-app.post('/api/documentation', authenticateJWT, authorizeRole(2), async (req, res) => {
+app.post('/api/documentation', jwtCorsMiddleware, authenticateJWT, authorizeRole(2), async (req, res) => {
     const documentation = req.body;
     try {
 	const {response, documentation_id} = await n4j.registerDocumentation(documentation);
@@ -1672,7 +1567,7 @@ app.post('/api/documentation', authenticateJWT, authorizeRole(2), async (req, re
  *       500:
  *         description: Internal server error
  */
-app.put('/api/documentation/:id', authenticateJWT, authorizeRole(2), async (req, res) => {
+app.put('/api/documentation/:id', jwtCorsMiddleware, authenticateJWT, authorizeRole(2), async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     const updates = req.body;
 
@@ -1708,7 +1603,7 @@ app.put('/api/documentation/:id', authenticateJWT, authorizeRole(2), async (req,
  *       500:
  *         description: Internal server error
  */
-app.delete('/api/documentation/:id', authenticateJWT, authorizeRole(2), async (req, res) => {
+app.delete('/api/documentation/:id', jwtCorsMiddleware, authenticateJWT, authorizeRole(2), async (req, res) => {
     const doc_id = req.params['id'];
 
     try {
