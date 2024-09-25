@@ -50,6 +50,16 @@ const SortBy = Object.freeze({
 });
 exports.SortBy = SortBy;
 
+const Role = Object.freeze({
+    SUPER_ADMIN: 1,
+    ADMIN: 2,
+    CONTENT_MODERATOR: 3,        // can edit any contribution
+    UNRESTRICTED_CONTRIBUTOR: 4, // can contribute restricted elements such as OERs etc.
+    TRUSTED_USER: 8,             // users with .edu emails
+    UNTRUSTED_USER: 10,          // all other users
+});
+exports.Role = Role;
+
 async function testServerConnection() {
     try {
 	const serverInfo = await driver.getServerInfo();
@@ -335,10 +345,17 @@ async function getElementByID(id){
 	    }
 	} else if (this_element_type == ElementType.PUBLICATION) {
 	    // External link for Publication
-	    console.log('Fixing external link for publication');
-	    var {'external_link': external_doi_link,
-		 ...ret} = this_elem;
+	    //console.log('Fixing external link for publication');
+	    var {'external_link': external_doi_link, ...ret} = this_elem;
 	    ret['external-link-publication'] = external_doi_link;
+	} else if (this_element_type == ElementType.MAP) {
+	    // External iframe link for Publication
+	    var {'external_iframe_link': external_iframe_link, ...ret} = this_elem;
+	    if (external_iframe_link) {
+		ret['external-iframe-link'] = external_iframe_link;
+	    } else {
+		ret['external-iframe-link'] = ret['thumbnail_image'];
+	    }
 	} else {
 	    var ret = this_elem;
 	}
@@ -763,17 +780,11 @@ async function registerContributor(contributor){
 
     // (2) assign roles for new contributor
     contributor['role'] = (() => {
-	// 0: super admin
-	// 2: admin
-	// 4: premium users
-	// 6: trusted users
-	// 10: untrusted user
 	if (contributor['email'].endsWith('edu')) {
-	    // Trusted users
-	    return neo4j.int(6);
+	    return neo4j.int(Role.TRUSTED_USER);
 	}
-	// default role i.e. Untrusted user
-	return neo4j.int(10);
+	// default role
+	return neo4j.int(Role.UNTRUSTED_USER);
 	})();
     const query_str = "CREATE (c: Contributor $contr_param)";
     try{
@@ -1217,8 +1228,9 @@ async function getContributorIdForElement(e_id){
  * @return {Boolean, String} {true, documentation_id} on success OR {false, ''} on failure.
  */
 async function registerDocumentation(documentation){
-    // generate id (UUID)
-    documentation['id'] = uuidv4();
+    // documentation ID will be used in URLs, so instead of random numbers, create readable id
+    const name_id = documentation['name'].replace(/[^a-z0-9.]/gi, '-').toLowerCase();
+    documentation['id'] = name_id; //uuidv4();
 
     const query_str = "CREATE (d: Documentation $doc_param)";
     try{

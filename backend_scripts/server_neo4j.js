@@ -776,8 +776,9 @@ app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, async (req, res) =
     try {
         console.log(resource['resource-type']);
 	console.log(req.user);
-        // Check if the resource type is "oer" and user's role is greater than 10
-        if (resource['resource-type'] === 'oer' && !(req.user.role <= 4)) {
+        // Check if the resource type is "oer" and user have enough permission to add OER
+        if (resource['resource-type'] === 'oer' &&
+	    !(req.user.role <= n4j.Role.UNRESTRICTED_CONTRIBUTOR)) {
             console.log(req.user, " blocked by role")
             return res.status(403).json({ message: 'Forbidden: You do not have permission to submit OER elements.' });
         }else{
@@ -929,8 +930,7 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
 		console.log('This element is owned by the user');
 		// this element is owned by the user sending update request
 		return true;
-	    } else if (req.user.role <=2) {
-		console.log('This update request is from an admin or super-admin');
+	    } else if (req.user.role <= n4j.Role.CONTENT_MODERATOR) {
 		// user sending update request is admin or super admin
 		return true;
 	    }
@@ -1483,7 +1483,7 @@ app.get('/api/documentation', cors(), async (req, res) => {
 	  'size': size} = req.query;
 
     try {
-	const documentation = await n4j.getAllDocumentation(from, size);	
+	const documentation = await n4j.getAllDocumentation(from, size);
 	if (documentation.length == 0){
 	    return res.status(404).json({ message: 'No Documentation found' });
 	}

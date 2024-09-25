@@ -89,6 +89,55 @@ async function readData(yaml_file){
     }
 }
 
-readData('../data/map_elements.yml')
-    .then(d => console.log(d))
-    .catch(error => console.error(error));
+async function insert_map_from_neo4j_to_OS() {
+    let sort_by = 'title';
+    let order = 'asc';
+
+    let resources = await n4j_server.getElementsByType('map', 0, 100, sort_by, order);
+    for (let map_element of resources){
+	console.log(map_element['id']);
+
+	let os_element = {
+            title: map_element['title'],
+            contents: map_element['contents'],
+            authors: map_element['authors'],
+            tags: map_element['tags'],
+            'resource-type': map_element['resource-type'],
+            'thumbnail-image': map_element['thumbnail-image']
+        };
+
+	os_element['contributor'] = 'Alexander Christopher Michels';
+
+	console.log('Indexing element: ' + os_element);
+        const response = await client.index({
+            id: map_element['id'],
+            index: os_index,
+            body: os_element,
+            refresh: true,
+        });
+        console.log(response['body']['result']);
+    }
+}
+
+function test_role() {
+    let role = n4j_server.Role.TRUSTED_USER;
+    console.log(role);
+
+    let user_role = 1;
+    
+    if (user_role <= n4j_server.Role.ADMIN) {
+	console.log('user is admin ...');
+    } else {
+	console.log('non-admin user');
+    }
+}
+
+test_role();
+
+// readData('../data/map_elements.yml')
+//     .then(d => console.log(d))
+//     .catch(error => console.error(error));
+
+// insert_map_from_neo4j_to_OS()
+//     .then(d => console.log(d))
+//     .catch(error => console.error(error));
