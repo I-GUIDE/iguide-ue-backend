@@ -44,7 +44,7 @@ async function performSearchWithMemory(userQuery, memoryId) {
                 query: {
                     multi_match: {
                         query: userQuery,
-                        fields: ["authors", "tags", "contents", "title", "contributors"],
+                        fields: ["authors", "contents", "title", "contributors"],
                         type: "best_fields" // "best_fields" selects the most relevant field for matching.
                     }
                 },
@@ -191,26 +191,29 @@ router.post('/llm/search', cors(), async (req, res) => {
 
         // Perform the search with the provided or newly created memory ID
         const searchResponse = await performSearchWithMemory(userQuery, finalMemoryId);
+        // handle no hits
+        const hits = searchResponse.hits.hits || [];
+        const totalHits = searchResponse.hits.total.value || 0;
 
-        // Limit the number of elements to at most 10 and handle null values
-        const elements = searchResponse.body.hits.hits
-            .slice(0, 10)  // Restrict to the first 10 elements
-            .map(hit => {
-                const source = hit._source;
-                return {
-                    ...source,
-                    tags: source.hasOwnProperty('tags') ? source.tags : null, // Return null if tags don't exist
-                    authors: source.authors || null,  // Example for authors, leave it as null if not present
-                    // Handle other fields similarly if needed
-                };
-            });
+        // Limit the number of elements to at most 10 and handle null fields
+        const elements = hits.slice(0, 10).map(hit => {
+            const source = hit._source;
+            return {
+                ...source,
+                tags: source.tags === undefined || source.tags === null ? null : source.tags, // Set to null if undefined or null
+                authors: source.authors || null,  // Similar handling for other fields
+                contents: source.contents || null,  // Ensuring null for missing contents
+                title: source.title || null,  // Ensuring null for missing title
+                contributor: source.contributor || null  // Ensuring null for missing contributor
+            };
+        });
 
         // Format the response
         const formattedResponse = {
-            answer: searchResponse.body.ext.retrieval_augmented_generation.answer,
-            message_id: searchResponse.body.ext.retrieval_augmented_generation.message_id,
-            elements: elements,  // Limited to 10 elements
-            count: elements.length  // Count of elements (max 10)
+            answer: searchResponse.ext.retrieval_augmented_generation?.answer || null, // Handle missing answer gracefully
+            message_id: searchResponse.ext.retrieval_augmented_generation?.message_id || null, // Handle missing message ID gracefully
+            elements: elements.length > 0 ? elements : [], // Return empty array if no elements
+            count: totalHits // Return the total number of hits
         };
 
         // Send the formatted response to the user
