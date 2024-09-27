@@ -192,7 +192,20 @@ router.post('/llm/search', cors(), async (req, res) => {
         // Perform the search with the provided or newly created memory ID
         const searchResponse = await performSearchWithMemory(userQuery, finalMemoryId);
 
-        res.json(searchResponse);
+        const elements = searchResponse.body.hits.hits
+            .slice(0, 10)  // Restrict to the first 10 elements
+            .map(hit => hit._source); // Extracting the _source field from each hit
+
+        // Format the response
+        const formattedResponse = {
+            answer: searchResponse.body.ext.retrieval_augmented_generation.answer,
+            message_id: searchResponse.body.ext.retrieval_augmented_generation.message_id,
+            elements: elements,  // Limited to 10 elements
+            count: elements.length  // Count of elements (max 10)
+        };
+
+        // Send the formatted response to the user
+        res.json(formattedResponse);
     } catch (error) {
         console.error('Error performing conversational search:', error);
         res.status(500).json({ error: 'Error performing conversational search' });
