@@ -192,12 +192,16 @@ router.post('/llm/search', cors(), async (req, res) => {
         // Perform the search with the provided or newly created memory ID
         const searchResponse = await performSearchWithMemory(userQuery, finalMemoryId);
         // handle no hits
-        const hits = searchResponse.hits.hits || [];
+        const hits = searchResponse.hits.hits.map(hit => ({
+            _id: hit._id,  // Include the _id field
+            ...hit._source // Include the _source fields
+        }));
+        //const hits = searchResponse.hits.hits || [];
         //const totalHits = searchResponse.hits.total.value || 0;
 
         // Limit the number of elements to at most 10 and handle null fields
         const elements = hits.slice(0, 10).map(hit => {
-            const source = hit._source;
+            const source = hit;
             return {
                 ...source,
                 tags: source.tags === undefined || source.tags === null ? null : source.tags, // Set to null if undefined or null
