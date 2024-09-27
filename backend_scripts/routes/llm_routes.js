@@ -193,7 +193,7 @@ router.post('/llm/search', cors(), async (req, res) => {
         const searchResponse = await performSearchWithMemory(userQuery, finalMemoryId);
         // handle no hits
         const hits = searchResponse.hits.hits || [];
-        const totalHits = searchResponse.hits.total.value || 0;
+        //const totalHits = searchResponse.hits.total.value || 0;
 
         // Limit the number of elements to at most 10 and handle null fields
         const elements = hits.slice(0, 10).map(hit => {
@@ -213,7 +213,7 @@ router.post('/llm/search', cors(), async (req, res) => {
             answer: searchResponse.ext.retrieval_augmented_generation?.answer || null, // Handle missing answer gracefully
             message_id: searchResponse.ext.retrieval_augmented_generation?.message_id || null, // Handle missing message ID gracefully
             elements: elements.length > 0 ? elements : [], // Return empty array if no elements
-            count: totalHits // Return the total number of hits
+            count: elements.length // Return the total number of hits
         };
 
         // Send the formatted response to the user
