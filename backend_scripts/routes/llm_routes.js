@@ -192,9 +192,18 @@ router.post('/llm/search', cors(), async (req, res) => {
         // Perform the search with the provided or newly created memory ID
         const searchResponse = await performSearchWithMemory(userQuery, finalMemoryId);
 
+        // Limit the number of elements to at most 10 and handle null values
         const elements = searchResponse.body.hits.hits
             .slice(0, 10)  // Restrict to the first 10 elements
-            .map(hit => hit._source); // Extracting the _source field from each hit
+            .map(hit => {
+                const source = hit._source;
+                return {
+                    ...source,
+                    tags: source.hasOwnProperty('tags') ? source.tags : null, // Return null if tags don't exist
+                    authors: source.authors || null,  // Example for authors, leave it as null if not present
+                    // Handle other fields similarly if needed
+                };
+            });
 
         // Format the response
         const formattedResponse = {
