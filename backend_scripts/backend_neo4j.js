@@ -31,7 +31,7 @@ const ElementType = Object.freeze({
     PUBLICATION: "Publication",
     OER: "Oer", // Open Educational Content
     MAP: "Map",
-    Documentation: "Documentation",
+    //Documentation: "Documentation",
 });
 exports.ElementType = ElementType;
 
@@ -226,16 +226,65 @@ async function createLinkUserLikedElement(user_id, element_id){
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
 async function getElementByID(id){
-    // [Bug] If an element 'n' with given 'id' does not have any related element,
-    // this query does not return anything
-    // const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param})-[:RELATED]-(r) " +
-    // 	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as related_elems, n, c  " +
-    // 	  "RETURN n{.*, related_elements: related_elems, element_type:LABELS(n)[0], created_by:c.openid}";
-    // [Fixed]
-    const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
-	  "OPTIONAL MATCH (n)-[:RELATED]-(r) " +
-	  "WITH COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) as related_elems, n, c  " +
-	  "RETURN n{.*, related_elements: related_elems, `resource-type`:TOLOWER(LABELS(n)[0]), contributor: {id:c.id, name:(c.first_name + ' ' + c.last_name), `avatar-url`:c.avatar_url}}";
+    // [Fixed] Fixes the bug where nothing is returned in case element does not have any relations
+    // const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
+    // 	  "OPTIONAL MATCH (n)-[:RELATED]-(r) " +
+    // 	  "WITH COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) as related_elems, n, c  " +
+    // 	  "RETURN n{.*, related_elements: related_elems, `resource-type`:TOLOWER(LABELS(n)[0]), contributor: {id:c.id, name:(c.first_name + ' ' + c.last_name), `avatar-url`:c.avatar_url}}";
+
+    // [Upadte] Query with related elements divided into separate lists for every type
+    // no need to do manual related elements separation
+    // This can be a little overwhelming, so please bear with me.
+    // An example of a complete query_str
+    //
+    // MATCH (c)-[:CONTRIBUTED]-(n{id:'d95f1b41-e068-442b-92a1-8482a34cc502'})
+    // OPTIONAL MATCH (n)-[:RELATED]-(related)
+    // WITH COLLECT (related) as rel_elems,n,c
+    // CALL {
+    //     WITH rel_elems
+    //     UNWIND rel_elems as r
+    //     MATCH(r) WHERE TOLOWER(LABELS(r)[0])='dataset'
+    //     RETURN COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image}) AS related_datasets
+    // }
+    // CALL {
+    //     WITH rel_elems
+    //     UNWIND rel_elems as r
+    //     MATCH(r) WHERE TOLOWER(LABELS(r)[0])='notebook'
+    //     RETURN COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image}) AS related_notebooks
+    // }
+    // CALL {
+    //     WITH rel_elems
+    //     UNWIND rel_elems as r
+    //     MATCH(r) WHERE TOLOWER(LABELS(r)[0])='oer'
+    //     RETURN COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image}) AS related_oers
+    // }
+    // RETURN n{.*,`resource-type`:TOLOWER(LABELS(n)[0]), contributor: {id:c.id, name:(c.first_name + ' ' + c.last_name), `avatar-url`:c.avatar_url}, related_datasets:related_datasets, related_notebooks:related_notebooks, related_oers:related_oers}
+    //
+    const match_query =
+	  "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
+	  "OPTIONAL MATCH (n)-[:RELATED]-(related) " +
+	  "WITH COLLECT (related) as rel_elems,n,c ";
+
+    // for every ElementType, create a subquery
+    var call_subquery = "";
+    var ret_query = "RETURN n{.*,`resource-type`:TOLOWER(LABELS(n)[0]), contributor: {id:c.id, name:(c.first_name + ' ' + c.last_name), `avatar-url`:c.avatar_url}";
+
+    for (let elem_type in ElementType){
+	elem_type = elem_type.toLowerCase();
+	call_subquery += "CALL { WITH rel_elems UNWIND rel_elems as r " +
+	    "MATCH(r) WHERE TOLOWER(LABELS(r)[0])='" + elem_type + "'" +
+	    "RETURN COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image}) " +
+	    "AS related_" + elem_type + "s} ";
+
+	ret_query += ",`related-"+elem_type+"s`:related_"+elem_type+"s";
+    }
+    ret_query += "}";
+
+    // create one query string from multiple parts
+    const query_str = match_query + call_subquery + ret_query;
+
+    // uncomment following to take a look at the query string
+    //console.log(query_str);
 
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
@@ -264,63 +313,53 @@ async function getElementByID(id){
 		     {database: process.env.NEO4J_DB});
 
 	await tx.commit();
-	// Original
-	// ret['related_nb'] = []
-	// ret['related_ds'] = []
-	// ret['related_oer'] = []
-	// ret['related_pub'] = []
 
-	// [ToDo] should be removed
-	this_elem['related-notebooks'] = []
-	this_elem['related-datasets'] = []
-	this_elem['related-oers'] = []
-	this_elem['related-publications'] = []
+	// // related elements should be divided into separate lists based on their types
+	// this_elem['related-notebooks'] = []
+	// this_elem['related-datasets'] = []
+	// this_elem['related-oers'] = []
+	// this_elem['related-publications'] = []
 
-	// [ToDo] Current frontend expects only IDs for every related element and
-	// makes a call to get title of every related element. Should be changed
-	// A better approach will be to return ID, title, and type of all related elements
-	//as a result of this one query.
-	// [ToDo] Change `rel_elem.id` to return everything for related elem
-	for (elem of related_elements){
-	    if (elem['id'] == null || elem['resource-type'] == null) continue;
-	    const element_type = parseElementType(elem['resource-type']);
+	// for (elem of related_elements){
+	//     if (elem['id'] == null || elem['resource-type'] == null) continue;
+	//     const element_type = parseElementType(elem['resource-type']);
 
-	    switch(element_type){
-	    case ElementType.DATASET:{
-		let {element_type:_, ...rel_elem} = elem;
-		//this_elem['related-datasets'].push(rel_elem['id']);
-		this_elem['related-datasets'].push(rel_elem);
-		break;
-	    }
-	    case ElementType.NOTEBOOK:{
-		let {element_type:_, ...rel_elem} = elem;
-		//this_elem['related-notebooks'].push(rel_elem['id']);
-		this_elem['related-notebooks'].push(rel_elem);
-		break;
-	    }
-	    case ElementType.OER:{
-		let {element_type:_, ...rel_elem} = elem;
-		//this_elem['related-oers'].push(rel_elem['id']);
-		this_elem['related-oers'].push(rel_elem);
-		break;
-	    }
-	    case ElementType.PUBLICATION:{
-		let {element_type:_, ...rel_elem} = elem;
-		//this_elem['related-publications'].push(rel_elem['id']);
-		this_elem['related-publications'].push(rel_elem);
-		break;
-	    }
-	    case "Author":{
-		//ignore
-		break;
-	    }
-	    default:
-		// should never reach here since error thrown in parseElementType
-		throw Error("Server Neo4j: Related element type not implemented: " +
-			    elem['resource-type']);
-		break;
-	    }
-	}
+	//     switch(element_type){
+	//     case ElementType.DATASET:{
+	// 	let {element_type:_, ...rel_elem} = elem;
+	// 	//this_elem['related-datasets'].push(rel_elem['id']);
+	// 	this_elem['related-datasets'].push(rel_elem);
+	// 	break;
+	//     }
+	//     case ElementType.NOTEBOOK:{
+	// 	let {element_type:_, ...rel_elem} = elem;
+	// 	//this_elem['related-notebooks'].push(rel_elem['id']);
+	// 	this_elem['related-notebooks'].push(rel_elem);
+	// 	break;
+	//     }
+	//     case ElementType.OER:{
+	// 	let {element_type:_, ...rel_elem} = elem;
+	// 	//this_elem['related-oers'].push(rel_elem['id']);
+	// 	this_elem['related-oers'].push(rel_elem);
+	// 	break;
+	//     }
+	//     case ElementType.PUBLICATION:{
+	// 	let {element_type:_, ...rel_elem} = elem;
+	// 	//this_elem['related-publications'].push(rel_elem['id']);
+	// 	this_elem['related-publications'].push(rel_elem);
+	// 	break;
+	//     }
+	//     case "Author":{
+	// 	//ignore
+	// 	break;
+	//     }
+	//     default:
+	// 	// should never reach here since error thrown in parseElementType
+	// 	throw Error("Server Neo4j: Related element type not implemented: " +
+	// 		    elem['resource-type']);
+	// 	break;
+	//     }
+	// }
 
 	//console.log('Testing ...' + this_elem['resource-type']);
 	//const this_element_type = parseElementType(this_elem['resource-type']);
@@ -365,7 +404,8 @@ async function getElementByID(id){
 	    ret['click-count'] = parse64BitNumber(ret['click_count']);
 	    delete ret['click_count'];
 	} else {
-	    // to handle corner cases, when click_count is not set. May happen for legacy elements added before summer school 2024
+	    // to handle corner cases, when click_count is not set.
+	    // May happen for legacy elements added before summer school 2024
 	    // for all such elements, this will happen the first time only
 	    // Sept, 2024: Should NEVER reach here
 	    ret['click-count'] = 0;
@@ -378,11 +418,7 @@ async function getElementByID(id){
 	    delete ret['updated_at'];
 	}
 
-	// [ToDo] should be removed
-	//ret['_id'] = ret['id']
-	//delete ret['id'];
-	//ret['resource-type'] = ret['element_type'].toLowerCase();
-	//delete ret['element_type'];
+	// frontend expects property names in dash-case, convert snake-case to dash-case
 	ret['thumbnail-image'] = ret['thumbnail_image'];
 	delete ret['thumbnail_image'];
 
@@ -422,25 +458,6 @@ async function getElementByID(id){
  */
 async function getElementsByType(type, from, size, sort_by=SortBy.TITLE, order="DESC"){
 
-    // // capitalize first letter of data type
-    // const node_type = type[0].toUpperCase() + type.slice(1);
-    // if (node_type == ElementType.NOTEBOOK ||
-    // 	node_type == ElementType.DATASET ||
-    // 	node_type == ElementType.PUBLICATION ||
-    // 	node_type == ElementType.OER
-    //    ){
-    // 	// legit element type
-    // } else {
-    // 	throw Error("Server Neo4j: Element type not implemented");
-    // }
-
-    // [ToDo] Just to make things work with frontend (should be removed)
-    // const query_str = "MATCH (n:"+ node_type +")-[:CONTRIBUTED]-(r) " +
-    // 	  "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)] } " +
-    // 	  "ORDER BY n.title " +
-    // 	  "SKIP $from " +
-    // 	  "LIMIT $size";
-
     try{
 	const node_type = parseElementType(type);
 	const order_by = parseSortBy(sort_by);
@@ -479,18 +496,6 @@ async function getElementsByType(type, from, size, sort_by=SortBy.TITLE, order="
  * @return {int} Intger count of given element type. -1 in case of error
  */
 async function getElementsCountByType(type){
-
-    // // capitalize first letter of data type
-    // const node_type = type[0].toUpperCase() + type.slice(1);
-    // if (node_type == ElementType.NOTEBOOK ||
-    // 	node_type == ElementType.DATASET ||
-    // 	node_type == ElementType.PUBLICATION ||
-    // 	node_type == ElementType.OER
-    //    ){
-    // 	// legit element type
-    // } else {
-    // 	throw Error("Server Neo4j: Element type not implemented");
-    // }
 
     try{
 
@@ -585,13 +590,6 @@ async function getElementsCountByContributor(id){
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
 async function getElementsByTag(tag, from, size, sort_by=SortBy.TITLE, order="DESC"){
-    // const query_str = "MATCH (n)-[:CONTRIBUTED]-(r) " +
-    // 	  "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) )" +
-    // 	  "RETURN n{_id: n.id, title:n.title, contents:n.contents, tags:n.tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)] } " +
-    // 	  "ORDER BY n.title " +
-    // 	  "SKIP $from " +
-    // 	  "LIMIT $size";
-
     try{
 	const order_by = parseSortBy(sort_by);
 	const query_str = "MATCH (n)-[:CONTRIBUTED]-(c) " +
@@ -651,16 +649,10 @@ async function getElementsCountByTag(tag){
  * @retrurn {Object[]} Array of featured objects. Empty array if no featrued elements found or error
  */
 async function getFeaturedElements(){
-    // Information required for featured elements by the frontend?
-    // id, title, thumbnail, type
 
     // Original query (should be used)
     // const query_str = "MATCH (n{featured:True})-[:CONTRIBUTED]-(r) " +
     // 	  "RETURN n{id: n.id, title:n.title, thumbnail_image:n.thumbnail_image, element_type:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)]}";
-
-    // [ToDo] Just to make things work with frontend (should be removed)
-    // const query_str = "MATCH (n{featured:True})-[:CONTRIBUTED]-(r) " +
-    // 	  "RETURN n{_id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:LABELS(n)[0], authors:[(r.first_name + ' ' + r.last_name)]}";
 
     // For dynamically loading featured/highlight elements
     const rel_count = 2; // threshold number of related elements for a given element to determine if it is featured
@@ -870,36 +862,7 @@ async function setContributorAvatar(id, avatar_url){
 
     return {result: ret, old_avatar_url:old_url};
 }
-// /**
-//  * DEPRECATED. Use getContributorByID() instead
-//  * Get contributor profile by OpenID with all related content
-//  * @param {string} id
-//  * @return {Object} Map of object with given ID. Empty map if ID not found or error
-//  */
-// async function getContributorProfileByID(openid){
-//     // This is not working -
-//     // const query_str = "MATCH (c:Contributor{openid:$id_param})-[:CONTRIBUTED]-(r) " +
-//     // 	  "WITH COLLECT({id:r.id, title:r.title, element_type:LABELS(r)[0]}) as contributed_elems, c " +
-//     // 	  "RETURN c{.*, contributed_elements: contributed_elems} ";
 
-
-//     try {
-// 	const {records, summary} =
-// 	      await driver.executeQuery(query_str,
-// 					{id_param: openid},
-// 					{database: process.env.NEO4J_DB});
-// 	if (records.length <= 0){
-// 	    // Query returned no match for given ID
-// 	    return {};
-// 	} else if (records.length > 1){
-// 	    // should never reach here since ID is unique
-// 	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID: " + openid);
-// 	}
-// 	return records[0]['_fields'][0];
-//     } catch(err){console.log('Error in query: '+ err);}
-//     // something went wrong
-//     return {};
-// }
 /**
  * Get contributor by ID without any related information
  * @param {string} id
@@ -924,7 +887,6 @@ async function getContributorByID(id){
 	contributor['role'] = parse64BitNumber(contributor['role']);
 
 	return contributor;
-	//return records[0]['_fields'][0];
     } catch(err){console.log('Error in query: '+ err);}
     // something went wrong
     return {};
@@ -951,12 +913,6 @@ async function checkContributorByID(id){
 }
 
 async function updateElement(id, element){
-
-    // let{metadata:_,
-    // 	'resource-type': node_type,
-    // 	'related-resources': related_elements,
-    // 	...node
-    //    } = element;
 
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
@@ -1263,7 +1219,8 @@ async function getDocumentationByID(id) {
 	    return {};
 	} else if (records.length > 1){
 	    // should never reach here since ID is unique
-	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID:" + id);
+	    console.warn(`Server Neo4j: ID should be unique, query returned multiple results for given ID: $id`);
+	    //throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID:" + id);
 	}
 	const documentation = records[0]['_fields'][0];
 	return documentation;
