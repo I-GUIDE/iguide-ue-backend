@@ -244,19 +244,19 @@ async function getElementByID(id){
     //     WITH rel_elems
     //     UNWIND rel_elems as r
     //     MATCH(r) WHERE TOLOWER(LABELS(r)[0])='dataset'
-    //     RETURN COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image}) AS related_datasets
+    //     RETURN COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) AS related_datasets
     // }
     // CALL {
     //     WITH rel_elems
     //     UNWIND rel_elems as r
     //     MATCH(r) WHERE TOLOWER(LABELS(r)[0])='notebook'
-    //     RETURN COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image}) AS related_notebooks
+    //     RETURN COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) AS related_notebooks
     // }
     // CALL {
     //     WITH rel_elems
     //     UNWIND rel_elems as r
     //     MATCH(r) WHERE TOLOWER(LABELS(r)[0])='oer'
-    //     RETURN COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image}) AS related_oers
+    //     RETURN COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) AS related_oers
     // }
     // RETURN n{.*,`resource-type`:TOLOWER(LABELS(n)[0]), contributor: {id:c.id, name:(c.first_name + ' ' + c.last_name), `avatar-url`:c.avatar_url}, related_datasets:related_datasets, related_notebooks:related_notebooks, related_oers:related_oers}
     //
@@ -271,9 +271,11 @@ async function getElementByID(id){
 
     for (let elem_type in ElementType){
 	elem_type = elem_type.toLowerCase();
+	// NOTE: `resource-type` may seem redundant here but it is NOT. Frontend is using it for
+	// showing related element types, updating elements etc.
 	call_subquery += "CALL { WITH rel_elems UNWIND rel_elems as r " +
 	    "MATCH(r) WHERE TOLOWER(LABELS(r)[0])='" + elem_type + "'" +
-	    "RETURN COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image}) " +
+	    "RETURN COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) " +
 	    "AS related_" + elem_type + "s} ";
 
 	ret_query += ",`related-"+elem_type+"s`:related_"+elem_type+"s";
