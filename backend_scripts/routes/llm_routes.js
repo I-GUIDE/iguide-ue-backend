@@ -39,7 +39,7 @@ async function performSearchWithMemory(userQuery, memoryId) {
     try {
         const searchResponse = await client.search({
             index: process.env.OPENSEARCH_INDEX,
-            search_pipeline: 'rag_pipeline', //Specify the optional search pipeline
+            search_pipeline: 'rag_pipeline_local', //Specify the optional search pipeline
             body: {
                 query: {
                     multi_match: {
