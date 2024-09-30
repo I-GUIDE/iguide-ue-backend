@@ -988,15 +988,19 @@ async function generateQueryStringForRelatedElements(related_elements){
 	// query_params["id"+i] = related_elem['id'];
 
 	// get related elements based on title
-	if (related_elem['type'] == 'notebook'){
-	    query_match += "MATCH(to"+i+":Notebook{title:$title"+i+"}) ";
-	} else if (related_elem['type'] == 'dataset') {
-	    query_match += "MATCH(to"+i+":Dataset{title:$title"+i+"}) ";
-	} else if (related_elem['type'] == 'publication') {
-	    query_match += "MATCH(to"+i+":Publication{title:$title"+i+"}) ";
-	} else if (related_elem['type'] == 'oer') {
-	    query_match += "MATCH(to"+i+":Oer{title:$title"+i+"}) ";
-	}
+	// if (related_elem['type'] == 'notebook'){
+	//     query_match += "MATCH(to"+i+":Notebook{title:$title"+i+"}) ";
+	// } else if (related_elem['type'] == 'dataset') {
+	//     query_match += "MATCH(to"+i+":Dataset{title:$title"+i+"}) ";
+	// } else if (related_elem['type'] == 'publication') {
+	//     query_match += "MATCH(to"+i+":Publication{title:$title"+i+"}) ";
+	// } else if (related_elem['type'] == 'oer') {
+	//     query_match += "MATCH(to"+i+":Oer{title:$title"+i+"}) ";
+	// }
+
+	let element_type = parseElementType(related_elem['type']);
+	query_match += "MATCH(to"+i+":"+element_type+"{title:$title"+i+"}) ";
+
 	query_merge += "MERGE (n)-[:RELATED]->(to"+i+") ";
 	query_params["title"+i] = related_elem['title'];
     }
