@@ -50,12 +50,9 @@ async function performSearchWithMemory(userQuery, memoryId) {
                 },
                 ext: {
                     generative_qa_parameters: {
-                        llm_model: "gpt-3.5-turbo", 
+                        llm_model: "llama3:latest", 
                         llm_question: userQuery,
-                        memory_id: memoryId, // Pass the memory ID here
-                        context_size: 5,
-                        message_size: 5,
-                        timeout: 15
+                        memory_id: memoryId
                     }
                 }
             }
