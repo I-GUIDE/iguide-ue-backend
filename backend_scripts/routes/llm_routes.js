@@ -44,7 +44,7 @@ async function performSearchWithMemory(userQuery, memoryId) {
                 query: {
                     multi_match: {
                         query: userQuery,
-                        fields: ["authors", "contents", "title", "contributors"],
+                        fields: ["authors^2", "contents", "title^3", "contributors^2"],
                         type: "best_fields" // "best_fields" selects the most relevant field for matching.
                     }
                 },
@@ -189,7 +189,7 @@ router.post('/llm/search', cors(), async (req, res) => {
         // Perform the search with the provided or newly created memory ID
         const searchResponse = await performSearchWithMemory(userQuery, finalMemoryId);
         // handle no hits
-        const scoreThreshold = 4.0;  // Adjust the threshold as needed
+        const scoreThreshold = 5.0;  // Adjust the threshold as needed
         const hits = searchResponse.hits.hits
             .filter(hit => hit._score >= scoreThreshold)  // Filter by score
             .map(hit => ({
