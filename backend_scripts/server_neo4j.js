@@ -892,7 +892,7 @@ app.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
  * @swagger
  * /api/elements/{id}:
  *   put:
- *     summary: Update the user document
+ *     summary: Update the element with given ID
  *     tags: ['elements']
  *     parameters:
  *       - in: path
@@ -900,7 +900,7 @@ app.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
  *         required: true
  *         schema:
  *           type: string
- *         description: The id of the elemnt
+ *         description: The id of the element
  *     requestBody:
  *       required: true
  *       content:
@@ -964,11 +964,11 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
 	    //console.log(response['body']['result']);
 	    res.json({ message: 'Element updated successfully', result: response });
 	} else {
-	    console.log('Error updating user');
-	    res.json({ message: 'Error updating element', result: response });
+	    console.log('Error updating element');
+	    res.status(500).json({ message: 'Error updating element', result: response });
 	}
     } catch (error) {
-	console.error('Error updating user:', error);
+	console.error('Error updating element:', error);
 	res.status(500).json({ message: 'Internal server error' });
     }
 });

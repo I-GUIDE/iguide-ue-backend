@@ -401,45 +401,68 @@ async function getElementByID(id){
 	    var ret = this_elem;
 	}
 
+	// frontend expects key names with '-', convert all '_' to '-'
+	ret = Object.fromEntries(
+	    Object.entries(ret).map(([key, value]) =>
+		[`${key}`.replaceAll("_","-"), value]
+	    )
+	);
+
 	// handle 64-bit numbers returned from neo4j
-	if (ret['click_count']){
-	    ret['click-count'] = parse64BitNumber(ret['click_count']);
-	    delete ret['click_count'];
+	if (ret['click-count']){
+	    ret['click-count'] = parse64BitNumber(ret['click-count']);
 	} else {
 	    // to handle corner cases, when click_count is not set.
 	    // May happen for legacy elements added before summer school 2024
 	    // for all such elements, this will happen the first time only
 	    // Sept, 2024: Should NEVER reach here
-	    ret['click-count'] = 0;
+	    //ret['click-count'] = 0;
+	    throw Error("Server Neo4j: Every element should have click_count");
 	}
 	// handle datetime values for created_at and updated_at properties
-	ret['created-at'] = parseDate(ret['created_at']);
-	delete ret['created_at'];
-	if (ret['updated_at']){
-	    ret['updated-at'] = parseDate(ret['updated_at']);
-	    delete ret['updated_at'];
+	ret['created-at'] = parseDate(ret['created-at']);
+	if (ret['updated-at']){
+	    ret['updated-at'] = parseDate(ret['updated-at']);
 	}
 
-	// frontend expects property names in dash-case, convert snake-case to dash-case
-	ret['thumbnail-image'] = ret['thumbnail_image'];
-	delete ret['thumbnail_image'];
+	// if (ret['click_count']){
+	//     ret['click-count'] = parse64BitNumber(ret['click_count']);
+	//     delete ret['click_count'];
+	// } else {
+	//     // to handle corner cases, when click_count is not set.
+	//     // May happen for legacy elements added before summer school 2024
+	//     // for all such elements, this will happen the first time only
+	//     // Sept, 2024: Should NEVER reach here
+	//     ret['click-count'] = 0;
+	// }
+	// // handle datetime values for created_at and updated_at properties
+	// ret['created-at'] = parseDate(ret['created_at']);
+	// delete ret['created_at'];
+	// if (ret['updated_at']){
+	//     ret['updated-at'] = parseDate(ret['updated_at']);
+	//     delete ret['updated_at'];
+	// }
 
-	if ('direct_download_link' in ret){
-	    ret['direct-download-link'] = ret['direct_download_link'];
-	    delete ret['direct_download_link'];
-	}
-	if ('external_link' in ret){
-	    ret['external-link'] = ret['external_link'];
-	    delete ret['external_link'];
-	}
-	if ('notebook_file' in ret){
-	    ret['notebook-file'] = ret['notebook_file'];
-	    delete ret['notebook_file'];
-	}
-	if ('notebook_repo' in ret) {
-	    ret['notebook-repo'] = ret['notebook_repo'];
-	    delete ret['notebook_repo'];
-	}
+	// // frontend expects property names in dash-case, convert snake-case to dash-case
+	// ret['thumbnail-image'] = ret['thumbnail_image'];
+	// delete ret['thumbnail_image'];
+
+	// if ('direct_download_link' in ret){
+	//     ret['direct-download-link'] = ret['direct_download_link'];
+	//     delete ret['direct_download_link'];
+	// }
+	// if ('external_link' in ret){
+	//     ret['external-link'] = ret['external_link'];
+	//     delete ret['external_link'];
+	// }
+	// if ('notebook_file' in ret){
+	//     ret['notebook-file'] = ret['notebook_file'];
+	//     delete ret['notebook_file'];
+	// }
+	// if ('notebook_repo' in ret) {
+	//     ret['notebook-repo'] = ret['notebook_repo'];
+	//     delete ret['notebook_repo'];
+	// }
 
 	return ret;
 	//return records[0]['_fields'][0];
@@ -1061,6 +1084,13 @@ async function elementToNode(element, generate_id=true){
 	throw Error(`Backend Neo4j: elementToNode type ($node_type) not implemented`);
     }
 
+    // key names from frontend use '-', convert all to '_'
+    node = Object.fromEntries(
+	Object.entries(node).map(([key, value]) =>
+	    [`${key}`.replaceAll("-","_"), value]
+	)
+    );
+
     return {node:node, node_type:node_type, related_elements:related_elements};
 }
 
@@ -1086,35 +1116,9 @@ async function registerElement(contributor_id, element){
     // add node (element info) as parameter
     query_params = {node_param: node, ...query_params};
 
-    // var query_match = "";
-    // var query_merge = "";
-    // var query_params = {node_param: node}
-
-    // // (3) create relations based on related-elements
-    // // [ToDo] To avoid full DB scan, if we know the type of related elements, the query
-    // // can be updated to search for related ID with a lable as type
-    // for (let [i, related_elem] of related_elements.entries()){
-    // 	// query_match += "MATCH(to"+i+"{id:$id"+i+"}) ";
-    // 	// query_merge += "MERGE (n)-[:RELATED]->(to"+i+") ";
-    // 	// query_params["id"+i] = related_elem['id'];
-
-    // 	// get related elements based on title
-    // 	if (related_elem['type'] == 'notebook'){
-    // 	    query_match += "MATCH(to"+i+":Notebook{title:$title"+i+"}) ";
-    // 	} else if (related_elem['type'] == 'dataset') {
-    // 	    query_match += "MATCH(to"+i+":Dataset{title:$title"+i+"}) ";
-    // 	} else if (related_elem['type'] == 'publication') {
-    // 	    query_match += "MATCH(to"+i+":Publication{title:$title"+i+"}) ";
-    // 	} else if (related_elem['type'] == 'oer') {
-    // 	    query_match += "MATCH(to"+i+":Oer{title:$title"+i+"}) ";
-    // 	}
-    // 	query_merge += "MERGE (n)-[:RELATED]->(to"+i+") ";
-    // 	query_params["title"+i] = related_elem['title'];
-
-    // }
-
-    // (4) create CONTRIBUTED_BY relation with contributor_id
+    // (3) create relations based on related-elements
     query_match += contributorMatchQuery(contributor_id)+" "; //"MATCH(c:Contributor{id:$contrib_id}) ";
+    // (4) create CONTRIBUTED_BY relation with contributor_id
     query_merge += "MERGE (c)-[:CONTRIBUTED]->(n) ";
     query_params['contrib_id'] = contributor_id;
 
