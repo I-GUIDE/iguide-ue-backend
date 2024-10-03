@@ -3,7 +3,7 @@ import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
-import spacy from 'spacy';
+import nlp from 'compromise';
 
 const router = express.Router();
 
@@ -38,17 +38,8 @@ async function createMemory(conversationName) {
 
 // Function to extract location from user query using NLP
 function extractLocationFromQuery(userQuery) {
-    // Example with SpaCy
-    const nlp = spacy.load('en_core_web_sm');
     const doc = nlp(userQuery);
-    const locations = [];
-
-    // Extract location-based entities
-    doc.ents.forEach(entity => {
-        if (entity.label_ === 'GPE') { // GPE = Geopolitical Entity (SpaCy's label for locations)
-            locations.push(entity.text);
-        }
-    });
+    const locations = doc.places().out('array');  // Extract locations (places)
     return locations;
 }
 
@@ -77,7 +68,7 @@ async function getBoundingBox(location) {
 }
 
 // Function to perform spatial search with memory in OpenSearch
-async function performSpatialSearch(memoryId, boundingBox) {
+async function performSpatialSearch(userQuery, memoryId, boundingBox) {
     try {
         const searchBody = {
             query: {
@@ -94,6 +85,7 @@ async function performSpatialSearch(memoryId, boundingBox) {
             ext: {
                 generative_qa_parameters: {
                     llm_model: "llama3:latest",
+                    llm_question: userQuery,
                     memory_id: memoryId
                 }
             }
@@ -101,7 +93,7 @@ async function performSpatialSearch(memoryId, boundingBox) {
 
         const searchResponse = await client.search({
             index: process.env.OPENSEARCH_INDEX_MAP,
-            search_pipeline: 'rag_pipeline_local', // Specify the optional search pipeline
+            search_pipeline: 'rag_pipeline_maps', // Specify the optional search pipeline
             body: searchBody
         });
         return searchResponse.body;
@@ -115,35 +107,92 @@ async function performSpatialSearch(memoryId, boundingBox) {
  * @swagger
  * /beta/llm/spatial-search:
  *   post:
- *     summary: Perform spatial search with OpenSearch and memory integration.
- *     description: This endpoint extracts locations from the user query, fetches a bounding box, and performs a spatial search using OpenSearch and LLM.
+ *     summary: Perform a spatial search with LLM and memory integration
+ *     description: This endpoint extracts locations from the user query, fetches a bounding box using Geocoding API, and performs a spatial search using OpenSearch with memory tracking.
  *     tags:
- *       - Conversational Search    
+ *       - Conversational Search
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/SpatialSearchRequest'
+ *             type: object
+ *             properties:
+ *               userQuery:
+ *                 type: string
+ *                 description: The query entered by the user, which should contain location information.
+ *                 example: Find research papers about environmental science in New York
+ *               memoryId:
+ *                 type: string
+ *                 description: Optional memory ID to track the search session. If not provided, a new memory will be created.
  *     responses:
  *       200:
- *         description: Spatial search results.
+ *         description: Successfully performed spatial search
  *         content:
  *           application/json:
  *             schema:
  *               type: object
-*                properties:
-*                  userQuery:
-*                    type: string
-*                    description: The query entered by the user for conversational search.
-*                    example: Maps about Flood Risk in the US
-*                  memoryId:
-*                    type: string
-*                    description: The optional memory ID for the search. If not provided, a new memory will be created.
+ *               properties:
+ *                 answer:
+ *                   type: string
+ *                   description: The generated answer from the LLM.
+ *                 message_id:
+ *                   type: string
+ *                   description: The message ID for tracking.
+ *                 elements:
+ *                   type: array
+ *                   description: List of search results.
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                         description: ID of the document.
+ *                       _score:
+ *                         type: number
+ *                         description: Relevance score of the document.
+ *                       title:
+ *                         type: string
+ *                         description: Title of the document.
+ *                       authors:
+ *                         type: array
+ *                         description: List of authors.
+ *                         items:
+ *                           type: string
+ *                       tags:
+ *                         type: array
+ *                         description: List of tags associated with the document.
+ *                         items:
+ *                           type: string
+ *                       contents:
+ *                         type: string
+ *                         description: The main content of the document.
+ *                       contributor:
+ *                         type: string
+ *                         description: Contributor of the document.
+ *                 count:
+ *                   type: integer
+ *                   description: The number of documents returned in the search.
  *       400:
- *         description: No valid location found in the query.
+ *         description: Invalid request or no location found in the query.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Error message.
  *       500:
- *         description: Error performing spatial search.
+ *         description: Internal server error while performing the spatial search.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Error message.
  */
 router.options('/llm/spatial-search', cors());
 router.post('/llm/spatial-search', cors(), async (req, res) => {
@@ -171,12 +220,12 @@ router.post('/llm/spatial-search', cors(), async (req, res) => {
             return res.status(400).json({ error: 'No valid location found in the query.' });
         }
 
-        console.log(`Searching with memoryID: ${finalMemoryId} and bounding box`);
+        console.log(`Searching with memoryID: ${finalMemoryId} and bounding box ${boundingBox}`);
 
         // Step 3: Perform the spatial search with the provided memory ID and bounding box
-        const searchResponse = await performSpatialSearch(finalMemoryId, boundingBox);
+        const searchResponse = await performSpatialSearch(userQuery, finalMemoryId, boundingBox);
 
-        const scoreThreshold = 5.0;  // Adjust the threshold as needed
+        const scoreThreshold = 0;  // Adjust the threshold as needed
         const hits = searchResponse.hits.hits
             .filter(hit => hit._score >= scoreThreshold)
             .map(hit => ({
@@ -184,6 +233,7 @@ router.post('/llm/spatial-search', cors(), async (req, res) => {
                 _score: hit._score,
                 ...hit._source
             }));
+        console.log(hits)
 
         // Limit the number of elements to at most 10 and handle null fields
         const elements = hits.slice(0, 10).map(hit => ({
