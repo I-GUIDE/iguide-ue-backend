@@ -132,14 +132,14 @@ async function performSpatialSearch(memoryId, boundingBox) {
  *           application/json:
  *             schema:
  *               type: object
- *                  properties:
- *                      userQuery:
- *                          type: string
- *                          description: The query entered by the user for conversational search.
- *                          example: Maps about Flood Risk in the US
- *                      memoryId:
- *                          type: string
- *                          description: The optional memory ID for the search. If not provided, a new memory will be created.
+*                properties:
+*                  userQuery:
+*                    type: string
+*                    description: The query entered by the user for conversational search.
+*                    example: Maps about Flood Risk in the US
+*                  memoryId:
+*                    type: string
+*                    description: The optional memory ID for the search. If not provided, a new memory will be created.
  *       400:
  *         description: No valid location found in the query.
  *       500:
