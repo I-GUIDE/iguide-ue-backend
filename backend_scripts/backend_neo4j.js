@@ -473,6 +473,33 @@ async function getElementByID(id){
     return {};
 }
 /**
+ * Get related elements for a given element ID
+ * @param {string} id
+ * @return {Object} Map of object with given ID. Empty map if ID not found or error
+ */
+async function getRelatedElementsForID(id){
+    const query_str = "MATCH(n{id:$id_param}) " +
+	  "MATCH (n)-[:RELATED]-(r1) " +
+	  "MATCH (n)-[:RELATED*2]-(r2) " +
+	  "WITH COLLECT({id:r1.id, title:r1.title, `resource-type`:TOLOWER(LABELS(r1)[0])}) as related_1, r2 " +
+	  "WITH COLLECT({id:r2.id, title:r2.title, `resource-type`:TOLOWER(LABELS(r2)[0])}) as related_2, related_1 " +
+	  "RETURN {r1:related_1, r2:related_2}";
+    try{
+	const {records, summary} =
+	      await driver.executeQuery(query_str,
+					{id_param: id},
+					{database: process.env.NEO4J_DB});
+	console.log(records);
+	if (records.length <= 0){
+	    // No related elements found for the given ID
+	    return {};
+	}
+	return records[0]['_fields'][0];
+    } catch(err){console.log('getElementsByType() Error in query: '+ err);}
+    // something went wrong
+    return {};
+}
+/**
  * Get elements by given type
  * @param {string} type
  * @param {int}    from For pagintion, get elements from this number
@@ -1323,18 +1350,19 @@ exports.registerElement = registerElement;
 exports.getElementsByTag = getElementsByTag;
 exports.deleteElementByID = deleteElementByID;
 exports.getElementsByType = getElementsByType;
-exports.updateContributor = updateContributor;
-exports.getContributorByID = getContributorByID;
 exports.getFeaturedElements = getFeaturedElements;
-exports.registerContributor = registerContributor;
-exports.setContributorAvatar = setContributorAvatar;
-exports.checkContributorByID = checkContributorByID;
 exports.getElementsCountByTag = getElementsCountByTag;
 exports.getElementsCountByType = getElementsCountByType;
 exports.setElementFeaturedForID = setElementFeaturedForID;
+exports.getRelatedElementsForID = getRelatedElementsForID;
 exports.getElementsByContributor = getElementsByContributor;
 exports.getFeaturedElementsByType = getFeaturedElementsByType;
-exports.createLinkNotebook2Dataset = createLinkNotebook2Dataset;
+
+exports.updateContributor = updateContributor;
+exports.getContributorByID = getContributorByID;
+exports.registerContributor = registerContributor;
+exports.setContributorAvatar = setContributorAvatar;
+exports.checkContributorByID = checkContributorByID;
 exports.getContributorIdForElement = getContributorIdForElement;
 exports.getElementsCountByContributor = getElementsCountByContributor;
 
@@ -1347,3 +1375,4 @@ exports.deleteDocumentationByID = deleteDocumentationByID;
 exports.testServerConnection = testServerConnection;
 
 //exports.getContributorProfileByID = getContributorProfileByID;
+//exports.createLinkNotebook2Dataset = createLinkNotebook2Dataset;
