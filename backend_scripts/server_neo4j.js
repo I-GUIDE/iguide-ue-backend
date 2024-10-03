@@ -1108,6 +1108,41 @@ app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('f
     });
 });
 
+/**
+ * @swagger
+ * /api/elements/{id}/neighbors:
+ *   get:
+ *     summary: Return neighbor elements of element with given ID
+ *     tags: ['elements']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the user
+ *     responses:
+ *       200:
+ *         description: JSON Map for related elements
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Error fetching the user
+ */
+app.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
+    try {
+	const response = await n4j.getRelatedElementsForID(id);
+	if (JSON.stringify(response) === '{}'){
+	    //return res.status(404).json({ message: 'No related elements found' });
+	    return res.status(404).json({r1:[], r2:[] });
+	}
+	res.status(200).json(response);
+    } catch (error) {
+	console.error('Error fetching related elements:', error);
+	res.status(500).json({ message: 'Error fetching related elements' });
+    }
+});
 /****************************************************************************
  * User/Contributor Endpoints
  ****************************************************************************/
