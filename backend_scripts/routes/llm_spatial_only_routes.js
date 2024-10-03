@@ -117,6 +117,8 @@ async function performSpatialSearch(memoryId, boundingBox) {
  *   post:
  *     summary: Perform spatial search with OpenSearch and memory integration.
  *     description: This endpoint extracts locations from the user query, fetches a bounding box, and performs a spatial search using OpenSearch and LLM.
+ *     tags:
+ *       - Conversational Search    
  *     requestBody:
  *       required: true
  *       content:
@@ -129,7 +131,15 @@ async function performSpatialSearch(memoryId, boundingBox) {
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/SpatialSearchResponse'
+ *               type: object
+ *                  properties:
+ *                      userQuery:
+ *                          type: string
+ *                          description: The query entered by the user for conversational search.
+ *                          example: Maps about Flood Risk in the US
+ *                      memoryId:
+ *                          type: string
+ *                          description: The optional memory ID for the search. If not provided, a new memory will be created.
  *       400:
  *         description: No valid location found in the query.
  *       500:
