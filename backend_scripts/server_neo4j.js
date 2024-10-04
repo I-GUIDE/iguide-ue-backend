@@ -1044,6 +1044,7 @@ app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('f
  *       500:
  *         description: Error fetching the user
  */
+app.options('/api/elements/:id/neighbors', cors());
 app.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     try {
