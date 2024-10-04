@@ -916,7 +916,7 @@ app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, async (req, res) =
                 authors: resource['authors'],
                 tags: resource['tags'],
                 'resource-type': resource['resource-type'],
-                'thumbnail-image': resource['thumbnail-image']
+                'thumbnail-image': resource['thumbnail-image'],
 		// spatial-temporal
 		'spatial-coverage': resource['spatial-coverage'],
 		'spatial-geometry': resource['spatial-geometry'],
