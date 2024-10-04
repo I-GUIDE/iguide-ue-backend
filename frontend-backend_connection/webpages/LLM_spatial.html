@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial Search Interface</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #map {
+            height: 400px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Spatial Search</h1>
+    <textarea id="userQuery" rows="4" cols="50" placeholder="Enter your query..."></textarea><br>
+    <button id="sendButton">Send</button>
+    
+    <h2>Response</h2>
+    <div id="response"></div>
+    
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([39.8283, -98.5795], 4); // Center of USA
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+        }).addTo(map);
+
+        document.getElementById('sendButton').addEventListener('click', async () => {
+            const userQuery = document.getElementById('userQuery').value;
+            const responseDiv = document.getElementById('response');
+
+            // Clear previous responses
+            responseDiv.innerHTML = '';
+            map.eachLayer((layer) => {
+                if (layer instanceof L.Polygon) {
+                    map.removeLayer(layer);
+                }
+            });
+
+            const requestBody = { userQuery };
+
+            try {
+                const response = await fetch("http://149.165.154.200:3501/beta/llm/spatial-search", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                responseDiv.innerHTML = `<p>${data.answer}</p>`;
+
+                // Visualize each knowledge element on the map
+                data.elements.forEach(element => {
+                    const latlngs = element.bounding_box.coordinates[0].map(coord => [coord[1], coord[0]]); // Invert [lng, lat] to [lat, lng]
+                    const polygon = L.polygon(latlngs, { color: 'blue', fillOpacity: 0.2 }).addTo(map);
+
+                    // Add a popup with information when the polygon is clicked
+                    const popupContent = `
+                        <strong>${element.title}</strong><br>
+                        Authors: ${element.authors}<br>
+                        Description: ${element.description || 'No description available.'}
+                    `;
+                    polygon.bindPopup(popupContent);
+                });
+
+            } catch (error) {
+                console.error('Error querying conversational search:', error);
+                responseDiv.innerHTML = '<p>Error fetching data. Please try again.</p>';
+            }
+        });
+    </script>
+</body>
+</html>
