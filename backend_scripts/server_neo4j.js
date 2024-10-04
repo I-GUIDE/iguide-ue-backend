@@ -815,7 +815,15 @@ app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, async (req, res) =
                 authors: resource['authors'],
                 tags: resource['tags'],
                 'resource-type': resource['resource-type'],
-                'thumbnail-image': resource['thumbnail-image']
+                'thumbnail-image': resource['thumbnail-image'],
+		// spatial-temporal
+		'spatial-coverage': resource['spatial-coverage'],
+		'spatial-geometry': resource['spatial-geometry'],
+		'spatial-bounding-box': resource['spatial-bounding-box'],
+		'spatial-centroid': resource['spatial-centroid'],
+		'spatial-georeferenced': resource['spatial-georeferenced'],
+		'spatial-temporal-coverage': resource['spatial-temporal-coverage'],
+		'spatial-index-year': resource['spatial-index-year']
             };
 
             console.log('Getting contributor name');
@@ -957,14 +965,22 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
 			'contents': updates['contents'],
 			'authors': updates['authors'],
 			'tags': updates['tags'],
-			'thumbnail-image': updates['thumbnail-image']
+			'thumbnail-image': updates['thumbnail-image'],
+			// spatial-temporal properties
+			'spatial-coverage': updates['spatial-coverage'],
+			'spatial-geometry': updates['spatial-geometry'],
+			'spatial-bounding-box': updates['spatial-bounding-box'],
+			'spatial-centroid': updates['spatial-centroid'],
+			'spatial-georeferenced': updates['spatial-georeferenced'],
+			'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
+			'spatial-index-year': updates['spatial-index-year']
 			// type and contributor should never be updated
 		    }
 		},
 		refresh: true,
 	    });
 	    //console.log(response['body']['result']);
-	    res.json({ message: 'Element updated successfully', result: response });
+	    res.status(200).json({ message: 'Element updated successfully', result: response });
 	} else {
 	    console.log('Error updating element');
 	    res.status(500).json({ message: 'Error updating element', result: response });
