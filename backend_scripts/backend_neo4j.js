@@ -479,11 +479,9 @@ async function getElementByID(id){
  */
 async function getRelatedElementsForID(id){
     const query_str = "MATCH(n{id:$id_param}) " +
-	  "MATCH (n)-[:RELATED]-(r1) " +
-	  "MATCH (n)-[:RELATED*2]-(r2) " +
-	  "WITH COLLECT({id:r1.id, title:r1.title, `resource-type`:TOLOWER(LABELS(r1)[0])}) as related_1, r2 " +
-	  "WITH COLLECT({id:r2.id, title:r2.title, `resource-type`:TOLOWER(LABELS(r2)[0])}) as related_2, related_1 " +
-	  "RETURN {r1:related_1, r2:related_2}";
+	  "OPTIONAL MATCH (n)-[rt2:RELATED*0..2]-(r2) " + 
+	  "UNWIND rt2 as related " +
+	  "RETURN {nodes: COLLECT(DISTINCT(r2{.id, .title, `thumbnail-image`:r2.thumbnail_image, `resource-type`:TOLOWER(LABELS(r2)[0])})), neighbors: COLLECT(DISTINCT({src:startNode(related).id, dst:endNode(related).id}))}";
     try{
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
