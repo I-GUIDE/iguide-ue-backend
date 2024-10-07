@@ -1136,14 +1136,14 @@ app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('f
  *         required: true
  *         schema:
  *           type: string
- *         description: The ID of the user
+ *         description: The ID of the elements
  *     responses:
  *       200:
  *         description: JSON Map for related elements
  *       404:
  *         description: User not found
  *       500:
- *         description: Error fetching the user
+ *         description: Error fetching the element
  */
 app.options('/api/elements/:id/neighbors', cors());
 app.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
