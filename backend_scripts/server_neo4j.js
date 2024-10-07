@@ -869,10 +869,12 @@ app.get('/api/elements', cors(), async (req, res) => {
  *     responses:
  *       200:
  *         description: Resource registered successfully
- *       500:
- *         description: Internal server error
+ *       402:
+ *         description: Registration failed because of duplicate
  *       403:
  *         description: The user does not have the permission to make the contribution
+ *       500:
+ *         description: Internal server error
  */
 //app.options('/api/elements', jwtCorsMiddleware);
 app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
@@ -947,8 +949,16 @@ app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, async (req, res) =
             console.log(response['body']['result']);
             res.status(200).json({ message: 'Resource registered successfully', elementId: element_id });
         } else {
-            console.log('Error registering resource ...');
-            res.status(500).json({ error: 'Error registering resource' });
+	    if (element_id) {
+		// registration failed because of duplicate element
+		console.log('Duplicate found while registering resource ...');
+		res.status(402).json({ message: 'Duplicate found while registering resource',
+				       error: 'Duplicate found while registering resource',
+				       elementId: element_id});
+	    } else {
+		console.log('Error registering resource ...');
+		res.status(500).json({ error: 'Error registering resource' });
+	    }
         }
     } catch (error) {
         res.status(500).json({ error: error.message });

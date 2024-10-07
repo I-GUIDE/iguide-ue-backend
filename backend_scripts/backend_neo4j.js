@@ -1119,12 +1119,30 @@ async function registerElement(contributor_id, element){
 					{database: process.env.NEO4J_DB});
 	if (summary.counters.updates()['nodesCreated'] >= 1){
 	    return {response: true, element_id: node['id']};
-	    //return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){
+	if (err.code === 'Neo.ClientError.Schema.ConstraintValidationFailed') {
+	    console.log('Error registering, duplicate element: '+ err);
+	    // try getting information for the existing duplicate element
+	    // Error Format: "Node(78) already exists with label `Publication` and property `external_link` = '...'"
+	    const internal_id = err.message.match(/\d+/)[0];
+	    try{
+		const {records, _} =
+		      await driver.executeQuery("MATCH(n) WHERE ID(n)=$duplicate_id RETURN n.id",
+						{duplicate_id:neo4j.int(internal_id)},
+						{database: process.env.NEO4J_DB});
+		if (records.length >= 1){
+		    return {response: false, element_id: records[0]['_fields'][0]};
+		} else {
+		    console.log('Error: Cannot get existing duplicate entry');
+		}
+	    } catch(err){console.log('Error in getting duplicate element info: '+ err);}
+	} else {
+	    console.log('Error in query while registering element: '+ err);
+	}
+    }
     // something went wrong
-    //return false;
-    return {response: false, element_id: ''};
+    return {response: false, element_id: null};
 }
 
 /**
