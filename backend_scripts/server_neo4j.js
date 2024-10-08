@@ -18,6 +18,8 @@ import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import * as n4j from './backend_neo4j.cjs'
 import llm_routes from './routes/llm_routes.js';
+import llm_spatial_only_routes from './routes/llm_spatial_only_routes.js';
+import anvil_proxy from './routes/anvil_proxy.js';
 import search_routes from './routes/search_routes.js';
 
 import { authenticateJWT, authorizeRole, generateAccessToken } from './jwtUtils.js';
@@ -50,7 +52,9 @@ app.use(cookieParser());
 dotenv.config();
 
 // Use the LLM-based conversational search route
-// app.use('/beta', llm_routes);
+app.use('/beta', llm_routes);
+app.use('/beta', llm_spatial_only_routes);
+app.use('/proxy', anvil_proxy);
 // Use the advanced search route
 app.use('/api', search_routes);
 
@@ -764,13 +768,15 @@ app.get('/api/elements', cors(), async (req, res) => {
  *     responses:
  *       200:
  *         description: Resource registered successfully
- *       500:
- *         description: Internal server error
+ *       402:
+ *         description: Registration failed because of duplicate
  *       403:
  *         description: The user does not have the permission to make the contribution
+ *       500:
+ *         description: Internal server error
  */
 //app.options('/api/elements', jwtCorsMiddleware);
-app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, authorizeRole(n4j.Role.TRUSTED_USER), async (req, res) => {
     const resource = req.body;
 
     try {
@@ -811,7 +817,15 @@ app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, async (req, res) =
                 authors: resource['authors'],
                 tags: resource['tags'],
                 'resource-type': resource['resource-type'],
-                'thumbnail-image': resource['thumbnail-image']
+                'thumbnail-image': resource['thumbnail-image'],
+		// spatial-temporal
+		'spatial-coverage': resource['spatial-coverage'],
+		'spatial-geometry': resource['spatial-geometry'],
+		'spatial-bounding-box': resource['spatial-bounding-box'],
+		'spatial-centroid': resource['spatial-centroid'],
+		'spatial-georeferenced': resource['spatial-georeferenced'],
+		'spatial-temporal-coverage': resource['spatial-temporal-coverage'],
+		'spatial-index-year': resource['spatial-index-year']
             };
 
             console.log('Getting contributor name');
@@ -834,8 +848,16 @@ app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, async (req, res) =
             console.log(response['body']['result']);
             res.status(200).json({ message: 'Resource registered successfully', elementId: element_id });
         } else {
-            console.log('Error registering resource ...');
-            res.status(500).json({ error: 'Error registering resource' });
+	    if (element_id) {
+		// registration failed because of duplicate element
+		console.log('Duplicate found while registering resource ...');
+		res.status(402).json({ message: 'Duplicate found while registering resource',
+				       error: 'Duplicate found while registering resource',
+				       elementId: element_id});
+	    } else {
+		console.log('Error registering resource ...');
+		res.status(500).json({ error: 'Error registering resource' });
+	    }
         }
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -890,7 +912,7 @@ app.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
  * @swagger
  * /api/elements/{id}:
  *   put:
- *     summary: Update the user document
+ *     summary: Update the element with given ID
  *     tags: ['elements']
  *     parameters:
  *       - in: path
@@ -898,7 +920,7 @@ app.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
  *         required: true
  *         schema:
  *           type: string
- *         description: The id of the elemnt
+ *         description: The id of the element
  *     requestBody:
  *       required: true
  *       content:
@@ -953,20 +975,28 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
 			'contents': updates['contents'],
 			'authors': updates['authors'],
 			'tags': updates['tags'],
-			'thumbnail-image': updates['thumbnail-image']
+			'thumbnail-image': updates['thumbnail-image'],
+			// spatial-temporal properties
+			'spatial-coverage': updates['spatial-coverage'],
+			'spatial-geometry': updates['spatial-geometry'],
+			'spatial-bounding-box': updates['spatial-bounding-box'],
+			'spatial-centroid': updates['spatial-centroid'],
+			'spatial-georeferenced': updates['spatial-georeferenced'],
+			'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
+			'spatial-index-year': updates['spatial-index-year']
 			// type and contributor should never be updated
 		    }
 		},
 		refresh: true,
 	    });
 	    //console.log(response['body']['result']);
-	    res.json({ message: 'Element updated successfully', result: response });
+	    res.status(200).json({ message: 'Element updated successfully', result: response });
 	} else {
-	    console.log('Error updating user');
-	    res.json({ message: 'Error updating element', result: response });
+	    console.log('Error updating element');
+	    res.status(500).json({ message: 'Error updating element', result: response });
 	}
     } catch (error) {
-	console.error('Error updating user:', error);
+	console.error('Error updating element:', error);
 	res.status(500).json({ message: 'Internal server error' });
     }
 });
@@ -1003,6 +1033,87 @@ app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('f
     });
 });
 
+/**
+ * @swagger
+ * /api/elements/{id}/neighbors:
+ *   get:
+ *     summary: Return neighbor elements of element with given ID
+ *     tags: ['elements']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the elements
+ *     responses:
+ *       200:
+ *         description: JSON Map for related elements
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Error fetching the element
+ */
+app.options('/api/elements/:id/neighbors', cors());
+app.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
+    try {
+	const response = await n4j.getRelatedElementsForID(id);
+	if (JSON.stringify(response) === '{}'){
+	    //return res.status(404).json({ message: 'No related elements found' });
+	    return res.status(404).json({r1:[], r2:[] });
+	}
+	res.status(200).json(response);
+    } catch (error) {
+	console.error('Error fetching related elements:', error);
+	res.status(500).json({ message: 'Error fetching related elements' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/duplicate:
+ *   get:
+ *     summary: Check for duplicate in elements given field-name
+ *     tags: ['elements']
+ *     parameters:
+ *       - in: query
+ *         name: field-name
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [doi]
+ *         description: The field to check duplicate for
+ *       - in: query
+ *         name: value
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Value of the field name to check for duplicates
+ *     responses:
+ *       200:
+ *         description: True if duplicate found, false otherwise
+ *       500:
+ *         description: Internal server error
+ */
+app.options('/api/duplicate', cors());
+app.get('/api/duplicate', cors(), async (req, res) => {
+//app.get('/api/elements/duplicate', async (req, res) => {
+
+    let field_name = req.query['field-name'];
+    let value = req.query['value'];
+    try {
+	const {response, element_id} = await n4j.checkDuplicatesForField(field_name, value);
+	if (response) {
+	    res.status(200).json({duplicate:true, elementId:element_id});
+	} else {
+	    res.status(200).json({duplicate:false, elementId:null});
+	}
+    } catch (error) {
+	console.error('Error checking duplicate:', error);
+	res.status(500).json({ message: 'Error checking duplicate' });
+    }
+});
 /****************************************************************************
  * User/Contributor Endpoints
  ****************************************************************************/
