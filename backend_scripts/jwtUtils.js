@@ -64,6 +64,6 @@ export const storeRefreshToken = async (token, user_id) => {
 
 // Generate an access token
 export const generateAccessToken = (user) => {
-  return jwt.sign(user, process.env.JWT_ACCESS_TOKEN_SECRET, { expiresIn: '1m' });
+  return jwt.sign(user, process.env.JWT_ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
 };
 
