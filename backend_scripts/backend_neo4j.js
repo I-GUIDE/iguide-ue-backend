@@ -925,6 +925,38 @@ async function checkContributorByID(id){
     return false;
 }
 
+/**
+ * Check for duplicates for given field
+ * @param {string} field name to check duplicates for 
+ * @return {Object} Map of object with given ID. Empty map if ID not found or error
+ */
+async function checkDuplicatesForField(field_name, value){
+
+    var query_str = "";
+    var query_params = {};
+    if (field_name === 'doi') {
+	query_str = "MATCH(p:Publication{external_link:$doi}) RETURN p.id";
+	query_params['doi'] = value;
+    } else {
+	throw Error('Server Neo4j: Field `$field_name` not implemented for duplucate checking');
+    }
+
+    try {
+	const {records, summary} =
+	      await driver.executeQuery(query_str,
+					query_params,
+					{database: process.env.NEO4J_DB});
+	if (records.length >= 1) {
+	    const duplicate_element_id = records[0]['_fields'][0];
+	    return {response: true, element_id: duplicate_element_id};
+	}
+	// no duplicates found
+	return {response: false, element_id: null};
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return {response: false, element_id: null};
+}
+
 async function updateElement(id, element){
 
     const session = driver.session({database: process.env.NEO4J_DB});
@@ -1011,7 +1043,7 @@ async function generateQueryStringForRelatedElements(related_elements){
 	//     query_match += "MATCH(to"+i+":Oer{title:$title"+i+"}) ";
 	// }
 
-	let element_type = parseElementType(related_elem['type']);
+	let element_type = parseElementType(related_elem['resource-type']);
 	query_match += "MATCH(to"+i+":"+element_type+"{title:$title"+i+"}) ";
 
 	query_merge += "MERGE (n)-[:RELATED]->(to"+i+") ";
@@ -1336,6 +1368,8 @@ exports.setElementFeaturedForID = setElementFeaturedForID;
 exports.getRelatedElementsForID = getRelatedElementsForID;
 exports.getElementsByContributor = getElementsByContributor;
 exports.getFeaturedElementsByType = getFeaturedElementsByType;
+
+exports.checkDuplicatesForField = checkDuplicatesForField
 
 exports.updateContributor = updateContributor;
 exports.getContributorByID = getContributorByID;

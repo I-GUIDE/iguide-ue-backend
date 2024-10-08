@@ -1170,6 +1170,51 @@ app.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
 	res.status(500).json({ message: 'Error fetching related elements' });
     }
 });
+
+/**
+ * @swagger
+ * /api/duplicate:
+ *   get:
+ *     summary: Check for duplicate in elements given field-name
+ *     tags: ['elements']
+ *     parameters:
+ *       - in: query
+ *         name: field-name
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [doi]
+ *         description: The field to check duplicate for
+ *       - in: query
+ *         name: value
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Value of the field name to check for duplicates
+ *     responses:
+ *       200:
+ *         description: True if duplicate found, false otherwise
+ *       500:
+ *         description: Internal server error
+ */
+app.options('/api/duplicate', cors());
+app.get('/api/duplicate', cors(), async (req, res) => {
+//app.get('/api/elements/duplicate', async (req, res) => {
+
+    let field_name = req.query['field-name'];
+    let value = req.query['value'];
+    try {
+	const {response, element_id} = await n4j.checkDuplicatesForField(field_name, value);
+	if (response) {
+	    res.status(200).json({duplicate:true, elementId:element_id});
+	} else {
+	    res.status(200).json({duplicate:false, elementId:null});
+	}
+    } catch (error) {
+	console.error('Error checking duplicate:', error);
+	res.status(500).json({ message: 'Error checking duplicate' });
+    }
+});
 /****************************************************************************
  * User/Contributor Endpoints
  ****************************************************************************/
