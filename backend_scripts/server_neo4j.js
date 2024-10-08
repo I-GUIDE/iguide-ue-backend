@@ -768,10 +768,12 @@ app.get('/api/elements', cors(), async (req, res) => {
  *     responses:
  *       200:
  *         description: Resource registered successfully
- *       500:
- *         description: Internal server error
+ *       402:
+ *         description: Registration failed because of duplicate
  *       403:
  *         description: The user does not have the permission to make the contribution
+ *       500:
+ *         description: Internal server error
  */
 //app.options('/api/elements', jwtCorsMiddleware);
 app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, authorizeRole(n4j.Role.TRUSTED_USER), async (req, res) => {
@@ -846,8 +848,16 @@ app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, authorizeRole(n4j.
             console.log(response['body']['result']);
             res.status(200).json({ message: 'Resource registered successfully', elementId: element_id });
         } else {
-            console.log('Error registering resource ...');
-            res.status(500).json({ error: 'Error registering resource' });
+	    if (element_id) {
+		// registration failed because of duplicate element
+		console.log('Duplicate found while registering resource ...');
+		res.status(402).json({ message: 'Duplicate found while registering resource',
+				       error: 'Duplicate found while registering resource',
+				       elementId: element_id});
+	    } else {
+		console.log('Error registering resource ...');
+		res.status(500).json({ error: 'Error registering resource' });
+	    }
         }
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -1035,14 +1045,14 @@ app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('f
  *         required: true
  *         schema:
  *           type: string
- *         description: The ID of the user
+ *         description: The ID of the elements
  *     responses:
  *       200:
  *         description: JSON Map for related elements
  *       404:
  *         description: User not found
  *       500:
- *         description: Error fetching the user
+ *         description: Error fetching the element
  */
 app.options('/api/elements/:id/neighbors', cors());
 app.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
@@ -1057,6 +1067,51 @@ app.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
     } catch (error) {
 	console.error('Error fetching related elements:', error);
 	res.status(500).json({ message: 'Error fetching related elements' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/duplicate:
+ *   get:
+ *     summary: Check for duplicate in elements given field-name
+ *     tags: ['elements']
+ *     parameters:
+ *       - in: query
+ *         name: field-name
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [doi]
+ *         description: The field to check duplicate for
+ *       - in: query
+ *         name: value
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Value of the field name to check for duplicates
+ *     responses:
+ *       200:
+ *         description: True if duplicate found, false otherwise
+ *       500:
+ *         description: Internal server error
+ */
+app.options('/api/duplicate', cors());
+app.get('/api/duplicate', cors(), async (req, res) => {
+//app.get('/api/elements/duplicate', async (req, res) => {
+
+    let field_name = req.query['field-name'];
+    let value = req.query['value'];
+    try {
+	const {response, element_id} = await n4j.checkDuplicatesForField(field_name, value);
+	if (response) {
+	    res.status(200).json({duplicate:true, elementId:element_id});
+	} else {
+	    res.status(200).json({duplicate:false, elementId:null});
+	}
+    } catch (error) {
+	console.error('Error checking duplicate:', error);
+	res.status(500).json({ message: 'Error checking duplicate' });
     }
 });
 /****************************************************************************

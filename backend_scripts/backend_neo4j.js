@@ -226,11 +226,13 @@ async function createLinkUserLikedElement(user_id, element_id){
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
 async function getElementByID(id){
+
+    // [Update-2.0] Frontend expects all related elements in a single list
     // [Fixed] Fixes the bug where nothing is returned in case element does not have any relations
-    // const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
-    // 	  "OPTIONAL MATCH (n)-[:RELATED]-(r) " +
-    // 	  "WITH COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) as related_elems, n, c  " +
-    // 	  "RETURN n{.*, related_elements: related_elems, `resource-type`:TOLOWER(LABELS(n)[0]), contributor: {id:c.id, name:(c.first_name + ' ' + c.last_name), `avatar-url`:c.avatar_url}}";
+    const query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
+	  "OPTIONAL MATCH (n)-[:RELATED]-(r) " +
+	  "WITH COLLECT(r{.id, .title, `thumbnail-image`:r.thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) as related_elems, n, c  " +
+	  "RETURN n{.*, related_elements: related_elems, `resource-type`:TOLOWER(LABELS(n)[0]), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name)}}";
 
     // [Upadte] Query with related elements divided into separate lists for every type
     // no need to do manual related elements separation
@@ -260,33 +262,33 @@ async function getElementByID(id){
     // }
     // RETURN n{.*,`resource-type`:TOLOWER(LABELS(n)[0]), contributor: {id:c.id, name:(c.first_name + ' ' + c.last_name), `avatar-url`:c.avatar_url}, related_datasets:related_datasets, related_notebooks:related_notebooks, related_oers:related_oers}
     //
-    const match_query =
-	  "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
-	  "OPTIONAL MATCH (n)-[:RELATED]-(related) " +
-	  "WITH COLLECT (related) as rel_elems,n,c ";
+    // const match_query =
+    // 	  "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
+    // 	  "OPTIONAL MATCH (n)-[:RELATED]-(related) " +
+    // 	  "WITH COLLECT (related) as rel_elems,n,c ";
 
-    // for every ElementType, create a subquery
-    var call_subquery = "";
-    var ret_query = "RETURN n{.*,`resource-type`:TOLOWER(LABELS(n)[0]), contributor: {id:c.id, name:(c.first_name + ' ' + c.last_name), `avatar-url`:c.avatar_url}";
+    // // for every ElementType, create a subquery
+    // var call_subquery = "";
+    // var ret_query = "RETURN n{.*,`resource-type`:TOLOWER(LABELS(n)[0]), contributor: {id:c.id, name:(c.first_name + ' ' + c.last_name), `avatar-url`:c.avatar_url}";
 
-    for (let elem_type in ElementType){
-	elem_type = elem_type.toLowerCase();
-	// NOTE: `resource-type` may seem redundant here but it is NOT. Frontend is using it for
-	// showing related element types, updating elements etc.
-	call_subquery += "CALL { WITH rel_elems UNWIND rel_elems as r " +
-	    "MATCH(r) WHERE TOLOWER(LABELS(r)[0])='" + elem_type + "'" +
-	    "RETURN COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) " +
-	    "AS related_" + elem_type + "s} ";
+    // for (let elem_type in ElementType){
+    // 	elem_type = elem_type.toLowerCase();
+    // 	// NOTE: `resource-type` may seem redundant here but it is NOT. Frontend is using it for
+    // 	// showing related element types, updating elements etc.
+    // 	call_subquery += "CALL { WITH rel_elems UNWIND rel_elems as r " +
+    // 	    "MATCH(r) WHERE TOLOWER(LABELS(r)[0])='" + elem_type + "'" +
+    // 	    "RETURN COLLECT({id:r.id, title:r.title, `thumbnail-image`:r.thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) " +
+    // 	    "AS related_" + elem_type + "s} ";
 
-	ret_query += ",`related-"+elem_type+"s`:related_"+elem_type+"s";
-    }
-    ret_query += "}";
+    // 	ret_query += ",`related-"+elem_type+"s`:related_"+elem_type+"s";
+    // }
+    // ret_query += "}";
 
-    // create one query string from multiple parts
-    const query_str = match_query + call_subquery + ret_query;
+    // // create one query string from multiple parts
+    // const query_str = match_query + call_subquery + ret_query;
 
-    // uncomment following to take a look at the query string
-    //console.log(query_str);
+    // // uncomment following to take a look at the query string
+    // //console.log(query_str);
 
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
@@ -306,7 +308,8 @@ async function getElementByID(id){
 
 	// frontend expects separate lists for related elements
 	let result = records[0]['_fields'][0];
-	let {related_elements: related_elements, ...this_elem} = result;
+	//let {related_elements: related_elements, ...this_elem} = result;
+	let this_elem = result;
 
 	// set/increment click count for this element
 	const this_element_type = parseElementType(result['resource-type']);
@@ -424,46 +427,6 @@ async function getElementByID(id){
 	if (ret['updated-at']){
 	    ret['updated-at'] = parseDate(ret['updated-at']);
 	}
-
-	// if (ret['click_count']){
-	//     ret['click-count'] = parse64BitNumber(ret['click_count']);
-	//     delete ret['click_count'];
-	// } else {
-	//     // to handle corner cases, when click_count is not set.
-	//     // May happen for legacy elements added before summer school 2024
-	//     // for all such elements, this will happen the first time only
-	//     // Sept, 2024: Should NEVER reach here
-	//     ret['click-count'] = 0;
-	// }
-	// // handle datetime values for created_at and updated_at properties
-	// ret['created-at'] = parseDate(ret['created_at']);
-	// delete ret['created_at'];
-	// if (ret['updated_at']){
-	//     ret['updated-at'] = parseDate(ret['updated_at']);
-	//     delete ret['updated_at'];
-	// }
-
-	// // frontend expects property names in dash-case, convert snake-case to dash-case
-	// ret['thumbnail-image'] = ret['thumbnail_image'];
-	// delete ret['thumbnail_image'];
-
-	// if ('direct_download_link' in ret){
-	//     ret['direct-download-link'] = ret['direct_download_link'];
-	//     delete ret['direct_download_link'];
-	// }
-	// if ('external_link' in ret){
-	//     ret['external-link'] = ret['external_link'];
-	//     delete ret['external_link'];
-	// }
-	// if ('notebook_file' in ret){
-	//     ret['notebook-file'] = ret['notebook_file'];
-	//     delete ret['notebook_file'];
-	// }
-	// if ('notebook_repo' in ret) {
-	//     ret['notebook-repo'] = ret['notebook_repo'];
-	//     delete ret['notebook_repo'];
-	// }
-
 	return ret;
 	//return records[0]['_fields'][0];
     } catch(err){
@@ -479,7 +442,7 @@ async function getElementByID(id){
  */
 async function getRelatedElementsForID(id){
     const query_str = "MATCH(n{id:$id_param}) " +
-	  "OPTIONAL MATCH (n)-[rt2:RELATED*0..2]-(r2) " + 
+	  "OPTIONAL MATCH (n)-[rt2:RELATED*0..2]-(r2) " +
 	  "UNWIND rt2 as related " +
 	  "RETURN {nodes: COLLECT(DISTINCT(r2{.id, .title, `thumbnail-image`:r2.thumbnail_image, `resource-type`:TOLOWER(LABELS(r2)[0])})), neighbors: COLLECT(DISTINCT({src:startNode(related).id, dst:endNode(related).id}))}";
     try{
@@ -962,6 +925,38 @@ async function checkContributorByID(id){
     return false;
 }
 
+/**
+ * Check for duplicates for given field
+ * @param {string} field name to check duplicates for 
+ * @return {Object} Map of object with given ID. Empty map if ID not found or error
+ */
+async function checkDuplicatesForField(field_name, value){
+
+    var query_str = "";
+    var query_params = {};
+    if (field_name === 'doi') {
+	query_str = "MATCH(p:Publication{external_link:$doi}) RETURN p.id";
+	query_params['doi'] = value;
+    } else {
+	throw Error('Server Neo4j: Field `$field_name` not implemented for duplucate checking');
+    }
+
+    try {
+	const {records, summary} =
+	      await driver.executeQuery(query_str,
+					query_params,
+					{database: process.env.NEO4J_DB});
+	if (records.length >= 1) {
+	    const duplicate_element_id = records[0]['_fields'][0];
+	    return {response: true, element_id: duplicate_element_id};
+	}
+	// no duplicates found
+	return {response: false, element_id: null};
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return {response: false, element_id: null};
+}
+
 async function updateElement(id, element){
 
     const session = driver.session({database: process.env.NEO4J_DB});
@@ -1048,7 +1043,7 @@ async function generateQueryStringForRelatedElements(related_elements){
 	//     query_match += "MATCH(to"+i+":Oer{title:$title"+i+"}) ";
 	// }
 
-	let element_type = parseElementType(related_elem['type']);
+	let element_type = parseElementType(related_elem['resource-type']);
 	query_match += "MATCH(to"+i+":"+element_type+"{title:$title"+i+"}) ";
 
 	query_merge += "MERGE (n)-[:RELATED]->(to"+i+") ";
@@ -1156,12 +1151,30 @@ async function registerElement(contributor_id, element){
 					{database: process.env.NEO4J_DB});
 	if (summary.counters.updates()['nodesCreated'] >= 1){
 	    return {response: true, element_id: node['id']};
-	    //return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){
+	if (err.code === 'Neo.ClientError.Schema.ConstraintValidationFailed') {
+	    console.log('Error registering, duplicate element: '+ err);
+	    // try getting information for the existing duplicate element
+	    // Error Format: "Node(78) already exists with label `Publication` and property `external_link` = '...'"
+	    const internal_id = err.message.match(/\d+/)[0];
+	    try{
+		const {records, _} =
+		      await driver.executeQuery("MATCH(n) WHERE ID(n)=$duplicate_id RETURN n.id",
+						{duplicate_id:neo4j.int(internal_id)},
+						{database: process.env.NEO4J_DB});
+		if (records.length >= 1){
+		    return {response: false, element_id: records[0]['_fields'][0]};
+		} else {
+		    console.log('Error: Cannot get existing duplicate entry');
+		}
+	    } catch(err){console.log('Error in getting duplicate element info: '+ err);}
+	} else {
+	    console.log('Error in query while registering element: '+ err);
+	}
+    }
     // something went wrong
-    //return false;
-    return {response: false, element_id: ''};
+    return {response: false, element_id: null};
 }
 
 /**
@@ -1355,6 +1368,8 @@ exports.setElementFeaturedForID = setElementFeaturedForID;
 exports.getRelatedElementsForID = getRelatedElementsForID;
 exports.getElementsByContributor = getElementsByContributor;
 exports.getFeaturedElementsByType = getFeaturedElementsByType;
+
+exports.checkDuplicatesForField = checkDuplicatesForField
 
 exports.updateContributor = updateContributor;
 exports.getContributorByID = getContributorByID;
