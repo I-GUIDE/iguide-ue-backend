@@ -438,11 +438,12 @@ async function getElementByID(id){
 /**
  * Get related elements for a given element ID
  * @param {string} id
+ * @param {int} depth Depth of related elements e.g. 2 depth would mean related of related
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
-async function getRelatedElementsForID(id){
+async function getRelatedElementsForID(id, depth=2){
     const query_str = "MATCH(n{id:$id_param}) " +
-	  "OPTIONAL MATCH (n)-[rt2:RELATED*0..2]-(r2) " +
+	  "OPTIONAL MATCH (n)-[rt2:RELATED*0.."+depth+"]-(r2) " +
 	  "UNWIND rt2 as related " +
 	  "RETURN {nodes: COLLECT(DISTINCT(r2{.id, .title, `thumbnail-image`:r2.thumbnail_image, `resource-type`:TOLOWER(LABELS(r2)[0])})), neighbors: COLLECT(DISTINCT({src:startNode(related).id, dst:endNode(related).id}))}";
     try{
@@ -450,7 +451,7 @@ async function getRelatedElementsForID(id){
 	      await driver.executeQuery(query_str,
 					{id_param: id},
 					{database: process.env.NEO4J_DB});
-	console.log(records);
+	//console.log(records);
 	if (records.length <= 0){
 	    // No related elements found for the given ID
 	    return {};
