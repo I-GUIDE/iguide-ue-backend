@@ -179,11 +179,13 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
     });
 
     if (body.hits.total.value === 0) {
+	console.log(`Token not found in database for ${user.id}`)
 	return res.sendStatus(403);
     }
 
     jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_SECRET, (err, user) => {
 	if (err) {
+	    console.log(`Error processing refreshToken for ${user.id}`)
 	    return res.sendStatus(403);
 	}
 
@@ -1046,12 +1048,6 @@ app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('f
  *         schema:
  *           type: string
  *         description: The ID of the elements
- *       - in: query
- *         name: depth
- *         required: false
- *         schema:
- *           type: int
- *         description: Depth of related elements e.g. 2 depth would mean related of related
  *     responses:
  *       200:
  *         description: JSON Map for related elements
@@ -1063,10 +1059,8 @@ app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('f
 app.options('/api/elements/:id/neighbors', cors());
 app.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
     const id = decodeURIComponent(req.params.id);
-    const depth = (typeof req.query['depth'] !== undefined)?req.query['depth']:2 ;
-    
     try {
-	const response = await n4j.getRelatedElementsForID(id, depth);
+	const response = await n4j.getRelatedElementsForID(id);
 	if (JSON.stringify(response) === '{}'){
 	    //return res.status(404).json({ message: 'No related elements found' });
 	    return res.status(404).json({r1:[], r2:[] });
