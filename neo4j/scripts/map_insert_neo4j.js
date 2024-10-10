@@ -44,18 +44,20 @@ async function readData(yaml_file){
     var map_objs = JSON.parse(fs.readFileSync(yaml_file, 'utf8'));
 
     console.log(map_objs.length);
-    
+    var i = 0;
     for (let map of map_objs) {
 
 	let map_element = {};
 	// (1) upload thumbnail
 	//let thumbnail_url = map['image'].replace('/assets/maps/', 'https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/');
-	//let thumbnail_url = 'https://backend.i-guide.io:443/user-uploads/thumbnails/' + map['image'];
-	let thumbnail_url = 'https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/' + map['image'];
-	
+	let thumbnail_url = 'https://backend.i-guide.io:443/user-uploads/thumbnails/' + map['image'];
+	//let thumbnail_url = 'https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/' + map['image'];
+
 	// (2) create json object
 	// These map elements are created by Alex
-	map_element['metadata'] = {'created_by':'063883de-1e64-4ad6-9898-1573ae5fbfa7'};
+	// Alex id (dev): 063883de-1e64-4ad6-9898-1573ae5fbfa7
+	// Alex id (prod): 4e0cf74d-46b8-4c4b-b6c7-a8099aaaa854
+	map_element['metadata'] = {'created_by':'4e0cf74d-46b8-4c4b-b6c7-a8099aaaa854'};
 	map_element['thumbnail-image'] = thumbnail_url;
 	map_element['resource-type'] = 'map';
 
@@ -77,7 +79,7 @@ async function readData(yaml_file){
 
 	//console.log(map_element);
 	//break;
-	
+
 	// (3) insert to neo4j
 	const contributor_id = map_element['metadata']['created_by'];
 	const {response, element_id} =
@@ -118,7 +120,12 @@ async function readData(yaml_file){
                 refresh: true,
             });
             console.log(response['body']['result']);
+	} else {
+	    console.error('Error inserting map element to neo4j');
 	}
+	i+=1;
+	console.log('Created ' + i + ' map elements ...');
+	//break;
     }
 }
 
@@ -157,7 +164,7 @@ async function insert_map_from_neo4j_to_OS() {
 //     console.log(role);
 
 //     let user_role = 1;
-    
+
 //     if (user_role <= n4j_server.Role.ADMIN) {
 // 	console.log('user is admin ...');
 //     } else {
