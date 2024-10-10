@@ -3,6 +3,9 @@ import { Client } from '@opensearch-project/opensearch';
 import axios from 'axios';
 import cors from 'cors';
 const router = express.Router();
+
+import * as n4j from '../backend_neo4j.cjs'
+
 // Initialize OpenSearch client
 const client = new Client({
     node: process.env.OPENSEARCH_NODE,
@@ -130,11 +133,23 @@ router.get('/search', cors(), async (req, res) => {
         }
 
         const searchResponse = await client.search(searchParams);
-        const results = searchResponse.body.hits.hits.map(hit => {
+        let results = searchResponse.body.hits.hits.map(hit => {
             const { _id, _source } = hit;
             const { metadata, ...rest } = _source; // Remove metadata
             return { _id, ...rest };
         });
+
+	// calculate per element count. Used for showing element tab counts on the frontend
+	let per_element_count = {};
+	for (let elem_type in n4j.ElementType) {
+	    elem_type = elem_type.toLowerCase();
+	    per_element_count[elem_type+'-count'] = 0;
+	}
+	for (let element of results){
+	    let element_type = element['resource-type'];
+	    per_element_count[element_type+'-count'] += 1;
+	}
+	results = {...results, ...per_element_count};
 
         res.json({ elements: results, total_count: searchResponse.body.hits.total.value });
     } catch (error) {
