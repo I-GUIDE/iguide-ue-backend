@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversational Search</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #queryForm {
+            margin-bottom: 20px;
+        }
+        #results {
+            margin-top: 20px;
+        }
+        .section {
+            margin-bottom: 20px;
+        }
+        .knowledge-element {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .form-section {
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Conversational Search</h1>
+    
+    <form id="queryForm">
+        
+        
+        <div class="form-section">
+            <label for="memoryIdInput">Memory ID (Optional):</label><br>
+            <input type="text" id="memoryIdInput" name="memoryId" style="width: 300px;" placeholder="Optional Memory ID">
+            <button type="button" onclick="generateMemoryId()">Generate Memory ID</button>
+        </div>
+
+	<div class="form-section">
+            <label for="queryInput">Enter your query:</label><br>
+            <input type="text" id="queryInput" name="query" style="width: 300px;" required>
+        </div>
+
+        <button type="submit">Submit</button>
+    </form>
+    
+    <div id="results">
+        <div id="message" class="section">
+            <h2>Returned Answer:</h2>
+            <pre id="answerContent">No answer yet.</pre>
+        </div>
+        <div id="elements" class="section">
+            <h2>Returned Knowledge Elements:</h2>
+            <div id="elementsList"></div>
+        </div>
+    </div>
+
+    <script>
+        // Function to generate a new memory ID
+        async function generateMemoryId() {
+            try {
+                const response = await fetch("http://149.165.154.200:3501/beta/llm/memory-id", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                if (data && data.memoryId) {
+                    document.getElementById('memoryIdInput').value = data.memoryId;
+                    alert(`Memory ID generated: ${data.memoryId}`);
+                } else {
+                    alert('Failed to generate memory ID');
+                }
+            } catch (error) {
+                console.error('Error generating memory ID:', error);
+                alert('Error generating memory ID');
+            }
+        }
+
+        // Function to query the conversational search API
+        async function queryConversationalSearch(userQuery, memoryId) {
+            const requestBody = {
+                userQuery: userQuery
+            };
+
+            if (memoryId) {
+                requestBody.memoryId = memoryId;
+            }
+
+            try {
+                const response = await fetch("http://149.165.154.200:3501/beta/llm/search", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error querying conversational search:', error);
+                return null;
+            }
+        }
+
+        document.getElementById('queryForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const userQuery = document.getElementById('queryInput').value;
+            const memoryId = document.getElementById('memoryIdInput').value;
+
+            // Clear previous results and show "Generating response..."
+            document.getElementById('answerContent').textContent = 'Generating response...';
+            document.getElementById('elementsList').innerHTML = ''; // Clear the knowledge elements
+
+            // Query the API
+            const result = await queryConversationalSearch(userQuery, memoryId);
+
+            if (result) {
+                // Display the answer from retrieval_augmented_generation
+                if (result.ext && result.ext.retrieval_augmented_generation && result.ext.retrieval_augmented_generation.answer) {
+                    document.getElementById('answerContent').textContent = result.ext.retrieval_augmented_generation.answer;
+                } else {
+                    document.getElementById('answerContent').textContent = 'No answer found.';
+                }
+
+                // Display the knowledge elements
+                const elementsList = document.getElementById('elementsList');
+                elementsList.innerHTML = ''; // Clear the previous results
+
+                if (result.hits && result.hits.hits.length > 0) {
+                    result.hits.hits.forEach(hit => {
+                        const elementDiv = document.createElement('div');
+                        elementDiv.classList.add('knowledge-element');
+
+                        const title = document.createElement('h3');
+                        title.textContent = hit._source.title;
+                        elementDiv.appendChild(title);
+
+                        const contents = document.createElement('p');
+                        contents.textContent = hit._source.contents;
+                        elementDiv.appendChild(contents);
+
+                        const authors = document.createElement('p');
+                        authors.textContent = `Authors: ${hit._source.authors.join(', ')}`;
+                        elementDiv.appendChild(authors);
+
+                        const tags = document.createElement('p');
+                        tags.textContent = `Tags: ${hit._source.tags.join(', ')}`;
+                        elementDiv.appendChild(tags);
+
+                        const resourceType = document.createElement('p');
+                        resourceType.textContent = `Resource Type: ${hit._source["resource-type"]}`;
+                        elementDiv.appendChild(resourceType);
+
+                        if (hit._source["thumbnail-image"]) {
+                            const thumbnail = document.createElement('img');
+                            thumbnail.src = hit._source["thumbnail-image"];
+                            thumbnail.alt = `Thumbnail for ${hit._source.title}`;
+                            thumbnail.style.width = '150px';
+                            elementDiv.appendChild(thumbnail);
+                        }
+
+                        elementsList.appendChild(elementDiv);
+                    });
+                } else {
+                    elementsList.textContent = 'No knowledge elements found.';
+                }
+            } else {
+                document.getElementById('answerContent').textContent = 'Error occurred or no data found.';
+                document.getElementById('elementsList').innerHTML = '';
+            }
+        });
+    </script>
+</body>
+</html>
