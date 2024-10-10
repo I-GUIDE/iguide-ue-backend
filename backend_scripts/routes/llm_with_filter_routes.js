@@ -81,11 +81,10 @@ async function performSearchWithMemory(userQuery, memoryId) {
 async function filterElementsWithGPT(userQuery, answer, elements) {
     try {
         const prompt = `
-        User Query: ${userQuery}
         Generated Answer: ${answer}
         Elements: ${JSON.stringify(elements)}
 
-        Based on the user query and the generated answer, return only the elements that are relevant.
+        Based on the generated answer, return only the elements that are relevant.
         Respond with a JSON array containing only the relevant elements.
         `;
 
