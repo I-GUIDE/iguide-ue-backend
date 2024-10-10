@@ -17,9 +17,9 @@ import { specs } from './swagger.js';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import * as n4j from './backend_neo4j.cjs'
-import llm_routes from './routes/llm_with_filter_routes.js';
-import llm_spatial_only_routes from './routes/llm_spatial_only_routes.js';
-import anvil_proxy from './routes/anvil_proxy.js';
+//import llm_routes from './routes/llm_with_filter_routes.js';
+//import llm_spatial_only_routes from './routes/llm_spatial_only_routes.js';
+//import anvil_proxy from './routes/anvil_proxy.js';
 import search_routes from './routes/search_routes.js';
 
 import { authenticateJWT, authorizeRole, generateAccessToken } from './jwtUtils.js';
