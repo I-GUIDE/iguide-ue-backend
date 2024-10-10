@@ -39,23 +39,20 @@ async function performSearchWithMemory(userQuery, memoryId) {
     try {
         const searchResponse = await client.search({
             index: process.env.OPENSEARCH_INDEX,
-            search_pipeline: 'rag_pipeline', //Specify the optional search pipeline
+            search_pipeline: 'rag_pipeline_local', //Specify the optional search pipeline
             body: {
                 query: {
                     multi_match: {
                         query: userQuery,
-                        fields: ["authors", "tags", "contents", "title", "contributors"],
+                        fields: ["authors^2", "contents", "title^3", "contributors^2"],
                         type: "best_fields" // "best_fields" selects the most relevant field for matching.
                     }
                 },
                 ext: {
                     generative_qa_parameters: {
-                        llm_model: "gpt-3.5-turbo", 
+                        llm_model: "llama3:latest", 
                         llm_question: userQuery,
-                        memory_id: memoryId, // Pass the memory ID here
-                        context_size: 5,
-                        message_size: 5,
-                        timeout: 15
+                        memory_id: memoryId
                     }
                 }
             }
@@ -191,8 +188,42 @@ router.post('/llm/search', cors(), async (req, res) => {
 
         // Perform the search with the provided or newly created memory ID
         const searchResponse = await performSearchWithMemory(userQuery, finalMemoryId);
+        // handle no hits
+        const scoreThreshold = 5.0;  // Adjust the threshold as needed
+        const hits = searchResponse.hits.hits
+            .filter(hit => hit._score >= scoreThreshold)  // Filter by score
+            .map(hit => ({
+                _id: hit._id,  // Include the _id field
+                _score: hit._score, // Include score for relevance information
+                ...hit._source // Include the _source fields
+            }));
+	    console.log(hits)
+        //const hits = searchResponse.hits.hits || [];
+        //const totalHits = searchResponse.hits.total.value || 0;
 
-        res.json(searchResponse);
+        // Limit the number of elements to at most 10 and handle null fields
+        const elements = hits.slice(0, 10).map(hit => {
+            const source = hit;
+            return {
+                ...source,
+                tags: source.tags === undefined || source.tags === null ? null : source.tags, // Set to null if undefined or null
+                authors: source.authors || null,  // Similar handling for other fields
+                contents: source.contents || null,  // Ensuring null for missing contents
+                title: source.title || null,  // Ensuring null for missing title
+                contributor: source.contributor || null  // Ensuring null for missing contributor
+            };
+        });
+
+        // Format the response
+        const formattedResponse = {
+            answer: searchResponse.ext.retrieval_augmented_generation?.answer || null, // Handle missing answer gracefully
+            message_id: searchResponse.ext.retrieval_augmented_generation?.message_id || null, // Handle missing message ID gracefully
+            elements: elements.length > 0 ? elements : [], // Return empty array if no elements
+            count: elements.length // Return the total number of hits
+        };
+
+        // Send the formatted response to the user
+        res.json(formattedResponse);
     } catch (error) {
         console.error('Error performing conversational search:', error);
         res.status(500).json({ error: 'Error performing conversational search' });
