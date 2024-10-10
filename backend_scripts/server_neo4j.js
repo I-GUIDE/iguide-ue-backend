@@ -179,13 +179,13 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
     });
 
     if (body.hits.total.value === 0) {
-	console.log(`Token not found in database for ${user.id}`)
+	console.log(`Token not found in database for ${refreshToken}`)
 	return res.sendStatus(403);
     }
 
     jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_SECRET, (err, user) => {
 	if (err) {
-	    console.log(`Error processing refreshToken for ${user.id}`)
+	    console.log(`Error processing refreshToken ${refreshToken}`)
 	    return res.sendStatus(403);
 	}
 
