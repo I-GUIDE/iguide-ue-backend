@@ -17,9 +17,9 @@ import { specs } from './swagger.js';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import * as n4j from './backend_neo4j.cjs'
-//import llm_routes from './routes/llm_with_filter_routes.js';
-//import llm_spatial_only_routes from './routes/llm_spatial_only_routes.js';
-//import anvil_proxy from './routes/anvil_proxy.js';
+import llm_routes from './routes/llm_with_filter_routes.js';
+import llm_spatial_only_routes from './routes/llm_spatial_only_routes.js';
+import anvil_proxy from './routes/anvil_proxy.js';
 import search_routes from './routes/search_routes.js';
 
 import { authenticateJWT, authorizeRole, generateAccessToken } from './jwtUtils.js';
@@ -52,9 +52,9 @@ app.use(cookieParser());
 dotenv.config();
 
 // Use the LLM-based conversational search route
-//app.use('/beta', llm_routes);
-//app.use('/beta', llm_spatial_only_routes);
-//app.use('/proxy', anvil_proxy);
+app.use('/beta', llm_routes);
+app.use('/beta', llm_spatial_only_routes);
+app.use('/proxy', anvil_proxy);
 // Use the advanced search route
 app.use('/api', search_routes);
 
