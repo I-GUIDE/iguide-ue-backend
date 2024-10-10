@@ -24,7 +24,10 @@ const options = {
       },
     ],
   },
-  apis: ['./server_neo4j.js', './routes/*.js'], // Path to the API docs
+  apis: [
+    './server_neo4j.js'
+    //, './routes/*.js'
+  ], // Path to the API docs
 };
 
 const specs = swaggerJsdoc(options);
