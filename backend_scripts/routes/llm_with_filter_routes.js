@@ -51,7 +51,8 @@ async function createMemory(conversationName) {
 async function performSearchWithMemory(userQuery, memoryId) {
     try {
         const searchResponse = await client.search({
-            index: process.env.OPENSEARCH_INDEX,
+            //index: process.env.OPENSEARCH_INDEX,
+            index: "neo4j-elements",
             search_pipeline: 'rag_pipeline_local',
             body: {
                 query: {
@@ -80,17 +81,26 @@ async function performSearchWithMemory(userQuery, memoryId) {
 // Function to call GPT API for filtering
 async function filterElementsWithGPT(userQuery, answer, elements) {
     try {
-        const prompt = `
-        Generated Answer: ${answer}
-        Elements: ${JSON.stringify(elements)}
+        const messages = [
+            {
+                role: 'system',
+                content: 'You are a helpful assistant that helps filter relevant elements based on a given answer.',
+            },
+            {
+                role: 'user',
+                content: `
+Generated Answer: ${answer}
+Elements: ${JSON.stringify(elements)}
 
-        Based on the generated answer, return only the elements that are relevant.
-        Respond with a JSON array containing only the relevant elements.
-        `;
+Based on the generated answer, return only the elements that are relevant.
+Respond with a JSON array containing only the relevant elements.
+                `,
+            },
+        ];
 
-        const response = await axios.post('https://api.openai.com/v1/completions', {
-            model: 'gpt-4o',
-            prompt: prompt,
+        const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+            model: 'gpt-3.5-turbo',
+            messages: messages,
             max_tokens: 1000,
             temperature: 0.5,
         }, {
@@ -99,13 +109,19 @@ async function filterElementsWithGPT(userQuery, answer, elements) {
                 'Content-Type': 'application/json',
             },
         });
+	//console.log(response)
+        // Clean up the response to remove unwanted markdown and whitespace
+        let responseContent = response.data.choices[0].message.content.trim();
+        responseContent = responseContent.replace(/```json|```/g, '').trim(); // Remove markdown formatting
 
-        return JSON.parse(response.data.choices[0].text.trim());
+        // Parse JSON safely
+        return JSON.parse(responseContent);
     } catch (error) {
         console.error('Error filtering elements with GPT:', error);
         throw error;
     }
 }
+
 
 /**
  * @swagger

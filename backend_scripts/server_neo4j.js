@@ -52,9 +52,9 @@ app.use(cookieParser());
 dotenv.config();
 
 // Use the LLM-based conversational search route
-app.use('/beta', llm_routes);
-app.use('/beta', llm_spatial_only_routes);
-app.use('/proxy', anvil_proxy);
+//app.use('/beta', llm_routes);
+//app.use('/beta', llm_spatial_only_routes);
+//app.use('/proxy', anvil_proxy);
 // Use the advanced search route
 app.use('/api', search_routes);
 
