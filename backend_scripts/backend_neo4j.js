@@ -130,6 +130,7 @@ function parseElementType(type){
 	throw Error('Server Neo4j: Element type ('+ element_type  +') not implemented');
     }
 }
+exports.parseElementType = parseElementType
 
 function parseSortBy(sort_by){
     switch (sort_by){
