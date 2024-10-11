@@ -964,6 +964,17 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
 	if (!can_edit){
 	    res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
 	}
+	if (updates['resource-type'] === 'notebook' &&
+            updates['notebook-repo'] &&
+            updates['notebook-file']) {
+            const htmlNotebookPath =
+                await convertNotebookToHtml(updates['notebook-repo'],
+                                            updates['notebook-file'], notebookHtmlDir);
+            if (htmlNotebookPath) {
+                updates['html-notebook'] =
+                    `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+            }
+        }
 
 	const response = await n4j.updateElement(id, updates);
 	if (response) {
