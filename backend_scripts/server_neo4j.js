@@ -17,7 +17,7 @@ import { specs } from './swagger.js';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import * as n4j from './backend_neo4j.cjs'
-import llm_routes from './routes/llm_routes.js';
+import llm_routes from './routes/llm_with_filter_routes.js';
 import llm_spatial_only_routes from './routes/llm_spatial_only_routes.js';
 import anvil_proxy from './routes/anvil_proxy.js';
 import search_routes from './routes/search_routes.js';
@@ -179,11 +179,13 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
     });
 
     if (body.hits.total.value === 0) {
+	console.log(`Token not found in database for ${refreshToken}`)
 	return res.sendStatus(403);
     }
 
     jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_SECRET, (err, user) => {
 	if (err) {
+	    console.log(`Error processing refreshToken ${refreshToken}`)
 	    return res.sendStatus(403);
 	}
 
@@ -1060,8 +1062,9 @@ app.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
     try {
 	const response = await n4j.getRelatedElementsForID(id);
 	if (JSON.stringify(response) === '{}'){
-	    //return res.status(404).json({ message: 'No related elements found' });
-	    return res.status(404).json({r1:[], r2:[] });
+	    return res.status(404).json({message: 'No related elements found',
+					 nodes:[],
+					 neighbors:[] });
 	}
 	res.status(200).json(response);
     } catch (error) {
@@ -1112,6 +1115,38 @@ app.get('/api/duplicate', cors(), async (req, res) => {
     } catch (error) {
 	console.error('Error checking duplicate:', error);
 	res.status(500).json({ message: 'Error checking duplicate' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/connected-graph:
+ *   get:
+ *     summary: Get all nodes and relations for the connected elements
+ *     tags: ['elements']
+ *     responses:
+ *       200:
+ *         description: Related elements found
+ *       404:
+ *         description: No related elements found
+ *       500:
+ *         description: Internal server error
+ */
+app.options('/api/connected-graph', cors());
+app.get('/api/connected-graph', cors(), async (req, res) => {
+    try {
+	const response = await n4j.getAllRelatedElements();
+	if (JSON.stringify(response) === '{}'){
+	    return res.status(404).json({message: 'No related elements found',
+					 nodes:[],
+					 neighbors:[] });
+	}
+	console.log('Number of connected nodes: ' + response['nodes'].length);
+	console.log('Number of relations: ' + response['neighbors'].length);
+	res.status(200).json(response);
+    } catch (error) {
+	console.error('Error getting related elememts:', error);
+	res.status(500).json({ message: 'Error getting related elememts' });
     }
 });
 /****************************************************************************

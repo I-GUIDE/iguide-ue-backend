@@ -130,6 +130,7 @@ function parseElementType(type){
 	throw Error('Server Neo4j: Element type ('+ element_type  +') not implemented');
     }
 }
+exports.parseElementType = parseElementType
 
 function parseSortBy(sort_by){
     switch (sort_by){
@@ -438,11 +439,12 @@ async function getElementByID(id){
 /**
  * Get related elements for a given element ID
  * @param {string} id
+ * @param {int} depth Depth of related elements e.g. 2 depth would mean related of related
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
-async function getRelatedElementsForID(id){
+async function getRelatedElementsForID(id, depth=2){
     const query_str = "MATCH(n{id:$id_param}) " +
-	  "OPTIONAL MATCH (n)-[rt2:RELATED*0..2]-(r2) " +
+	  "OPTIONAL MATCH (n)-[rt2:RELATED*0.."+depth+"]-(r2) " +
 	  "UNWIND rt2 as related " +
 	  "RETURN {nodes: COLLECT(DISTINCT(r2{.id, .title, `thumbnail-image`:r2.thumbnail_image, `resource-type`:TOLOWER(LABELS(r2)[0])})), neighbors: COLLECT(DISTINCT({src:startNode(related).id, dst:endNode(related).id}))}";
     try{
@@ -450,9 +452,32 @@ async function getRelatedElementsForID(id){
 	      await driver.executeQuery(query_str,
 					{id_param: id},
 					{database: process.env.NEO4J_DB});
-	console.log(records);
+	//console.log(records);
 	if (records.length <= 0){
 	    // No related elements found for the given ID
+	    return {};
+	}
+	return records[0]['_fields'][0];
+    } catch(err){console.log('getElementsByType() Error in query: '+ err);}
+    // something went wrong
+    return {};
+}
+/**
+ * Get related elements for a given element ID
+ * @param {string} id
+ * @param {int} depth Depth of related elements e.g. 2 depth would mean related of related
+ * @return {Object} Map of object with given ID. Empty map if ID not found or error
+ */
+async function getAllRelatedElements(){
+    const query_str = "MATCH(n)-[rt:RELATED]-(r) " +
+	  "UNWIND [n, r] as cn " +
+	  "RETURN {nodes: COLLECT(DISTINCT(cn{.id, .title, `thumbnail-image`:cn.thumbnail_image, `resource-type`:TOLOWER(LABELS(cn)[0])})), neighbors: COLLECT(DISTINCT({src:startNode(rt).id, dst:endNode(rt).id}))}";
+    try{
+	const {records, summary} =
+	      await driver.executeQuery(query_str,
+					{database: process.env.NEO4J_DB});
+	if (records.length <= 0){
+	    // No related elements found
 	    return {};
 	}
 	return records[0]['_fields'][0];
@@ -1128,7 +1153,7 @@ async function registerElement(contributor_id, element){
     node['click_count'] = neo4j.int(0);
     // for every element initialize creation time
     node['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
-
+    
     // (3) create relations based on related-elements
     var {query_match, query_merge, query_params} =
 	  await generateQueryStringForRelatedElements(related_elements);
@@ -1152,6 +1177,7 @@ async function registerElement(contributor_id, element){
 	if (summary.counters.updates()['nodesCreated'] >= 1){
 	    return {response: true, element_id: node['id']};
 	}
+	
     } catch(err){
 	if (err.code === 'Neo.ClientError.Schema.ConstraintValidationFailed') {
 	    console.log('Error registering, duplicate element: '+ err);
@@ -1369,6 +1395,7 @@ exports.getRelatedElementsForID = getRelatedElementsForID;
 exports.getElementsByContributor = getElementsByContributor;
 exports.getFeaturedElementsByType = getFeaturedElementsByType;
 
+exports.getAllRelatedElements = getAllRelatedElements
 exports.checkDuplicatesForField = checkDuplicatesForField
 
 exports.updateContributor = updateContributor;
