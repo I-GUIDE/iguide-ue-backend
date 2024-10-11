@@ -4,8 +4,6 @@ import axios from 'axios';
 import cors from 'cors';
 const router = express.Router();
 
-import * as n4j from '../backend_neo4j.cjs'
-
 // Initialize OpenSearch client
 const client = new Client({
     node: process.env.OPENSEARCH_NODE,
@@ -17,6 +15,7 @@ const client = new Client({
         rejectUnauthorized: false,
     },
 });
+
 /**
  * @swagger
  * /api/search:
@@ -118,6 +117,13 @@ router.get('/search', cors(), async (req, res) => {
                 from: parseInt(from, 10),
                 size: parseInt(size, 10),
                 query: query,
+                aggs: {
+                    resource_type_counts: {
+                        terms: {
+                            field: 'resource-type',
+                        },
+                    },
+                },
             },
         };
 
@@ -133,25 +139,25 @@ router.get('/search', cors(), async (req, res) => {
         }
 
         const searchResponse = await client.search(searchParams);
-        let results = searchResponse.body.hits.hits.map(hit => {
+
+        // Map search hits
+        const results = searchResponse.body.hits.hits.map(hit => {
             const { _id, _source } = hit;
             const { metadata, ...rest } = _source; // Remove metadata
             return { _id, ...rest };
         });
 
-	// calculate per element count. Used for showing element tab counts on the frontend
-	let per_element_count = {};
-	for (let elem_type in n4j.ElementType) {
-	    elem_type = elem_type.toLowerCase();
-	    per_element_count[elem_type+'-count'] = 0;
-	}
-	for (let element of results){
-	    let element_type = element['resource-type'];
-	    per_element_count[element_type+'-count'] += 1;
-	}
-	results = {...results, ...per_element_count};
+        // Get resource-type aggregation counts
+        const resourceTypeCounts = searchResponse.body.aggregations.resource_type_counts.buckets.map(bucket => ({
+            "element-type": bucket.key,
+            count: bucket.doc_count,
+        }));
 
-        res.json({ elements: results, total_count: searchResponse.body.hits.total.value });
+        res.json({
+            elements: results,
+            total_count: searchResponse.body.hits.total.value,
+            resource_type_counts: resourceTypeCounts,  // Return counts by resource-type
+        });
     } catch (error) {
         console.error('Error querying OpenSearch:', error);
         res.status(500).json({ error: 'Error querying OpenSearch' });
