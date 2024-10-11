@@ -26,7 +26,7 @@ const options = {
   },
   apis: [
     './server_neo4j.js'
-    //, './routes/*.js'
+    , './routes/*.js'
   ], // Path to the API docs
 };
 
