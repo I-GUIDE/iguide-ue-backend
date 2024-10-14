@@ -810,7 +810,7 @@ async function registerContributor(contributor){
 
     // (2) assign roles for new contributor
     contributor['role'] = (() => {
-	if (contributor['email'].endsWith('edu')) {
+	if (contributor['email'] && contributor['email'].endsWith('edu')) {
 	    return neo4j.int(Role.TRUSTED_USER);
 	}
 	// default role
