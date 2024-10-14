@@ -810,7 +810,9 @@ async function registerContributor(contributor){
 
     // (2) assign roles for new contributor
     contributor['role'] = (() => {
-	if (contributor['email'] && contributor['email'].endsWith('edu')) {
+	if ((contributor['email'] && contributor['email'].endsWith('edu')) ||
+	    (contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university'))
+	   ) {
 	    return neo4j.int(Role.TRUSTED_USER);
 	}
 	// default role
@@ -952,7 +954,7 @@ async function checkContributorByID(id){
 
 /**
  * Check for duplicates for given field
- * @param {string} field name to check duplicates for 
+ * @param {string} field name to check duplicates for
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
 async function checkDuplicatesForField(field_name, value){
@@ -1153,7 +1155,7 @@ async function registerElement(contributor_id, element){
     node['click_count'] = neo4j.int(0);
     // for every element initialize creation time
     node['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
-    
+
     // (3) create relations based on related-elements
     var {query_match, query_merge, query_params} =
 	  await generateQueryStringForRelatedElements(related_elements);
@@ -1177,7 +1179,7 @@ async function registerElement(contributor_id, element){
 	if (summary.counters.updates()['nodesCreated'] >= 1){
 	    return {response: true, element_id: node['id']};
 	}
-	
+
     } catch(err){
 	if (err.code === 'Neo.ClientError.Schema.ConstraintValidationFailed') {
 	    console.log('Error registering, duplicate element: '+ err);
