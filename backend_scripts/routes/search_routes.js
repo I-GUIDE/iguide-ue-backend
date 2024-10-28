@@ -3,6 +3,11 @@ import { Client } from '@opensearch-project/opensearch';
 import axios from 'axios';
 import cors from 'cors';
 const router = express.Router();
+import { Filter } from 'bad-words'
+const customFilter = new Filter();
+
+// Override the replace method to replace bad words with an empty string
+customFilter.replaceWord = (word) => '';
 
 // Initialize OpenSearch client
 const client = new Client({
@@ -223,9 +228,7 @@ router.get('/search/count', cors(), async (req, res) => {
 router.options('/search', cors());
 router.get('/search', cors(), async (req, res) => {
     const { keyword, 'element-type': element_type, 'sort-by': sort_by = '_score', order = 'desc', from = 0, size = 15, ...additionalFields } = req.query;
-    if (keyword) {
-        await saveSearchKeyword(keyword);
-    }
+    
     let query = {
         multi_match: {
             query: keyword,
@@ -298,7 +301,11 @@ router.get('/search', cors(), async (req, res) => {
             const { metadata, ...rest } = _source; // Remove metadata
             return { _id, ...rest };
         });
-
+        if (searchResponse.body.hits.total.value > 0){
+            var cleaned_keyword = customFilter.clean(keyword).trim()
+            cleaned_keyword = cleaned_keyword.replace(/\s\s+/g, ' ');
+            await saveSearchKeyword(cleaned_keyword);
+        }
         res.json({ elements: results, total_count: searchResponse.body.hits.total.value });
     } catch (error) {
         console.error('Error querying OpenSearch:', error);
