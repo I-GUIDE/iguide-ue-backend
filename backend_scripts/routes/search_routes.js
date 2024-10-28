@@ -15,7 +15,19 @@ const client = new Client({
         rejectUnauthorized: false,
     },
 });
-
+const saveSearchKeyword = async (keyword) => {
+    try {
+        await client.index({
+            index: 'search_keywords',
+            body: {
+                keyword,
+                timestamp: new Date().toISOString()
+            }
+        });
+    } catch (error) {
+        console.error('Error saving search keyword:', error);
+    }
+};
 /**
  * @swagger
  * /api/search/count:
@@ -211,7 +223,9 @@ router.get('/search/count', cors(), async (req, res) => {
 router.options('/search', cors());
 router.get('/search', cors(), async (req, res) => {
     const { keyword, 'element-type': element_type, 'sort-by': sort_by = '_score', order = 'desc', from = 0, size = 15, ...additionalFields } = req.query;
-
+    if (keyword) {
+        await saveSearchKeyword(keyword);
+    }
     let query = {
         multi_match: {
             query: keyword,
@@ -289,6 +303,89 @@ router.get('/search', cors(), async (req, res) => {
     } catch (error) {
         console.error('Error querying OpenSearch:', error);
         res.status(500).json({ error: 'Error querying OpenSearch' });
+    }
+});
+/**
+ * @swagger
+ * /api/top-keywords:
+ *   get:
+ *     summary: Retrieve the most searched keywords within a specified time window
+ *     tags:
+ *       - Advanced Search
+ *     parameters:
+ *       - in: query
+ *         name: k
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of top keywords to retrieve
+ *       - in: query
+ *         name: t
+ *         schema:
+ *           type: integer
+ *           default: 24
+ *         description: Time window in hours to filter keywords (e.g., 24 for the past 24 hours)
+ *     responses:
+ *       200:
+ *         description: A list of the most searched keywords within the specified time window
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 top_keywords:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       keyword:
+ *                         type: string
+ *                       count:
+ *                         type: integer
+ *                   description: List of top keywords and their respective counts
+ *       500:
+ *         description: Error retrieving top keywords
+ */
+
+router.options('/search', cors());
+router.get('/top-keywords', cors(), async (req, res) => {
+    const { k = 10, t = 24 } = req.query; // default: top 10 keywords within the last 24 hours
+
+    // Calculate the time window based on `t` in hours
+    const timeWindow = new Date(Date.now() - t * 60 * 60 * 1000).toISOString();
+
+    try {
+        const response = await client.search({
+            index: 'search_keywords',
+            body: {
+                query: {
+                    range: {
+                        timestamp: {
+                            gte: timeWindow
+                        }
+                    }
+                },
+                aggs: {
+                    popular_keywords: {
+                        terms: {
+                            field: 'keyword.keyword',  // Use the keyword sub-field for exact match
+                            size: parseInt(k, 10)     // Limit results to top `k`
+                        }
+                    }
+                },
+                size: 0  // We only want the aggregation results, not the documents
+            }
+        });
+
+        const topKeywords = response.body.aggregations.popular_keywords.buckets.map(bucket => ({
+            keyword: bucket.key,
+            count: bucket.doc_count
+        }));
+
+        res.json({ top_keywords: topKeywords });
+    } catch (error) {
+        console.error('Error retrieving top keywords:', error);
+        res.status(500).json({ error: 'Error retrieving top keywords' });
     }
 });
 
