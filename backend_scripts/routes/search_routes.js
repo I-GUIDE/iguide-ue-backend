@@ -354,7 +354,7 @@ router.get('/search', cors(), async (req, res) => {
  *         description: Error retrieving top keywords
  */
 
-router.options('/search', cors());
+router.options('/top-keywords', cors());
 router.get('/top-keywords', cors(), async (req, res) => {
     const { k = 10, t = 24 } = req.query; // default: top 10 keywords within the last 24 hours
 
