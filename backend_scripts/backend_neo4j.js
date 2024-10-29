@@ -60,6 +60,12 @@ const Role = Object.freeze({
 });
 exports.Role = Role;
 
+const Visibility = Object.freeze({
+    PRIVATE: 1,
+    PUBLIC: 10,
+});
+exports.Role = Role;
+
 async function testServerConnection() {
     try {
 	const serverInfo = await driver.getServerInfo();
@@ -298,7 +304,7 @@ async function getElementByID(id){
 	const {records, summary} =
 	      await tx.run(query_str,
 			   {id_param: id},
-			   {database: process.env.NEO4J_DB});
+			   {routing: 'READ', database: process.env.NEO4J_DB});
 	if (records.length <= 0){
 	    // Query returned no match for given ID
 	    return {};
@@ -451,7 +457,7 @@ async function getRelatedElementsForID(id, depth=2){
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
 					{id_param: id},
-					{database: process.env.NEO4J_DB});
+					{routing: 'READ', database: process.env.NEO4J_DB});
 	//console.log(records);
 	if (records.length <= 0){
 	    // No related elements found for the given ID
@@ -475,7 +481,7 @@ async function getAllRelatedElements(){
     try{
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
-					{database: process.env.NEO4J_DB});
+					{routing: 'READ', database: process.env.NEO4J_DB});
 	if (records.length <= 0){
 	    // No related elements found
 	    return {};
@@ -510,7 +516,7 @@ async function getElementsByType(type, from, size, sort_by=SortBy.TITLE, order="
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
 					{from: neo4j.int(from), size: neo4j.int(size)},
-					{database: process.env.NEO4J_DB});
+					{routing: 'READ', database: process.env.NEO4J_DB});
 
 	if (records.length <= 0){
 	    // No elements found
@@ -542,7 +548,8 @@ async function getElementsCountByType(type){
 	      "RETURN COUNT(n)";
 
 	const {records, summary} =
-	      await driver.executeQuery(query_str, {database: process.env.NEO4J_DB});
+	      await driver.executeQuery(query_str,
+					{routing: 'READ', database: process.env.NEO4J_DB});
 	if (records.length <= 0){
 	    // Error running query
 	    return -1;
@@ -578,7 +585,7 @@ async function getElementsByContributor(id, from, size, sort_by=SortBy.TITLE, or
 					{contrib_id: id,
 					 from: neo4j.int(from),
 					 size: neo4j.int(size)},
-					{database: process.env.NEO4J_DB});
+					{routing: 'READ', database: process.env.NEO4J_DB});
 	if (records.length <= 0){
 	    // No elements found by contributor
 	    return [];
@@ -607,7 +614,7 @@ async function getElementsCountByContributor(id){
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
 					{contrib_id: id},
-					{database: process.env.NEO4J_DB});
+					{routing: 'READ', database: process.env.NEO4J_DB});
 	if (records.length <= 0){
 	    // Error running query
 	    return -1;
@@ -642,7 +649,7 @@ async function getElementsByTag(tag, from, size, sort_by=SortBy.TITLE, order="DE
 					{tag_str: tag,
 					 from: neo4j.int(from),
 					 size: neo4j.int(size)},
-					{database: process.env.NEO4J_DB});
+					{routing: 'READ', database: process.env.NEO4J_DB});
 	if (records.length <= 0){
 	    // No elements found with given tag
 	    return [];
@@ -671,7 +678,7 @@ async function getElementsCountByTag(tag){
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
 					{tag_str: tag},
-					{database: process.env.NEO4J_DB});
+					{routing: 'READ', database: process.env.NEO4J_DB});
 	if (records.length <= 0){
 	    // Error running query
 	    return -1;
@@ -711,7 +718,7 @@ async function getFeaturedElements(){
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
 					{rel_count:rel_count},
-					{database: process.env.NEO4J_DB});
+					{routing: 'READ', database: process.env.NEO4J_DB});
 	if (records.length <= 0){
 	    // No featured elements found
 	    return [];
@@ -762,7 +769,7 @@ async function getFeaturedElementsByType(type, limit){
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
 					{rel_count:rel_count, limit:neo4j.int(limit)},
-					{database: process.env.NEO4J_DB});
+					{routing: 'READ', database: process.env.NEO4J_DB});
 	if (records.length <= 0){
 	    // No featured elements found
 	    return [];
@@ -881,7 +888,7 @@ async function setContributorAvatar(id, avatar_url){
 	    "RETURN c.avatar_url";
 	let {records, summ} = await tx.run(query_str,
 			      {contrib_id: id},
-			      {database: process.env.NEO4J_DB});
+			      {routing: 'READ', database: process.env.NEO4J_DB});
 	if (records.length > 0){
 	    old_url = records[0]['_fields'][0];
 	}
@@ -915,7 +922,7 @@ async function getContributorByID(id){
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
 					{contrib_id: id},
-					{database: process.env.NEO4J_DB});
+					{routing: 'READ', database: process.env.NEO4J_DB});
 	if (records.length <= 0){
 	    // Query returned no match for given ID
 	    return {};
@@ -944,7 +951,7 @@ async function checkContributorByID(id){
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
 					{contrib_id: id},
-					{database: process.env.NEO4J_DB});
+					{routing: 'READ', database: process.env.NEO4J_DB});
 	const resp = records[0]['_fields'][0];
 	return resp;
     } catch(err){console.log('Error in query: '+ err);}
@@ -972,7 +979,7 @@ async function checkDuplicatesForField(field_name, value){
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
 					query_params,
-					{database: process.env.NEO4J_DB});
+					{routing: 'READ', database: process.env.NEO4J_DB});
 	if (records.length >= 1) {
 	    const duplicate_element_id = records[0]['_fields'][0];
 	    return {response: true, element_id: duplicate_element_id};
@@ -1227,7 +1234,30 @@ async function deleteElementByID(id){
 }
 
 /**
- * Get contributor ID for the element
+ * Set visibility for an element/resource given ID
+ * @param {string} id
+ * @param {Enum} visibility
+ * @return {Object} true if deleted successfully, false otherwise
+ */
+async function setElementVisibilityForID(id, visibility){
+    const query_str = "MATCH (n{id:$id_param}) " +
+	  "SET n.visibility=$visibility";
+    try {
+	const {_, summary} =
+	      await driver.executeQuery(query_str,
+					{id_param: id, visibility:neo4j.int(visibility)},
+					{database: process.env.NEO4J_DB});
+	if (summary.counters.updates()['propertiesSet'] == 1){
+	    return true;
+	}
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return false;
+}
+
+
+/**
+ * Set contrib ID for the element
  * @param {string} e_id Element ID
  * @return {Object} Contributors {id, openid}
  */
