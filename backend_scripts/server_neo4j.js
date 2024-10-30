@@ -21,6 +21,7 @@ import llm_routes from './routes/llm_with_filter_routes.js';
 import llm_spatial_only_routes from './routes/llm_spatial_only_routes.js';
 import anvil_proxy from './routes/anvil_proxy.js';
 import search_routes from './routes/search_routes.js';
+import sharp from 'sharp';
 
 import { authenticateJWT, authorizeRole, generateAccessToken } from './jwtUtils.js';
 
@@ -1033,17 +1034,67 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
  *       400:
  *         description: No file uploaded
  */
+
+// Sizes for different image versions
+const IMAGE_SIZES = {
+    thumbnail: [
+        { width: 320, suffix: '-320w' },
+        { width: 480, suffix: '-480w' },
+        { width: 800, suffix: '-800w' },
+        { width: 1200, suffix: '-1200w' }
+    ],
+    avatar: [
+        { width: 150, suffix: '-150w' },
+        { width: 300, suffix: '-300w' }
+    ]
+};
+
+
 app.options('/api/elements/thumbnail', jwtCorsMiddleware);
-app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('file'), authenticateJWT, (req, res) => {
+app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('file'), authenticateJWT, async (req, res) => {
     if (!req.file) {
 	return res.status(400).json({ message: 'No file uploaded' });
     }
     // [ToDo] Change filename to user ID
-    const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${req.file.filename}`;
-    res.json({
-	message: 'Thumbnail uploaded successfully',
-	url: filePath,
-    });
+
+	try {
+        const fileNameWithoutExt = req.file.filename.replace(/\.[^/.]+$/, '');
+        const fileExt = path.extname(req.file.filename);
+        const images = [];
+
+        for (const size of IMAGE_SIZES.thumbnail) {
+            const resizedFileName = `${fileNameWithoutExt}${size.suffix}${fileExt}`;
+            const resizedFilePath = path.join(thumbnailDir, resizedFileName);
+
+            await sharp(req.file.path)
+                .resize(size.width)
+                .toFile(resizedFilePath);
+
+            const imageUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${resizedFileName}`;
+            images.push({
+                url: imageUrl,
+                width: size.width
+            });
+        }
+
+        const srcset = images.map(img => `${img.url} ${img.width}w`).join(', ');
+
+        const sizes = '(max-width: 480px) 320px, ' + '(max-width: 800px) 480px, ' + '(max-width: 1200px) 800px, ' + '1200px';
+
+        res.json({
+            message: 'Thumbnail uploaded successfully',
+            images: images,
+            srcset: srcset,
+            sizes: sizes,
+            defaultSrc: images[1].url
+        });
+
+    } catch (error) {
+        console.error('Error processing image:', error);
+        res.status(500).json({ message: 'Error processing image' });
+    }
+
+	
 });
 
 /**
