@@ -303,8 +303,11 @@ router.get('/search', cors(), async (req, res) => {
         });
         if (searchResponse.body.hits.total.value > 0){
             var cleaned_keyword = customFilter.clean(keyword).trim()
-            cleaned_keyword = cleaned_keyword.replace(/\s\s+/g, ' ');
-            await saveSearchKeyword(cleaned_keyword);
+            //cleaned_keyword = cleaned_keyword.replace(/\s\s+/g, ' ');
+            if (cleaned_keyword === keyword){
+                await saveSearchKeyword(cleaned_keyword);
+            }
+            
         }
         res.json({ elements: results, total_count: searchResponse.body.hits.total.value });
     } catch (error) {
