@@ -1015,6 +1015,21 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
     }
 });
 
+
+// Sizes for different image versions
+const IMAGE_SIZES = {
+    thumbnail: [
+        { width: 320, suffix: '-320w' },
+        { width: 480, suffix: '-480w' },
+        { width: 800, suffix: '-800w' },
+        { width: 1200, suffix: '-1200w' }
+    ],
+    avatar: [
+        { width: 150, suffix: '-150w' },
+        { width: 300, suffix: '-300w' }
+    ]
+};
+
 /**
  * @swagger
  * /api/elements/thumbnail:
@@ -1035,38 +1050,32 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
  *         description: No file uploaded
  */
 
-// Sizes for different image versions
-const IMAGE_SIZES = {
-    thumbnail: [
-        { width: 320, suffix: '-320w' },
-        { width: 480, suffix: '-480w' },
-        { width: 800, suffix: '-800w' },
-        { width: 1200, suffix: '-1200w' }
-    ],
-    avatar: [
-        { width: 150, suffix: '-150w' },
-        { width: 300, suffix: '-300w' }
-    ]
-};
-
 
 app.options('/api/elements/thumbnail', jwtCorsMiddleware);
 app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('file'), authenticateJWT, async (req, res) => {
-    if (!req.file) {
-	return res.status(400).json({ message: 'No file uploaded' });
-    }
-    // [ToDo] Change filename to user ID
+    try {
+        const body = JSON.parse(JSON.stringify(req.body));
+        const elementId = body.id;
+        const newThumbnailFile = req.file;
 
-	try {
-        const fileNameWithoutExt = req.file.filename.replace(/\.[^/.]+$/, '');
-        const fileExt = path.extname(req.file.filename);
+        if (!elementId || !newThumbnailFile) {
+            return res.status(400).json({ message: 'Element ID and new thumbnail file are required' });
+        }
+
+        const element = await n4j.getElementByID(elementId);
+        if (!element || JSON.stringify(element) === '{}') {
+            return res.status(404).json({ message: 'Element not found' });
+        }
+
+        const fileNameWithoutExt = newThumbnailFile.filename.replace(/\.[^/.]+$/, '');
+        const fileExt = path.extname(newThumbnailFile.filename);
         const images = [];
 
         for (const size of IMAGE_SIZES.thumbnail) {
             const resizedFileName = `${fileNameWithoutExt}${size.suffix}${fileExt}`;
             const resizedFilePath = path.join(thumbnailDir, resizedFileName);
 
-            await sharp(req.file.path)
+            await sharp(newThumbnailFile.path)
                 .resize(size.width)
                 .toFile(resizedFilePath);
 
@@ -1077,24 +1086,23 @@ app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('f
             });
         }
 
-        const srcset = images.map(img => `${img.url} ${img.width}w`).join(', ');
+        const srcSet = images.map(img => `${img.url} ${img.width}w`).join(', ');
 
-        const sizes = '(max-width: 480px) 320px, ' + '(max-width: 800px) 480px, ' + '(max-width: 1200px) 800px, ' + '1200px';
+        const newThumbnailData = {
+            defaultSrc: images[images.length - 1].url,
+            srcSet: srcSet
+        };
+        await n4j.updateElement(elementId, { 'thumbnail-image': newThumbnailData });
 
         res.json({
             message: 'Thumbnail uploaded successfully',
-            images: images,
-            srcset: srcset,
-            sizes: sizes,
-            defaultSrc: images[1].url
+            thumbnailImage: newThumbnailData
         });
 
     } catch (error) {
         console.error('Error processing image:', error);
         res.status(500).json({ message: 'Error processing image' });
     }
-
-	
 });
 
 /**
@@ -1450,30 +1458,18 @@ app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.s
             });
         }
 
-        const srcset = images.map((img, index) => `${img.url} ${index + 1}x`).join(', ');
+        const srcSet = images.map(img => `${img.url} ${img.width}w`).join(', ');
 
-        const {result, oldAvatarUrl} = await n4j.setContributorAvatar(id, {
-            defaultSrc: images[0].url,
-            srcset: srcset
-        });
+        const avatarData = {
+            defaultSrc: images[images.length - 1].url,
+            srcSet: srcSet
+        };
 
-        if (oldAvatarUrl) {
-            const oldBaseFileName = path.basename(oldAvatarUrl).replace(/\.[^/.]+$/, '');
-            const oldFileExt = path.extname(oldAvatarUrl);
-            
-            for (const size of IMAGE_SIZES.avatar) {
-                const oldResizedPath = path.join(avatarDir, `${oldBaseFileName}${size.suffix}${oldFileExt}`);
-                if (fs.existsSync(oldResizedPath)) {
-                    fs.unlinkSync(oldResizedPath);
-                }
-            }
-        }
+        await n4j.setContributorAvatar(id, avatarData);
 
         res.json({
-            message: oldAvatarUrl ? 'Avatar updated successfully' : 'Avatar uploaded successfully',
-            images: images,
-            srcset: srcset,
-            defaultSrc: images[0].url
+            message: 'Avatar uploaded successfully',
+            avatar: avatarData
         });
 
     } catch (error) {
@@ -1481,6 +1477,7 @@ app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.s
         res.status(500).json({ message: 'Internal server error' });
     }
 });
+
 
 /**
  * @swagger
