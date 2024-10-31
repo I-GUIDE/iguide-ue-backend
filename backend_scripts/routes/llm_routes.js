@@ -50,7 +50,7 @@ async function performSearchWithMemory(userQuery, memoryId) {
                 },
                 ext: {
                     generative_qa_parameters: {
-                        llm_model: "llama3:latest", 
+                        llm_model: "llama3:instruct", 
                         llm_question: userQuery,
                         memory_id: memoryId
                     }
