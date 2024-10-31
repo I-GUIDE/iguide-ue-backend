@@ -386,14 +386,17 @@ app.get('/api/elements/titles', cors(), async (req, res) => {
 	    index: os_index,
 	    scroll: scrollTimeout,
 	    body: {
-		size: 100, // Number of results to fetch per scroll request
-		query: {
-		    term: {
-			'resource-type': elementType
-		    },
-		},
-		_source: ['title'], // Only fetch the title field
-	    },
+        size: 100, // Number of results to fetch per scroll request
+        query: {
+            bool: {
+                must: [
+                    { term: { 'resource-type': elementType } },
+                    { term: { visibility: 10 } } // Filter for visibility 10
+                ]
+            }
+        },
+        _source: ['title'], // Only fetch the title field
+    },
 	});
 
 	let scrollId = initialSearchResponse.body._scroll_id;
