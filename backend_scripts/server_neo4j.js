@@ -686,25 +686,16 @@ app.get('/api/elements', cors(), async (req, res) => {
 		// [ToDo] Should be removed since '_id' is not used anymore???
 		if (field_name == '_id'){
 		    throw Error('GET /api/elements field_name=_id: Should not be used');
-
-		    // const resources = [];
-		    // let total_count = 0;
-		    // for (let val of match_value){
-		    // 	let resource = await n4j.getElementByID(val);
-		    // 	//let resource_count = await n4j.getElementsCountByContributor(val);
-		    // 	resources.push(resource);
-		    // }
-		    // res.json({elements:resources, 'total-count': total_count});
-		    // return;
 		} else if (field_name == 'contributor') {
 		    //'62992f5f-fd30-41d6-bc19-810cbba752e9';
+		    // 'http://cilogon.org/serverA/users/48835826'
 		    const user_id = (() => {
 			if (!req.user || req.user == null || typeof req.user === 'undefined'){
 			    return null;
 			}
 			return req.user.id;
 		    })();
-		    
+
 		    const resources = [];
 		    let total_count = 0;
 		    for (let val of match_value){
@@ -813,7 +804,7 @@ app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, authorizeRole(n4j.
 	}
 	return {user_id:req.user.id, user_role:req.user.role}
     })();
-    
+
     try {
         console.log('Registering ' + resource['resource-type'] + 'by ' + user_id);
         // Check if the resource type is "oer" and user have enough permission to add OER
@@ -1081,8 +1072,7 @@ app.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, async (req, r
     console.log('Setting visibility (' + visibility_str + ') for element with id: ' + id);
 
     try {
-	// [DEBUG] Uncomment for Prod
-	const can_edit = true; //await n4j.userCanEditElement(id, req.user.id, req.user.role);
+	const can_edit = await n4j.userCanEditElement(id, req.user.id, req.user.role);
 	if (!can_edit){
 	    res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
 	}
