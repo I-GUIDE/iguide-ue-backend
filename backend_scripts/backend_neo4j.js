@@ -258,10 +258,10 @@ function makeFrontendCompatible(element) {
 function contributorMatchQuery(id, with_contributions=false){
     if (id.startsWith('http')){
 	// query should use openid, single user can have multiple openids e.g. multiple orgs
-	// [BUG] 'WHERE r.visibility=public' added after this will result in invalid query string
-	// however, since we are not using openids anymore, this should never happen
-	console.warn('[BUG] contributorMatchQuery() called with openid');
 	if (with_contributions){
+	    // [BUG] 'WHERE r.visibility=public' added after this will result in invalid query str
+	    // however, since we are not using openids anymore, this should never happen
+	    console.warn('[BUG] contributorMatchQuery() called with openid');
 	    return "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) WHERE $contrib_id in c.openid";
 	} else {
 	    return "MATCH (c:Contributor) WHERE $contrib_id in c.openid";
@@ -269,6 +269,9 @@ function contributorMatchQuery(id, with_contributions=false){
     } else {
 	// query should use id
 	if (with_contributions){
+	    // [BUG] 'WHERE r.visibility=public' added after this will result in invalid query str
+	    // however, since we are not using openids anymore, this should never happen
+	    console.warn('[BUG] contributorMatchQuery() called with openid');
 	    return "MATCH (c:Contributor{id:$contrib_id})-[:CONTRIBUTED]-(r)";
 	} else {
 	    return "MATCH (c:Contributor{id:$contrib_id})";
@@ -545,6 +548,7 @@ async function getElementByID(id, user_id, user_role){
     } catch(err){
 	console.log('Error in query: '+ err);
     }
+    finally {await session.close();}
     // something went wrong
     return {};
 }
@@ -642,10 +646,7 @@ async function getElementsByType(type, from, size, sort_by=SortBy.TITLE, order="
 	}
 	var ret = []
 	for (record of records){
-	    ret.push(makeFrontendCompatible(record['_fields'][0]));
-	    // element = record['_fields'][0];
-	    // element['resource-type'] = element['resource-type'].toLowerCase();
-	    // ret.push(element);
+	    ret.push(makeFrontendCompatible(record.get('n')));
 	}
 	return ret;
     } catch(err){console.log('getElementsByType() Error in query: '+ err);}
@@ -663,7 +664,7 @@ async function getElementsCountByType(type){
 	const node_type = parseElementType(type);
 	const query_str = "MATCH (n:"+ node_type +") " +
 	      "WHERE n.visibility=$public_visibility " +
-	      "RETURN COUNT(n)";
+	      "RETURN COUNT(n) AS count";
 
 	const {records, summary} =
 	      await driver.executeQuery(query_str,
@@ -673,8 +674,7 @@ async function getElementsCountByType(type){
 	    // Error running query
 	    return -1;
 	}
-	var ret = records[0]['_fields'][0]['low'];
-	return ret;
+	return parse64BitNumber(records[0].get('count'));
     } catch(err){console.log('getElementsCountByType() Error in query: '+ err);}
     // something went wrong
     return -1;
@@ -695,44 +695,57 @@ async function getElementsByContributor(id,
 					size,
 					sort_by=SortBy.TITLE,
 					order="DESC"){
+
     // There are two cases where this function is called
     // (1) For showing up elements on user profile page. This should return all public and private
     // (2) A user clicks on another user's profile. This should only return public elements
+
+    const session = driver.session({database: process.env.NEO4J_DB});
+    const tx = await session.beginTransaction();
+
     try{
+	// get contributor ID and all associated openids
+	const query_str1 = "MATCH(c:Contributor) " +
+	      "WHERE c.id=$id_param OR $id_param IN c.openid " +
+	      "RETURN c.id, c.openid"
+	const contrib_results = await tx.run(query_str1,
+					     {id_param: id},
+					     {routing: 'READ', database: process.env.NEO4J_DB});
+
+	const contrib_id = contrib_results.records[0].get('c.id');
+	const contrib_openids = contrib_results.records[0].get('c.openid');
+
 	const order_by = parseSortBy(sort_by);
-	let query_str = contributorMatchQuery(id, with_contributions=true)+" ";
+	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) " +
+	    "WHERE c.id=$contrib_id OR $contrib_id IN c.openid ";
 
 	// if no user logged-in OR contributor is NOT logged-in user, only return public elements
-	if (user_id === null || user_id != id)
-	    query_str += "WHERE r.visibility=$public_visibility ";
+	if (user_id === null || (user_id != contrib_id && !contrib_openids.includes(user_id)))
+	    query_str += "AND r.visibility=$public_visibility ";
 
-	query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name) }} " +
+	query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name) }} AS element " +
 	      "ORDER BY r." + order_by + " " + order + " " +
 	      "SKIP $from " +
 	      "LIMIT $size";
 
-	const {records, summary} =
-	      await driver.executeQuery(query_str,
-					{contrib_id: id,
-					 from: neo4j.int(from),
-					 size: neo4j.int(size),
-					 public_visibility: Visibility.PUBLIC},
-					{routing: 'READ', database: process.env.NEO4J_DB});
+	const {records, summary} = await tx.run(query_str,
+						{contrib_id: id,
+						 from: neo4j.int(from),
+						 size: neo4j.int(size),
+						 public_visibility: Visibility.PUBLIC},
+						{routing: 'READ', database: process.env.NEO4J_DB});
+	await tx.commit();
 	if (records.length <= 0){
 	    // No elements found by contributor
 	    return [];
 	}
 	var ret = []
 	for (record of records){
-	    ret.push(makeFrontendCompatible(record['_fields'][0]));
-	    //ret.push(record['_fields'][0]);
-
-	    //element = record['_fields'][0];
-	    //element['resource-type'] = element['resource-type'].toLowerCase();
-	    //ret.push(element);
+	    ret.push(makeFrontendCompatible(record.get('element')));
 	}
 	return ret;
     } catch(err){console.log('getElementsByContributor() Error in query: '+ err);}
+    finally {await session.close();}
     // something went wrong
     return [];
 }
@@ -743,26 +756,41 @@ async function getElementsByContributor(id,
  * @return {int} Count
  */
 async function getElementsCountByContributor(id, user_id){
-    let query_str = contributorMatchQuery(id, with_contributions=true) + " ";
-
-    // if no user logged-in OR contributor is NOT logged-in user, only return public elements
-    if (user_id === null || user_id != id)
-	query_str += "WHERE r.visibility=$public_visibility ";
-
-    query_str += "RETURN COUNT(r)";
+    const session = driver.session({database: process.env.NEO4J_DB});
+    const tx = await session.beginTransaction();
     try{
+	// get contributor ID and all associated openids
+	const query_str1 = "MATCH(c:Contributor) " +
+	      "WHERE c.id=$id_param OR $id_param IN c.openid " +
+	      "RETURN c.id, c.openid"
+	const contrib_results = await tx.run(query_str1,
+					     {id_param: id},
+					     {routing: 'READ', database: process.env.NEO4J_DB});
+	const contrib_id = contrib_results.records[0].get('c.id');
+	const contrib_openids = contrib_results.records[0].get('c.openid');
+
+	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) " +
+	    "WHERE c.id=$contrib_id OR $contrib_id IN c.openid ";
+
+	// if no user logged-in OR contributor is NOT logged-in user, only return public elements
+	if (user_id === null || (user_id != contrib_id && !contrib_openids.includes(user_id)))
+	    query_str += "AND r.visibility=$public_visibility ";
+
+	query_str += "RETURN COUNT(r) AS count";
+
 	const {records, summary} =
-	      await driver.executeQuery(query_str,
-					{contrib_id: id,
-					 public_visibility: Visibility.PUBLIC},
-					{routing: 'READ', database: process.env.NEO4J_DB});
+	      await tx.run(query_str,
+			   {contrib_id: id,
+			    public_visibility: Visibility.PUBLIC},
+			   {routing: 'READ', database: process.env.NEO4J_DB});
+	await tx.commit();
 	if (records.length <= 0){
 	    // Error running query
 	    return -1;
 	}
-	var ret = records[0]['_fields'][0]['low'];
-	return ret;
+	return parse64BitNumber(records[0].get('count'));
     } catch(err){console.log('getElementsCountByContributor() Error in query: '+ err);}
+    finally {await session.close();}
     // something went wrong
     return -1;
 }
@@ -800,9 +828,6 @@ async function getElementsByTag(tag, from, size, sort_by=SortBy.TITLE, order="DE
 	var ret = []
 	for (record of records){
 	    ret.push(makeFrontendCompatible(record['_fields'][0]));
-	    //element = record['_fields'][0];
-	    //element['resource-type'] = element['resource-type'].toLowerCase();
-	    //ret.push(element);
 	}
 	return ret;
     } catch(err){console.log('getElementsByTag() Error in query: '+ err);}
@@ -1041,6 +1066,7 @@ async function updateElement(id, element){
 	await tx.commit();
 	return ret;
     } catch(err){console.log('Error in query: '+ err);}
+    finally {await session.close();}
     // something went wrong
     return false;
 }
