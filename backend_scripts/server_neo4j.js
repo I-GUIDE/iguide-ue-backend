@@ -189,9 +189,10 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 	    return res.sendStatus(403);
 	}
 
+	
 	const newAccessToken = generateAccessToken({ id: user.id, role: user.role });
-	res.cookie('jwt', newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
-
+	 // updated to new variable name 
+	res.cookie(process.env.JWT_ACCESS_TOKEN_NAME, newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
 	res.json({ accessToken: newAccessToken });
     });
 });
