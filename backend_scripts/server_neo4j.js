@@ -1422,53 +1422,64 @@ app.get('/api/url-title', cors(), async (req, res) => {
  */
 app.options('/api/users/avatar', jwtCorsMiddleware);
 app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
-    // if (!req.file) {
-    // 	return res.status(400).json({ message: 'No file uploaded' });
-    // }
-
-    // const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${req.file.filename}`;
-
-    // res.json({
-    // 	message: 'Avatar uploaded successfully',
-    // 	url: filePath,
-    // });
-
     try {
-	const body = JSON.parse(JSON.stringify(req.body));
-	const id = body.id;
-	const newAvatarFile = req.file;
+        const body = JSON.parse(JSON.stringify(req.body));
+        const id = body.id;
+        const newAvatarFile = req.file;
 
-	if (!id || !newAvatarFile) {
-	    return res.status(400).json({ message: 'ID and new avatar file are required' });
-	}
+        if (!id || !newAvatarFile) {
+            return res.status(400).json({ message: 'ID and new avatar file are required' });
+        }
 
-	// Update the user's avatar URL with the new file URL
-	const newAvatarUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${newAvatarFile.filename}`;
+        const fileNameWithoutExt = newAvatarFile.filename.replace(/\.[^/.]+$/, '');
+        const fileExt = path.extname(newAvatarFile.filename);
+        const images = [];
 
-	const {result, oldAvatarUrl} = await n4j.setContributorAvatar(id, newAvatarUrl);
-	if (result == false){
-	    return res.status(404).json({ message: 'User not found' });
-	}
-	if (oldAvatarUrl) {
-	    // Delete the old avatar file
-	    const oldAvatarFilePath = path.join(avatarDir, path.basename(oldAvatarUrl));
-	    if (fs.existsSync(oldAvatarFilePath)) {
-		fs.unlinkSync(oldAvatarFilePath);
-	    }
-	    var ret_message = 'Avatar updated successfully'
-	} else {
-	    var ret_message = 'Avatar uploaded successfully'
-	}
+        for (const size of IMAGE_SIZES.avatar) {
+            const resizedFileName = `${fileNameWithoutExt}${size.suffix}${fileExt}`;
+            const resizedFilePath = path.join(avatarDir, resizedFileName);
 
-	res.json({
-	    message: ret_message,
-	    url: newAvatarUrl,
-	});
+            await sharp(newAvatarFile.path)
+                .resize(size.width)
+                .toFile(resizedFilePath);
+
+            const imageUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${resizedFileName}`;
+            images.push({
+                url: imageUrl,
+                width: size.width
+            });
+        }
+
+        const srcset = images.map((img, index) => `${img.url} ${index + 1}x`).join(', ');
+
+        const {result, oldAvatarUrl} = await n4j.setContributorAvatar(id, {
+            defaultSrc: images[0].url,
+            srcset: srcset
+        });
+
+        if (oldAvatarUrl) {
+            const oldBaseFileName = path.basename(oldAvatarUrl).replace(/\.[^/.]+$/, '');
+            const oldFileExt = path.extname(oldAvatarUrl);
+            
+            for (const size of IMAGE_SIZES.avatar) {
+                const oldResizedPath = path.join(avatarDir, `${oldBaseFileName}${size.suffix}${oldFileExt}`);
+                if (fs.existsSync(oldResizedPath)) {
+                    fs.unlinkSync(oldResizedPath);
+                }
+            }
+        }
+
+        res.json({
+            message: oldAvatarUrl ? 'Avatar updated successfully' : 'Avatar uploaded successfully',
+            images: images,
+            srcset: srcset,
+            defaultSrc: images[0].url
+        });
+
     } catch (error) {
-	console.error('Error updating avatar:', error);
-	res.status(500).json({ message: 'Internal server error' });
+        console.error('Error updating avatar:', error);
+        res.status(500).json({ message: 'Internal server error' });
     }
-
 });
 
 /**
