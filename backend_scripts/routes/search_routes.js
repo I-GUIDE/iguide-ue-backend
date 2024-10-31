@@ -83,15 +83,26 @@ router.get('/search/count', cors(), async (req, res) => {
     const { keyword, 'element-type': element_type, 'sort-by': sort_by = '_score', order = 'desc', from = 0, size = 15, ...additionalFields } = req.query;
 
     let query = {
-        multi_match: {
-            query: keyword,
-            fields: [
-                'title^3',    // Boost title matches
-                'authors^3',  // Boost author matches
-                'tags^2',     // Slightly boost tag matches
-                'contents'    // Normal weight for content matches
-            ],
-        },
+        bool: {
+            must: [
+                {
+                    multi_match: {
+                        query: keyword,
+                        fields: [
+                            'title^3',    // Boost title matches
+                            'authors^3',  // Boost author matches
+                            'tags^2',     // Slightly boost tag matches
+                            'contents'    // Normal weight for content matches
+                        ],
+                    }
+                },
+                {
+                    term: {
+                        visibility: 10 // Filter to only documents with visibility 10
+                    }
+                }
+            ]
+        }
     };
 
     // Build a list of must conditions for bool query
@@ -230,15 +241,26 @@ router.get('/search', cors(), async (req, res) => {
     const { keyword, 'element-type': element_type, 'sort-by': sort_by = '_score', order = 'desc', from = 0, size = 15, ...additionalFields } = req.query;
     
     let query = {
-        multi_match: {
-            query: keyword,
-            fields: [
-                'title^3',    // Boost title matches
-                'authors^3',  // Boost author matches
-                'tags^2',     // Slightly boost tag matches
-                'contents'    // Normal weight for content matches
-            ],
-        },
+        bool: {
+            must: [
+                {
+                    multi_match: {
+                        query: keyword,
+                        fields: [
+                            'title^3',    // Boost title matches
+                            'authors^3',  // Boost author matches
+                            'tags^2',     // Slightly boost tag matches
+                            'contents'    // Normal weight for content matches
+                        ],
+                    }
+                },
+                {
+                    term: {
+                        visibility: 10 // Filter to only documents with visibility 10
+                    }
+                }
+            ]
+        }
     };
 
     // Build a list of must conditions for bool query
