@@ -389,7 +389,7 @@ app.get('/api/elements/titles', cors(), async (req, res) => {
 		size: 100, // Number of results to fetch per scroll request
 		query: {
 		    term: {
-			'resource-type': elementType,
+			'resource-type': elementType
 		    },
 		},
 		_source: ['title'], // Only fetch the title field
@@ -486,24 +486,39 @@ app.get('/api/elements/homepage', cors(), async (req, res) => {
  *     responses:
  *       200:
  *         description: JSON Map object for element with given ID
+ *       403:
+ *         description: Insufficient permission to view this element
  *       404:
  *         description: No element found with given ID
  *       500:
  *         description: Internal server error
  */
-//app.options('/api/elements/:id', cors());
 app.get('/api/elements/:id', cors(), async (req, res) => {
 
     const element_id = decodeURIComponent(req.params['id']);
-    //console.log('getElementByID(): ' + element_id);
-    try {
-	const element = await n4j.getElementByID(element_id);
-	if (JSON.stringify(element) === '{}'){
-	    return res.status(404).json({ message: 'Element not found' });
+    const {user_id, user_role} = (() => {
+	if (!req.user || req.user == null || typeof req.user === 'undefined'){
+	    return {user_id:null, user_role:null};
 	}
+	return {user_id:req.user.id, user_role:req.user.role}
+    })();
+
+    try {
+	const can_view = await n4j.userCanViewElement(element_id, user_id, user_role);
+	if (!can_view){
+	    res.status(403).json({ message: 'Forbidden: You do not have permission to view this element.' });
+	    return;
+	}
+
+	const element = await n4j.getElementByID(element_id, user_id, user_role);
+	if (JSON.stringify(element) === '{}'){
+	    res.status(404).json({ message: 'Element not found' });
+	    return;
+	}
+
 	res.status(200).json(element);
     } catch (error) {
-	console.error('/api/resources/:id Error querying OpenSearch:', error);
+	console.error('/api/resources/:id Error querying:', error);
 	res.status(500).json({ message: 'Internal server error' });
     }
 });
@@ -669,25 +684,34 @@ app.get('/api/elements', cors(), async (req, res) => {
 		if (field_name == '_id'){
 		    throw Error('GET /api/elements field_name=_id: Should not be used');
 
-		    const resources = [];
-		    let total_count = 0;
-		    for (let val of match_value){
-			let resource = await n4j.getElementByID(val);
-			//let resource_count = await n4j.getElementsCountByContributor(val);
-			resources.push(resource);
-		    }
-		    res.json({elements:resources, 'total-count': total_count});
-		    return;
+		    // const resources = [];
+		    // let total_count = 0;
+		    // for (let val of match_value){
+		    // 	let resource = await n4j.getElementByID(val);
+		    // 	//let resource_count = await n4j.getElementsCountByContributor(val);
+		    // 	resources.push(resource);
+		    // }
+		    // res.json({elements:resources, 'total-count': total_count});
+		    // return;
 		} else if (field_name == 'contributor') {
+		    //'62992f5f-fd30-41d6-bc19-810cbba752e9';
+		    const user_id = (() => {
+			if (!req.user || req.user == null || typeof req.user === 'undefined'){
+			    return null;
+			}
+			return req.user.id;
+		    })();
+		    
 		    const resources = [];
 		    let total_count = 0;
 		    for (let val of match_value){
 			let resource = await n4j.getElementsByContributor(val,
+									  user_id,
 									  from,
 									  size,
 									  sort_by,
 									  order);
-			total_count += await n4j.getElementsCountByContributor(val);
+			total_count += await n4j.getElementsCountByContributor(val, user_id);
 			resources.push(...resource);
 		    }
 		    res.json({elements:resources, 'total-count': total_count});
@@ -780,17 +804,22 @@ app.get('/api/elements', cors(), async (req, res) => {
 //app.options('/api/elements', jwtCorsMiddleware);
 app.post('/api/elements', jwtCorsMiddleware, authenticateJWT, authorizeRole(n4j.Role.TRUSTED_USER), async (req, res) => {
     const resource = req.body;
-
+    const {user_id, user_role} = (() => {
+	if (!req.user || req.user == null || typeof req.user === 'undefined'){
+	    return {user_id:null, user_role:null};
+	}
+	return {user_id:req.user.id, user_role:req.user.role}
+    })();
+    
     try {
-        console.log(resource['resource-type']);
-	console.log(req.user);
+        console.log('Registering ' + resource['resource-type'] + 'by ' + user_id);
         // Check if the resource type is "oer" and user have enough permission to add OER
         if (resource['resource-type'] === 'oer' &&
-	    !(req.user.role <= n4j.Role.UNRESTRICTED_CONTRIBUTOR)) {
-            console.log(req.user, " blocked by role")
+	    !(user_role <= n4j.Role.UNRESTRICTED_CONTRIBUTOR)) {
+            console.log(user_id, " blocked by role")
             return res.status(403).json({ message: 'Forbidden: You do not have permission to submit OER elements.' });
         }else{
-            console.log(req.user, " is allowed to submit oers")
+            console.log(user_id, " is allowed to submit oers")
         }
 
         // Handle notebook resource type
@@ -945,22 +974,22 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
     console.log('Updating element with id: ' + id);
 
     try {
-	// only allow updating if
-	// (1) this element is owned by the user sending update request
-	// (2) user sending update request is admin or super admin
-	const element_owner = await n4j.getContributorIdForElement(id);
-	const can_edit = (() => {
-	    if (req.user.id == element_owner['id'] || req.user.id == element_owner['openid']){
-		console.log('This element is owned by the user');
-		// this element is owned by the user sending update request
-		return true;
-	    } else if (req.user.role <= n4j.Role.CONTENT_MODERATOR) {
-		// user sending update request is admin or super admin
-		return true;
-	    }
-	    return false;
-	})();
-
+	// // only allow updating if
+	// // (1) this element is owned by the user sending update request
+	// // (2) user sending update request is admin or super admin
+	// const element_owner = await n4j.getContributorIdForElement(id);
+	// const can_edit = (() => {
+	//     if (req.user.id == element_owner['id'] || req.user.id == element_owner['openid']){
+	// 	console.log('This element is owned by the user');
+	// 	// this element is owned by the user sending update request
+	// 	return true;
+	//     } else if (req.user.role <= n4j.Role.CONTENT_MODERATOR) {
+	// 	// user sending update request is admin or super admin
+	// 	return true;
+	//     }
+	//     return false;
+	// })();
+	const can_edit = await n4j.userCanEditElement(id, req.user.id, req.user.role);
 	if (!can_edit){
 	    res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
 	}
@@ -1002,6 +1031,78 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
 	res.status(500).json({ message: 'Internal server error' });
     }
 });
+
+/**
+ * @swagger
+ * /api/elements/{id}/visibility:
+ *   put:
+ *     summary: Set visibility for the element with given ID
+ *     tags: ['elements']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The id of the element
+ *       - in: query
+ *         name: visibility
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [public, private]
+ *         description: The visibility value
+ *     responses:
+ *       200:
+ *         description: Element visibility updated successfully
+ *       403:
+ *         description: The user does not have the permission to edit this element
+ *       500:
+ *         description: Internal server error
+ */
+app.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
+    const visibility_str = decodeURIComponent(req.query.visibility);
+
+    console.log('Setting visibility (' + visibility_str + ') for element with id: ' + id);
+
+    try {
+	// [DEBUG] Uncomment for Prod
+	const can_edit = true; //await n4j.userCanEditElement(id, req.user.id, req.user.role);
+	if (!can_edit){
+	    res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
+	}
+
+	const visibility = n4j.parseVisibility(visibility_str);
+	console.log(visibility);
+
+	const response =
+	      await n4j.setElementVisibilityForID(id, visibility);
+
+	if (response) {
+	    // Update in OpenSearch
+	    const response = await client.update({
+		id: id,
+		index: os_index,
+		body: {
+		    doc: {
+			'visibility': visibility
+		    }
+		},
+		refresh: true,
+	    });
+	    console.log('OpenSearch set visibility:' + response['body']['result']);
+	    res.status(200).json({ message: 'Element visibility updated successfully'});
+	} else {
+	    console.log('Error updating element');
+	    res.status(500).json({ message: 'Error updating element'});
+	}
+    } catch (error) {
+	console.error('Error updating element:', error);
+	res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 
 /**
  * @swagger
