@@ -162,7 +162,8 @@ const uploadAvatar = multer({ storage: avatarStorage });
  */
 app.options('/api/refresh-token', jwtCorsMiddleware);
 app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
-    const refreshToken = req.cookies.refreshToken;
+	// updated refresh token to use env variable 
+    const refreshToken = req.cookies[process.env.JWT_REFRESH_TOKEN_NAME];
     //console.log("Refresh token", refreshToken);
     if (!refreshToken) {
 	return res.sendStatus(401);
