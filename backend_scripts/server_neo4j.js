@@ -1105,6 +1105,166 @@ app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('f
     }
 });
 
+
+/*
+
+You can call if with this
+
+await updateImagesInDirectory(
+    avatarDir, 
+    IMAGE_SIZES.avatar, 
+    'avatars'
+);
+
+await updateImagesInDirectory(
+    thumbnailDir, 
+    IMAGE_SIZES.thumbnail, 
+    'thumbnails'
+);
+
+*/
+// Function for updating previous images
+async function updateImagesInDirectory(dirPath, imageSizes, imageType) {
+    const files = fs.readdirSync(dirPath);
+
+    for (const file of files) {
+        const filePath = path.join(dirPath, file);
+        const stat = fs.statSync(filePath);
+
+        if (stat.isDirectory()) {
+            continue;
+        }
+
+        const ext = path.extname(file).toLowerCase();
+        if (!['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
+            continue;
+        }
+
+        const fileNameWithoutExt = file.replace(/\.[^/.]+$/, '');
+        const hasSizeSuffix = imageSizes.some(size => fileNameWithoutExt.endsWith(size.suffix));
+
+        if (hasSizeSuffix) {
+            continue;
+        }
+
+        console.log(`Processing image: ${file}`);
+
+        const image = sharp(filePath);
+
+        const images = [];
+
+        for (const size of imageSizes) {
+            const resizedFileName = `${fileNameWithoutExt}${size.suffix}${ext}`;
+            const resizedFilePath = path.join(dirPath, resizedFileName);
+
+            if (fs.existsSync(resizedFilePath)) {
+                console.log(`Resized image already exists: ${resizedFileName}`);
+                continue;
+            }
+
+            try {
+                await image
+                    .resize(size.width)
+                    .toFile(resizedFilePath);
+                console.log(`Created resized image: ${resizedFileName}`);
+
+                const imageUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/${imageType}/${resizedFileName}`;
+                images.push({
+                    url: imageUrl,
+                    width: size.width
+                });
+            } catch (err) {
+                console.error(`Error resizing image ${file}:`, err);
+            }
+        }
+
+        if (images.length > 0) {
+            const srcSet = images.map(img => `${img.url} ${img.width}w`).join(', ');
+            const defaultSrc = images[images.length - 1].url;
+
+            if (imageType === 'avatars') {
+                await updateAvatarInDatabase(file, defaultSrc, srcSet);
+            } else if (imageType === 'thumbnails') {
+                await updateThumbnailInDatabase(file, defaultSrc, srcSet);
+            }
+        }
+    }
+}
+
+// Updating images helper 1
+async function updateAvatarInDatabase(filename, defaultSrc, srcSet) {
+    const userId = await n4j.findContributorByAvatarFilename(filename);
+
+    if (userId) {
+        const avatarData = {
+            defaultSrc: defaultSrc,
+            srcSet: srcSet
+        };
+
+        await n4j.setContributorAvatar(userId, avatarData);
+        console.log(`Updated avatar for user ${userId}`);
+    } else {
+        console.warn(`User not found for avatar file: ${filename}`);
+    }
+}
+
+// Updating images helper 2
+async function updateThumbnailInDatabase(filename, defaultSrc, srcSet) {
+    const elementId = await n4j.findElementByThumbnailFilename(filename);
+
+    if (elementId) {
+        const thumbnailData = {
+            'thumbnail-image': {
+                defaultSrc: defaultSrc,
+                srcSet: srcSet
+            }
+        };
+
+        await n4j.updateElement(elementId, thumbnailData);
+        console.log(`Updated thumbnail for element ${elementId}`);
+    } else {
+        console.warn(`Element not found for thumbnail file: ${filename}`);
+    }
+}
+// Updating images helper 3
+export async function findContributorByAvatarFilename(filename) {
+    const session = driver.session();
+    try {
+        const result = await session.run(
+            `MATCH (c:Contributor)
+             WHERE c.avatar['defaultSrc'] CONTAINS $filename
+             RETURN c.id AS id`,
+            { filename }
+        );
+        if (result.records.length > 0) {
+            return result.records[0].get('id');
+        } else {
+            return null;
+        }
+    } finally {
+        await session.close();
+    }
+}
+// Updating images helper 4
+export async function findElementByThumbnailFilename(filename) {
+    const session = driver.session();
+    try {
+        const result = await session.run(
+            `MATCH (e:Element)
+             WHERE e.\`thumbnail-image\`['defaultSrc'] CONTAINS $filename
+             RETURN e.id AS id`,
+            { filename }
+        );
+        if (result.records.length > 0) {
+            return result.records[0].get('id');
+        } else {
+            return null;
+        }
+    } finally {
+        await session.close();
+    }
+}
+
 /**
  * @swagger
  * /api/elements/{id}/neighbors:
