@@ -173,7 +173,8 @@ const uploadAvatar = multer({ storage: avatarStorage });
  */
 app.options('/api/refresh-token', jwtCorsMiddleware);
 app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
-    const refreshToken = req.cookies.refreshToken;
+	// updated refresh token to use env variable 
+    const refreshToken = req.cookies[process.env.JWT_REFRESH_TOKEN_NAME];
     //console.log("Refresh token", refreshToken);
     if (!refreshToken) {
 	return res.sendStatus(401);
@@ -200,9 +201,10 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 	    return res.sendStatus(403);
 	}
 
+	
 	const newAccessToken = generateAccessToken({ id: user.id, role: user.role });
-	res.cookie('jwt', newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
-
+	 // updated to new variable name 
+	res.cookie(process.env.JWT_ACCESS_TOKEN_NAME, newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
 	res.json({ accessToken: newAccessToken });
     });
 });
