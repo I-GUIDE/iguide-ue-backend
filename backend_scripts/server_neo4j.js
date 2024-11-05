@@ -17,7 +17,8 @@ import { specs } from './swagger.js';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import * as n4j from './backend_neo4j.cjs'
-import llm_routes from './routes/llm_with_filter_routes.js';
+//import llm_routes from './routes/llm_with_filter_routes.js';
+import llm_routes from './routes/llm_routes.js';
 import llm_spatial_only_routes from './routes/llm_spatial_only_routes.js';
 import anvil_proxy from './routes/anvil_proxy.js';
 import search_routes from './routes/search_routes.js';
@@ -36,13 +37,23 @@ const jwtCorsOptions = {
 
 const jwtCorsMiddleware = (req, res, next) => {
     res.header('Access-Control-Allow-Credentials', true);
-    res.header('Access-Control-Allow-Origin', jwtCorsOptions.origin);
     res.header('Access-Control-Allow-Methods', jwtCorsOptions.methods);
     res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
 
+    /*const isDev = process.env.NODE_ENV === 'development';
+
+    if (isDev) {
+        // Accept any origin in development
+        res.header('Access-Control-Allow-Origin', req.headers.origin);
+    } else {
+        // Use the FRONTEND_DOMAIN in production
+        res.header('Access-Control-Allow-Origin', process.env.FRONTEND_DOMAIN);
+    }
+
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
-    }
+    }*/
+    res.header('Access-Control-Allow-Origin', process.env.FRONTEND_DOMAIN);
 
     next();
 };
