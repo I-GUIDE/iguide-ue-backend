@@ -23,6 +23,7 @@ import anvil_proxy from './routes/anvil_proxy.js';
 import search_routes from './routes/search_routes.js';
 import sharp from 'sharp';
 
+
 import { authenticateJWT, authorizeRole, generateAccessToken } from './jwtUtils.js';
 
 const app = express();
@@ -1017,7 +1018,7 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
 
 
 // Sizes for different image versions
-const IMAGE_SIZES = {
+/*const IMAGE_SIZES = {
     thumbnail: [
         { width: 320, suffix: '-320w' },
         { width: 480, suffix: '-480w' },
@@ -1027,6 +1028,18 @@ const IMAGE_SIZES = {
     avatar: [
         { width: 150, suffix: '-150w' },
         { width: 300, suffix: '-300w' }
+    ]
+};*/
+
+// Sizes for different image versions
+const IMAGE_SIZES = {
+    thumbnail: [
+        { width: 300, suffix: '-300px', name: 'low' },
+        { width: 765, suffix: '-756px', name: 'medium' },
+        { width: 1024, suffix: '-1024px', name:'high' },
+    ],
+    avatar: [
+        { width: 96, suffix: '-150px', name: 'low' },
     ]
 };
 
@@ -1054,17 +1067,15 @@ const IMAGE_SIZES = {
 app.options('/api/elements/thumbnail', jwtCorsMiddleware);
 app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('file'), authenticateJWT, async (req, res) => {
     try {
+    
+    	console.log("test")
+    	
         const body = JSON.parse(JSON.stringify(req.body));
         const elementId = body.id;
         const newThumbnailFile = req.file;
 
-        if (!elementId || !newThumbnailFile) {
+        if (!newThumbnailFile) {
             return res.status(400).json({ message: 'Element ID and new thumbnail file are required' });
-        }
-
-        const element = await n4j.getElementByID(elementId);
-        if (!element || JSON.stringify(element) === '{}') {
-            return res.status(404).json({ message: 'Element not found' });
         }
 
         const fileNameWithoutExt = newThumbnailFile.filename.replace(/\.[^/.]+$/, '');
@@ -1075,29 +1086,45 @@ app.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('f
             const resizedFileName = `${fileNameWithoutExt}${size.suffix}${fileExt}`;
             const resizedFilePath = path.join(thumbnailDir, resizedFileName);
 
-            await sharp(newThumbnailFile.path)
+			
+			await sharp(newThumbnailFile.path)
                 .resize(size.width)
                 .toFile(resizedFilePath);
+            
 
             const imageUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${resizedFileName}`;
-            images.push({
-                url: imageUrl,
-                width: size.width
-            });
+            
+            
+			if (size.name == "low") {
+				images.push({
+					low: imageUrl,
+				});
+			} else if (size.name == "medium") {
+				images.push({
+					medium: imageUrl,
+				});
+			} else if (size.name == "high") {
+				images.push({
+					high: imageUrl,
+				});
+			}
+            
         }
 
-        const srcSet = images.map(img => `${img.url} ${img.width}w`).join(', ');
+		const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${req.file.filename}`;
 
-        const newThumbnailData = {
-            defaultSrc: images[images.length - 1].url,
-            srcSet: srcSet
-        };
-        await n4j.updateElement(elementId, { 'thumbnail-image': newThumbnailData });
+		images.push({
+			orginal: filePath,
+		});
+
+		console.log(images);
 
         res.json({
             message: 'Thumbnail uploaded successfully',
-            thumbnailImage: newThumbnailData
+            images: images
         });
+
+        
 
     } catch (error) {
         console.error('Error processing image:', error);
@@ -1613,23 +1640,21 @@ app.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.s
 
             const imageUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${resizedFileName}`;
             images.push({
-                url: imageUrl,
-                width: size.width
+                low: imageUrl
             });
         }
 
-        const srcSet = images.map(img => `${img.url} ${img.width}w`).join(', ');
+		const originalPath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${req.file.filename}`;
 
-        const avatarData = {
-            defaultSrc: images[images.length - 1].url,
-            srcSet: srcSet
-        };
+		images.push({
+			original: originalPath,
+		});
 
-        await n4j.setContributorAvatar(id, avatarData);
+		console.log(images);
 
-        res.json({
+		res.json({
             message: 'Avatar uploaded successfully',
-            avatar: avatarData
+            images: images
         });
 
     } catch (error) {
