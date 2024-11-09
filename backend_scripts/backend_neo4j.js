@@ -23,7 +23,7 @@ exports.driver = driver;
 exports.uuidv4 = uuidv4;
 
 /**************
- * Helper Functions
+ * Enums
  **************/
 const ElementType = Object.freeze({
     NOTEBOOK: "Notebook",
@@ -66,11 +66,14 @@ const Role = Object.freeze({
 exports.Role = Role;
 
 const Visibility = Object.freeze({
-    PRIVATE: 1,
-    PUBLIC: 10,
+    PRIVATE: 'private',
+    PUBLIC: 'public',
 });
 exports.Visibility = Visibility;
 
+/**************
+ * Helper Functions
+ **************/
 async function testServerConnection() {
     try {
 	const serverInfo = await driver.getServerInfo();
@@ -82,47 +85,6 @@ async function testServerConnection() {
 	await driver.close()
 	return false
     }
-}
-/**
- * Generic helper function to create relation between two elements
- * NOTE: MATCH without LABEL does not use index and results in full DB scan
- */
-async function createRelation(from_id, to_id, relation_type){
-    const query_str = "MATCH (from{id:$from_id}) " +
-	  "MATCH (to{id:$to_id}) " +
-	  "MERGE (from)-[:"+relation_type+"]->(to)";
-	  //"CREATE (from)-[:"+relation_type+"]->(to)"; // can create duplicate relations
-
-    try{
-	const {_, summary} =
-	      await driver.executeQuery(query_str,
-					{from_id: from_id, to_id: to_id},
-					{database: process.env.NEO4J_DB});
-	if (summary.counters.updates()['relationshipsCreated'] >= 1){
-	    return true;
-	}
-    } catch(err){console.log('Error in query: '+ err);}
-    // something went wrong
-    return false;
-}
-/**
- * Generic helper function to remove/delete relation between two elements
- */
-async function removeRelation(from_id, to_id, relation_type){
-    const query_str = "MATCH (from{id:$from_id})-[rel:"+relation_type+"]-(to{id:$to_id}) " +
-	  "DELETE rel";
-
-    try{
-	const {_, summary} =
-	      await driver.executeQuery(query_str,
-					{from_id: from_id, to_id: to_id},
-					{database: process.env.NEO4J_DB});
-	if (summary.counters.updates()['relationshipsDeleted'] >= 1){
-	    return true;
-	}
-    } catch(err){console.log('Error in query: '+ err);}
-    // something went wrong
-    return false;
 }
 
 /**
@@ -238,8 +200,8 @@ function makeFrontendCompatible(element) {
     let ret = replaceUnderscores(element);
 
     // handle 64-bit numbers returned from neo4j
-    if (ret['visibility'])
-	ret['visibility'] = parse64BitNumber(ret['visibility']);
+    // if (ret['visibility'])
+    // 	ret['visibility'] = parse64BitNumber(ret['visibility']);
     if (ret['click-count']){
 	ret['click-count'] = parse64BitNumber(ret['click-count']);
     }
@@ -299,7 +261,7 @@ async function userCanEditElement(element_id, user_id, user_role) {
 	console.log('This element is owned by the user');
 	// this element is owned by the user sending update request
 	return true;
-    } else if (user_role <= n4j.Role.CONTENT_MODERATOR) {
+    } else if (user_role <= Role.CONTENT_MODERATOR) {
 	// user sending update request is admin or super admin
 	return true;
     }
@@ -331,7 +293,7 @@ async function userCanViewElement(element_id, user_id, user_role) {
 	console.log('This element is owned by the user');
 	// this element is owned by the user calling endpoing
 	return true;
-    } else if (user_role <= n4j.Role.CONTENT_MODERATOR) {
+    } else if (user_role <= Role.CONTENT_MODERATOR) {
 	// endpoing invoked by admin or super admin
 	console.log('Admin user accessing a private element');
 	return true;
@@ -341,40 +303,26 @@ async function userCanViewElement(element_id, user_id, user_role) {
 exports.userCanViewElement = userCanViewElement;
 
 /********************************/
-async function createLinkNotebook2Dataset(nb_id, ds_id){
-    return createRelation(nb_id, ds_id, Relations.USES);
-}
-/**
- * [ToDo] May not be useable separately since this can be done while registering the element
- * @param {string} user_id Registered user ID
- * @param {string} element_id Contributed element ID
- */
-async function createLinkUserContributedElement(user_id, element_id){
-    return createRelation(user_id, element_id, Relations.CONTRIBUTED);
-}
-/**
- * Create relation for elements liked by user
- * @param {string} user_id Registered user ID
- * @param {string} element_id Liked element ID
- */
-async function createLinkUserLikedElement(user_id, element_id){
-    return createRelation(user_id, element_id, Relations.LIKED);
-}
 /**
  * Get single element by given ID with all related content
  * @param {string} id Element ID
  * @param {string} user_id ID of user making this request (Logged-In user)
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
-async function getElementByID(id, user_id, user_role){
+async function getElementByID(id, user_id=null, user_role=null){
 
     // [Update-2.0] Frontend expects all related elements in a single list
     // [Fixed] Fixes the bug where nothing is returned in case element does not have any relations
-    let query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) " +
-	"OPTIONAL MATCH (n)-[:RELATED]-(r) ";
-    // add filter to get only public related elements if user is not logged in
+    let query_str = "MATCH (c)-[:CONTRIBUTED]-(n{id:$id_param}) ";
+    // if user is not logged in, make sure this element is public
+    if (user_id == null)
+	query_str += "WHERE n.visibility=$public_visibility ";
+
+    query_str += "OPTIONAL MATCH (n)-[:RELATED]-(r) ";
+    // if user is not logged in, make sure all related elements are public
     if (user_id == null)
 	query_str += "WHERE r.visibility=$public_visibility ";
+
     query_str += "WITH COLLECT(r{.id, .title, .visibility, .thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) as related_elems, n, c  " +
 	"RETURN n{.*, created_at:TOSTRING(n.created_at), related_elements: related_elems, `resource-type`:TOLOWER(LABELS(n)[0]), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name)}}";
 
@@ -471,7 +419,7 @@ async function getElementByID(id, user_id, user_role){
 		elem['resource-type'] == null ||
 		elem['visibility'] == null) continue;
 
-	    elem['visibility'] = parse64BitNumber(elem['visibility']);
+	    //elem['visibility'] = parse64BitNumber(elem['visibility']);
 	    const can_view = await userCanViewElement(elem['id'], user_id, user_role);
 	    if (can_view){
 		this_elem['related_elements'].push(elem);
@@ -563,8 +511,9 @@ async function getElementByID(id, user_id, user_role){
  */
 async function getRelatedElementsForID(id, depth=2){
     const query_str = "MATCH(n{id:$id_param}) " +
+	  "WHERE n.visibility=$public_visibility " +
 	  "OPTIONAL MATCH (n)-[rt2:RELATED*0.."+depth+"]-(r2) " +
-	  "WHERE n.visibility=$public_visibility AND r2.visibility=$public_visibility " +
+	  "WHERE r2.visibility=$public_visibility " +
 	  "UNWIND rt2 as related " +
 	  "RETURN {nodes: COLLECT(DISTINCT(r2{.id, .title, .thumbnail_image, `resource-type`:TOLOWER(LABELS(r2)[0])})), neighbors: COLLECT(DISTINCT({src:startNode(related).id, dst:endNode(related).id}))}";
     try{
@@ -690,11 +639,11 @@ async function getElementsCountByType(type){
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
 async function getElementsByContributor(id,
-					user_id,
 					from,
 					size,
 					sort_by=SortBy.TITLE,
-					order="DESC"){
+					order="DESC",
+				       	private_only=false){
 
     // There are two cases where this function is called
     // (1) For showing up elements on user profile page. This should return all public and private
@@ -704,35 +653,43 @@ async function getElementsByContributor(id,
     const tx = await session.beginTransaction();
 
     try{
-	// get contributor ID and all associated openids
-	const query_str1 = "MATCH(c:Contributor) " +
-	      "WHERE c.id=$id_param OR $id_param IN c.openid " +
-	      "RETURN c.id, c.openid"
-	const contrib_results = await tx.run(query_str1,
-					     {id_param: id},
-					     {routing: 'READ', database: process.env.NEO4J_DB});
+	// // get contributor ID and all associated openids
+	// const query_str1 = "MATCH(c:Contributor) " +
+	//       "WHERE c.id=$id_param OR $id_param IN c.openid " +
+	//       "RETURN c.id, c.openid"
+	// const contrib_results = await tx.run(query_str1,
+	// 				     {id_param: id},
+	// 				     {routing: 'READ', database: process.env.NEO4J_DB});
 
-	const contrib_id = contrib_results.records[0].get('c.id');
-	const contrib_openids = contrib_results.records[0].get('c.openid');
+	// const contrib_id = contrib_results.records[0].get('c.id');
+	// const contrib_openids = contrib_results.records[0].get('c.openid');
 
 	const order_by = parseSortBy(sort_by);
+	let query_params = {contrib_id: id, from: neo4j.int(from), size: neo4j.int(size)};
+
 	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) " +
-	    "WHERE c.id=$contrib_id OR $contrib_id IN c.openid ";
+	    "WHERE (c.id=$contrib_id OR $contrib_id IN c.openid) ";
 
-	// if no user logged-in OR contributor is NOT logged-in user, only return public elements
-	if (user_id === null || (user_id != contrib_id && !contrib_openids.includes(user_id)))
-	    query_str += "AND r.visibility=$public_visibility ";
+	// // if no user logged-in OR contributor is NOT logged-in user, only return public elements
+	// if (user_id === null || (user_id != contrib_id && !contrib_openids.includes(user_id)))
+	//     query_str += "AND r.visibility=$public_visibility ";
 
-	query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name) }} AS element " +
+	if (private_only){
+	    query_str += "AND r.visibility=$visibility ";
+	    query_params['visibility'] = Visibility.PRIVATE;
+	}
+	else {
+	    query_str += "AND r.visibility=$visibility ";
+	    query_params['visibility'] = Visibility.PUBLIC;
+	}
+
+	query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name) }} AS element " +
 	      "ORDER BY r." + order_by + " " + order + " " +
 	      "SKIP $from " +
 	      "LIMIT $size";
 
 	const {records, summary} = await tx.run(query_str,
-						{contrib_id: id,
-						 from: neo4j.int(from),
-						 size: neo4j.int(size),
-						 public_visibility: Visibility.PUBLIC},
+						query_params,
 						{routing: 'READ', database: process.env.NEO4J_DB});
 	await tx.commit();
 	if (records.length <= 0){
@@ -755,33 +712,42 @@ async function getElementsByContributor(id,
  * @param {string} user_id ID of logged-in user
  * @return {int} Count
  */
-async function getElementsCountByContributor(id, user_id){
+async function getElementsCountByContributor(id, private_only=false){
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
     try{
-	// get contributor ID and all associated openids
-	const query_str1 = "MATCH(c:Contributor) " +
-	      "WHERE c.id=$id_param OR $id_param IN c.openid " +
-	      "RETURN c.id, c.openid"
-	const contrib_results = await tx.run(query_str1,
-					     {id_param: id},
-					     {routing: 'READ', database: process.env.NEO4J_DB});
-	const contrib_id = contrib_results.records[0].get('c.id');
-	const contrib_openids = contrib_results.records[0].get('c.openid');
+	// // get contributor ID and all associated openids
+	// const query_str1 = "MATCH(c:Contributor) " +
+	//       "WHERE c.id=$id_param OR $id_param IN c.openid " +
+	//       "RETURN c.id, c.openid"
+	// const contrib_results = await tx.run(query_str1,
+	// 				     {id_param: id},
+	// 				     {routing: 'READ', database: process.env.NEO4J_DB});
+	// const contrib_id = contrib_results.records[0].get('c.id');
+	// const contrib_openids = contrib_results.records[0].get('c.openid');
+
+	let query_params = {contrib_id: id};
 
 	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) " +
-	    "WHERE c.id=$contrib_id OR $contrib_id IN c.openid ";
+	    "WHERE (c.id=$contrib_id OR $contrib_id IN c.openid) ";
 
-	// if no user logged-in OR contributor is NOT logged-in user, only return public elements
-	if (user_id === null || (user_id != contrib_id && !contrib_openids.includes(user_id)))
-	    query_str += "AND r.visibility=$public_visibility ";
+	if (private_only){
+	    query_str += "AND r.visibility=$visibility ";
+	    query_params['visibility'] = Visibility.PRIVATE;
+	}
+	else {
+	    query_str += "AND r.visibility=$visibility ";
+	    query_params['visibility'] = Visibility.PUBLIC;
+	}
+	// // if no user logged-in OR contributor is NOT logged-in user, only return public elements
+	// if (user_id === null || (user_id != contrib_id && !contrib_openids.includes(user_id)))
+	//     query_str += "AND r.visibility=$public_visibility ";
 
 	query_str += "RETURN COUNT(r) AS count";
 
 	const {records, summary} =
 	      await tx.run(query_str,
-			   {contrib_id: id,
-			    public_visibility: Visibility.PUBLIC},
+			   query_params,
 			   {routing: 'READ', database: process.env.NEO4J_DB});
 	await tx.commit();
 	if (records.length <= 0){
@@ -1117,7 +1083,7 @@ async function elementToNode(element, generate_id=true){
 	'thumbnail-image': thumbnail,
 	'resource-type': node_type,
 	'related-resources': related_elements,
-	'visibility': visibility,
+	//'visibility': visibility,
 	'external-link': external_link,                 // Dataset
 	'direct-download-link': direct_download_link,   // Dataset
 	'notebook-repo': notebook_repo,                 // Notebook
@@ -1131,7 +1097,7 @@ async function elementToNode(element, generate_id=true){
 
     node_type = parseElementType(node_type);
     node['thumbnail_image'] = thumbnail;
-    node['visibility'] = parseVisibility(visibility);
+    //node['visibility'] = parseVisibility(visibility);
 
     // (1) generate id (UUID)
     if (generate_id) node['id'] = uuidv4();
@@ -1273,7 +1239,7 @@ async function setElementVisibilityForID(id, visibility){
     try {
 	const {_, summary} =
 	      await driver.executeQuery(query_str,
-					{id_param: id, visibility:neo4j.int(visibility)},
+					{id_param: id, visibilityvisibility},
 					{database: process.env.NEO4J_DB});
 	if (summary.counters.updates()['propertiesSet'] == 1){
 	    return true;
@@ -1290,19 +1256,19 @@ async function setElementVisibilityForID(id, visibility){
  */
 async function getElementVisibilityForID(id){
     const query_str = "MATCH (n{id:$id_param}) " +
-	  "RETURN n.visibility";
+	  "RETURN n.visibility AS visibility";
 
     try {
 	const {records, _} =
 	      await driver.executeQuery(query_str,
 					{id_param: id},
 					{routing: 'READ', database: process.env.NEO4J_DB});
-	if (records.length < 0){
+	if (records.length <= 0){
 	    console.log('Error: Element with id ' + id + ' not found');
 	    return -1;
 	}
-	const visibility = parseVisibility(parse64BitNumber(records[0]['_fields'][0]));
-	return visibility;
+	//const visibility = parseVisibility(parse64BitNumber(records[0]['_fields'][0]));
+	return records[0].get('visibility');
     } catch(err){console.log('Error in query: '+ err);}
     // something went wrong
     return -1;

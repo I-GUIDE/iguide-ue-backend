@@ -490,7 +490,7 @@ app.get('/api/elements/homepage', cors(), async (req, res) => {
  * @swagger
  * /api/elements/{id}:
  *   get:
- *     summary: Retrieve ONE element using id
+ *     summary: Retrieve ONE public element using id.
  *     tags: ['elements']
  *     parameters:
  *       - in: path
@@ -512,6 +512,46 @@ app.get('/api/elements/homepage', cors(), async (req, res) => {
 app.get('/api/elements/:id', cors(), async (req, res) => {
 
     const element_id = decodeURIComponent(req.params['id']);
+    try {
+	const element = await n4j.getElementByID(element_id);
+	if (JSON.stringify(element) === '{}'){
+	    res.status(404).json({ message: 'Element not found' });
+	    return;
+	}
+
+	res.status(200).json(element);
+    } catch (error) {
+	console.error('/api/resources/:id Error querying:', error);
+	res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/private-elements/{id}:
+ *   get:
+ *     summary: Retrieve ONE private element using id.
+ *     tags: ['private-elements']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The element ID to fetch
+ *     responses:
+ *       200:
+ *         description: JSON Map object for element with given ID
+ *       403:
+ *         description: Insufficient permission to view this element
+ *       404:
+ *         description: No element found with given ID
+ *       500:
+ *         description: Internal server error
+ */
+app.get('/api/private-elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+
+    const element_id = decodeURIComponent(req.params['id']);
     const {user_id, user_role} = (() => {
 	if (!req.user || req.user == null || typeof req.user === 'undefined'){
 	    return {user_id:null, user_role:null};
@@ -519,6 +559,9 @@ app.get('/api/elements/:id', cors(), async (req, res) => {
 	return {user_id:req.user.id, user_role:req.user.role}
     })();
 
+    // 'http://cilogon.org/serverA/users/48835826'
+    // const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
+    // 				  user_role: n4j.Role.TRUSTED_USER};
     try {
 	const can_view = await n4j.userCanViewElement(element_id, user_id, user_role);
 	if (!can_view){
@@ -535,6 +578,82 @@ app.get('/api/elements/:id', cors(), async (req, res) => {
 	res.status(200).json(element);
     } catch (error) {
 	console.error('/api/resources/:id Error querying:', error);
+	res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/private-elements:
+ *   get:
+ *     summary: Retrieve private elements for given user ID
+ *     tags: ['private-elements']
+ *     parameters:
+ *       - in: query
+ *         name: user-id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The user ID to get private elements for
+ *       - in: query
+ *         name: sort-by
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [click_count, creation_time, title]
+ *         description: The field to sort the elements by
+ *       - in: query
+ *         name: order
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *         description: Sort order of returned elements
+ *       - in: query
+ *         name: from
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The offset value for pagination
+ *       - in: query
+ *         name: size
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: List of JSON Map objects for private elements
+ *       404:
+ *         description: No private elements found for given user ID
+ *       500:
+ *         description: Internal server error
+ */
+app.options('/api/private-elements', cors());
+app.get('/api/private-elements', jwtCorsMiddleware, authenticateJWT,, async (req, res) => {
+
+    //const contributor_id = decodeURIComponent(req.params['id']);
+    let {'user-id': contributor_id,
+	 'sort-by': sort_by,
+	 'order': order,
+	 'from': from,
+	 'size': size} = req.query;
+
+    try {
+	const elements = await n4j.getElementsByContributor(contributor_id,
+							    from,
+							    size,
+							    sort_by,
+							    order,
+							    true
+							   );
+	const total_count = await n4j.getElementsCountByContributor(contributor_id, true);
+	if (total_count === 0){
+	    res.status(404).json({ message: 'Element not found' });
+	    return;
+	}
+	res.status(200).json({elements:elements, 'total-count': total_count});
+    } catch (error) {
+	console.error('Error querying:', error);
 	res.status(500).json({ message: 'Internal server error' });
     }
 });
@@ -700,25 +819,15 @@ app.get('/api/elements', cors(), async (req, res) => {
 		if (field_name == '_id'){
 		    throw Error('GET /api/elements field_name=_id: Should not be used');
 		} else if (field_name == 'contributor') {
-		    //'62992f5f-fd30-41d6-bc19-810cbba752e9';
-		    // 'http://cilogon.org/serverA/users/48835826'
-		    const user_id = (() => {
-			if (!req.user || req.user == null || typeof req.user === 'undefined'){
-			    return null;
-			}
-			return req.user.id;
-		    })();
-
 		    const resources = [];
 		    let total_count = 0;
 		    for (let val of match_value){
 			let resource = await n4j.getElementsByContributor(val,
-									  user_id,
 									  from,
 									  size,
 									  sort_by,
 									  order);
-			total_count += await n4j.getElementsCountByContributor(val, user_id);
+			total_count += await n4j.getElementsCountByContributor(val);
 			resources.push(...resource);
 		    }
 		    res.json({elements:resources, 'total-count': total_count});
@@ -981,21 +1090,6 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
     console.log('Updating element with id: ' + id);
 
     try {
-	// // only allow updating if
-	// // (1) this element is owned by the user sending update request
-	// // (2) user sending update request is admin or super admin
-	// const element_owner = await n4j.getContributorIdForElement(id);
-	// const can_edit = (() => {
-	//     if (req.user.id == element_owner['id'] || req.user.id == element_owner['openid']){
-	// 	console.log('This element is owned by the user');
-	// 	// this element is owned by the user sending update request
-	// 	return true;
-	//     } else if (req.user.role <= n4j.Role.CONTENT_MODERATOR) {
-	// 	// user sending update request is admin or super admin
-	// 	return true;
-	//     }
-	//     return false;
-	// })();
 	const can_edit = await n4j.userCanEditElement(id, req.user.id, req.user.role);
 	if (!can_edit){
 	    res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
@@ -1014,30 +1108,38 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
 
 	const response = await n4j.updateElement(id, updates);
 	if (response) {
-	    // Update in OpenSearch
-	    const response = await client.update({
-		id: id,
-		index: os_index,
-		body: {
-		    doc: {
-			'title': updates['title'],
-			'contents': updates['contents'],
-			'authors': updates['authors'],
-			'tags': updates['tags'],
-			'thumbnail-image': updates['thumbnail-image'],
-			// spatial-temporal properties
-			'spatial-coverage': updates['spatial-coverage'],
-			'spatial-geometry': updates['spatial-geometry'],
-			'spatial-bounding-box': updates['spatial-bounding-box'],
-			'spatial-centroid': updates['spatial-centroid'],
-			'spatial-georeferenced': updates['spatial-georeferenced'],
-			'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
-			'spatial-index-year': updates['spatial-index-year']
-			// type and contributor should never be updated
-		    }
-		},
-		refresh: true,
-	    });
+	    // 'visibility' field is NOT searchable so should NOT be added to OS
+	    // elements should ONLY be in OpenSearch if they are public
+	    const visibility = n4j.parseVisibility(updates['visibility']);
+	    if (visibility === n4j.Visibility.PUBLIC) {
+		// Update in OpenSearch
+		const response = await client.update({
+		    id: id,
+		    index: os_index,
+		    body: {
+			doc: {
+			    'title': updates['title'],
+			    'contents': updates['contents'],
+			    'authors': updates['authors'],
+			    'tags': updates['tags'],
+			    'thumbnail-image': updates['thumbnail-image'],
+			    // spatial-temporal properties
+			    'spatial-coverage': updates['spatial-coverage'],
+			    'spatial-geometry': updates['spatial-geometry'],
+			    'spatial-bounding-box': updates['spatial-bounding-box'],
+			    'spatial-centroid': updates['spatial-centroid'],
+			    'spatial-georeferenced': updates['spatial-georeferenced'],
+			    'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
+			    'spatial-index-year': updates['spatial-index-year']
+			    // type and contributor should never be updated
+			}
+		    },
+		    refresh: true,
+		});
+	    } else {
+		// [ToDo] remove element from OpenSearch
+	    }
+
 	    //console.log(response['body']['result']);
 	    res.status(200).json({ message: 'Element updated successfully', result: response });
 	} else {
@@ -1096,19 +1198,27 @@ app.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, async (req, r
 	const response =
 	      await n4j.setElementVisibilityForID(id, visibility);
 
+	// 'visibility' field is NOT searchable so should NOT be added to OS
+	// elements should ONLY be in OpenSearch if they are public
 	if (response) {
-	    // Update in OpenSearch
-	    const response = await client.update({
-		id: id,
-		index: os_index,
-		body: {
-		    doc: {
-			'visibility': visibility
-		    }
-		},
-		refresh: true,
-	    });
-	    console.log('OpenSearch set visibility:' + response['body']['result']);
+	    if (visibility === n4j.Visibility.PUBLIC) {
+		// [ToDo] add/update element to OpenSearch
+	    } else {
+		// [ToDo] remove element from OpenSearch
+	    }
+
+	    // // Update in OpenSearch
+	    // const response = await client.update({
+	    // 	id: id,
+	    // 	index: os_index,
+	    // 	body: {
+	    // 	    doc: {
+	    // 		'visibility': visibility
+	    // 	    }
+	    // 	},
+	    // 	refresh: true,
+	    // });
+	    // console.log('OpenSearch set visibility:' + response['body']['result']);
 	    res.status(200).json({ message: 'Element visibility updated successfully'});
 	} else {
 	    console.log('Error updating element');
@@ -1897,3 +2007,4 @@ https.createServer(SSLOptions, app).listen(process.env.PORT, () => {
 
 // Serve Swagger docs
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+console.log(`Swagger UI started at http://${process.env.DOMAIN}:${HTTP_PORT}/api-docs`);
