@@ -1,9 +1,22 @@
+import axios from 'axios';
 import express from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
+import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
+
+// Rate Limiter Configuration
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: 'Too many requests from this IP, please try again later.',
+    headers: true,
+});
+
+// Apply rate limiter to all requests
+router.use(limiter);
 
 // Initialize OpenSearch client
 const client = new Client({
@@ -24,8 +37,8 @@ async function createMemory(conversationName) {
             method: 'POST',
             path: '/_plugins/_ml/memory/',
             body: {
-                name: conversationName
-            }
+                name: conversationName,
+            },
         });
         return response.body.memory_id;
     } catch (error) {
@@ -38,24 +51,25 @@ async function createMemory(conversationName) {
 async function performSearchWithMemory(userQuery, memoryId) {
     try {
         const searchResponse = await client.search({
-            index: process.env.OPENSEARCH_INDEX,
-            search_pipeline: 'rag_pipeline_local', //Specify the optional search pipeline
+            //index: process.env.OPENSEARCH_INDEX,
+            index: "neo4j-elements",
+            search_pipeline: 'rag_pipeline_local',
             body: {
                 query: {
                     multi_match: {
                         query: userQuery,
                         fields: ["authors^2", "contents", "title^3", "contributors^2"],
-                        type: "best_fields" // "best_fields" selects the most relevant field for matching.
-                    }
+                        type: "best_fields",
+                    },
                 },
                 ext: {
                     generative_qa_parameters: {
-                        llm_model: "llama3:instruct", 
+                        llm_model: "llama3:latest",
                         llm_question: userQuery,
-                        memory_id: memoryId
-                    }
-                }
-            }
+                        memory_id: memoryId,
+                    },
+                },
+            },
         });
         return searchResponse.body;
     } catch (error) {
@@ -63,6 +77,51 @@ async function performSearchWithMemory(userQuery, memoryId) {
         throw error;
     }
 }
+
+// Function to call GPT API for filtering
+async function filterElementsWithGPT(userQuery, answer, elements) {
+    try {
+        const messages = [
+            {
+                role: 'system',
+                content: 'You are a helpful assistant that helps filter relevant elements based on a given answer.',
+            },
+            {
+                role: 'user',
+                content: `
+Generated Answer: ${answer}
+Elements: ${JSON.stringify(elements)}
+
+Based on the generated answer, return only the elements that are relevant.
+Respond with a JSON array containing only the relevant elements.
+                `,
+            },
+        ];
+
+        const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+            model: 'gpt-3.5-turbo',
+            messages: messages,
+            max_tokens: 1000,
+            temperature: 0.5,
+        }, {
+            headers: {
+                'Authorization': `Bearer ${process.env.OPENAI_KEY}`,
+                'Content-Type': 'application/json',
+            },
+        });
+	//console.log(response)
+        // Clean up the response to remove unwanted markdown and whitespace
+        let responseContent = response.data.choices[0].message.content.trim();
+        responseContent = responseContent.replace(/```json|```/g, '').trim(); // Remove markdown formatting
+
+        // Parse JSON safely
+        return JSON.parse(responseContent);
+    } catch (error) {
+        console.error('Error filtering elements with GPT:', error);
+        throw error;
+    }
+}
+
 
 /**
  * @swagger
@@ -171,6 +230,7 @@ router.post('/llm/memory-id', cors(), async (req, res) => {
  *       500:
  *         description: Error performing conversational search
  */
+
 router.options('/llm/search', cors());
 router.post('/llm/search', cors(), async (req, res) => {
     const { userQuery, memoryId } = req.body;
@@ -178,51 +238,49 @@ router.post('/llm/search', cors(), async (req, res) => {
     try {
         let finalMemoryId = memoryId;
 
-        // If no memoryId is provided, create a new memory
         if (!finalMemoryId) {
             console.log("No memoryId provided, creating a new memory...");
             finalMemoryId = await createMemory(userQuery);
         }
 
-        console.log(`Searching "${userQuery}" with memoryID: ${finalMemoryId}`); 
+        console.log(`Searching "${userQuery}" with memoryID: ${finalMemoryId}`);
 
-        // Perform the search with the provided or newly created memory ID
         const searchResponse = await performSearchWithMemory(userQuery, finalMemoryId);
-        // handle no hits
-        const scoreThreshold = 5.0;  // Adjust the threshold as needed
+        const scoreThreshold = 5.0;
         const hits = searchResponse.hits.hits
-            .filter(hit => hit._score >= scoreThreshold)  // Filter by score
+            .filter(hit => hit._score >= scoreThreshold)
             .map(hit => ({
-                _id: hit._id,  // Include the _id field
-                _score: hit._score, // Include score for relevance information
-                ...hit._source // Include the _source fields
+                _id: hit._id,
+                _score: hit._score,
+                ...hit._source
             }));
-	    console.log(hits)
-        //const hits = searchResponse.hits.hits || [];
-        //const totalHits = searchResponse.hits.total.value || 0;
 
-        // Limit the number of elements to at most 10 and handle null fields
         const elements = hits.slice(0, 10).map(hit => {
             const source = hit;
             return {
                 ...source,
-                tags: source.tags === undefined || source.tags === null ? null : source.tags, // Set to null if undefined or null
-                authors: source.authors || null,  // Similar handling for other fields
-                contents: source.contents || null,  // Ensuring null for missing contents
-                title: source.title || null,  // Ensuring null for missing title
-                contributor: source.contributor || null  // Ensuring null for missing contributor
+                tags: source.tags === undefined || source.tags === null ? null : source.tags,
+                authors: source.authors || null,
+                contents: source.contents || null,
+                title: source.title || null,
+                contributor: source.contributor || null,
             };
         });
 
+        // Get the answer generated by the model
+        const answer = searchResponse.ext.retrieval_augmented_generation?.answer || null;
+
+        // Use GPT to filter elements
+        const filteredElements = answer ? await filterElementsWithGPT(userQuery, answer, elements) : elements;
+
         // Format the response
         const formattedResponse = {
-            answer: searchResponse.ext.retrieval_augmented_generation?.answer || null, // Handle missing answer gracefully
-            message_id: searchResponse.ext.retrieval_augmented_generation?.message_id || null, // Handle missing message ID gracefully
-            elements: elements.length > 0 ? elements : [], // Return empty array if no elements
-            count: elements.length // Return the total number of hits
+            answer: answer,
+            message_id: searchResponse.ext.retrieval_augmented_generation?.message_id || null,
+            elements: filteredElements.length > 0 ? filteredElements : [],
+            count: filteredElements.length,
         };
 
-        // Send the formatted response to the user
         res.json(formattedResponse);
     } catch (error) {
         console.error('Error performing conversational search:', error);

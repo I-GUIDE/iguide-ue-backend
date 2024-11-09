@@ -17,6 +17,7 @@ import { specs } from './swagger.js';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import * as n4j from './backend_neo4j.cjs'
+//import llm_routes from './routes/llm_with_filter_routes.js';
 import llm_routes from './routes/llm_routes.js';
 import llm_spatial_only_routes from './routes/llm_spatial_only_routes.js';
 import anvil_proxy from './routes/anvil_proxy.js';
@@ -36,13 +37,23 @@ const jwtCorsOptions = {
 
 const jwtCorsMiddleware = (req, res, next) => {
     res.header('Access-Control-Allow-Credentials', true);
-    res.header('Access-Control-Allow-Origin', jwtCorsOptions.origin);
     res.header('Access-Control-Allow-Methods', jwtCorsOptions.methods);
     res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
 
+    /*const isDev = process.env.NODE_ENV === 'development';
+
+    if (isDev) {
+        // Accept any origin in development
+        res.header('Access-Control-Allow-Origin', req.headers.origin);
+    } else {
+        // Use the FRONTEND_DOMAIN in production
+        res.header('Access-Control-Allow-Origin', process.env.FRONTEND_DOMAIN);
+    }
+
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
-    }
+    }*/
+    res.header('Access-Control-Allow-Origin', process.env.FRONTEND_DOMAIN);
 
     next();
 };
@@ -162,7 +173,8 @@ const uploadAvatar = multer({ storage: avatarStorage });
  */
 app.options('/api/refresh-token', jwtCorsMiddleware);
 app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
-    const refreshToken = req.cookies.refreshToken;
+	// updated refresh token to use env variable 
+    const refreshToken = req.cookies[process.env.JWT_REFRESH_TOKEN_NAME];
     //console.log("Refresh token", refreshToken);
     if (!refreshToken) {
 	return res.sendStatus(401);
@@ -189,9 +201,10 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 	    return res.sendStatus(403);
 	}
 
+	
 	const newAccessToken = generateAccessToken({ id: user.id, role: user.role });
-	res.cookie('jwt', newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
-
+	 // updated to new variable name 
+	res.cookie(process.env.JWT_ACCESS_TOKEN_NAME, newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
 	res.json({ accessToken: newAccessToken });
     });
 });
@@ -386,14 +399,17 @@ app.get('/api/elements/titles', cors(), async (req, res) => {
 	    index: os_index,
 	    scroll: scrollTimeout,
 	    body: {
-		size: 100, // Number of results to fetch per scroll request
-		query: {
-		    term: {
-			'resource-type': elementType
-		    },
-		},
-		_source: ['title'], // Only fetch the title field
-	    },
+        size: 100, // Number of results to fetch per scroll request
+        query: {
+            bool: {
+                must: [
+                    { term: { 'resource-type': elementType } },
+                    { term: { visibility: 10 } } // Filter for visibility 10
+                ]
+            }
+        },
+        _source: ['title'], // Only fetch the title field
+    },
 	});
 
 	let scrollId = initialSearchResponse.body._scroll_id;
@@ -1078,6 +1094,17 @@ app.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
 	if (!can_edit){
 	    res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
 	}
+	if (updates['resource-type'] === 'notebook' &&
+            updates['notebook-repo'] &&
+            updates['notebook-file']) {
+            const htmlNotebookPath =
+                await convertNotebookToHtml(updates['notebook-repo'],
+                                            updates['notebook-file'], notebookHtmlDir);
+            if (htmlNotebookPath) {
+                updates['html-notebook'] =
+                    `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+            }
+        }
 
 	const response = await n4j.updateElement(id, updates);
 	if (response) {
