@@ -613,7 +613,7 @@ app.get('/api/private-elements/:id', jwtCorsMiddleware, authenticateJWT, async (
  *         description: Internal server error
  */
 app.options('/api/private-elements', cors());
-app.get('/api/private-elements', jwtCorsMiddleware, authenticateJWT,, async (req, res) => {
+app.get('/api/private-elements', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
 
     //const contributor_id = decodeURIComponent(req.params['id']);
     let {'user-id': contributor_id,

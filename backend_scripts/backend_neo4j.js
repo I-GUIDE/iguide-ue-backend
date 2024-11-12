@@ -653,26 +653,11 @@ async function getElementsByContributor(id,
     const tx = await session.beginTransaction();
 
     try{
-	// // get contributor ID and all associated openids
-	// const query_str1 = "MATCH(c:Contributor) " +
-	//       "WHERE c.id=$id_param OR $id_param IN c.openid " +
-	//       "RETURN c.id, c.openid"
-	// const contrib_results = await tx.run(query_str1,
-	// 				     {id_param: id},
-	// 				     {routing: 'READ', database: process.env.NEO4J_DB});
-
-	// const contrib_id = contrib_results.records[0].get('c.id');
-	// const contrib_openids = contrib_results.records[0].get('c.openid');
-
 	const order_by = parseSortBy(sort_by);
 	let query_params = {contrib_id: id, from: neo4j.int(from), size: neo4j.int(size)};
 
 	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) " +
 	    "WHERE (c.id=$contrib_id OR $contrib_id IN c.openid) ";
-
-	// // if no user logged-in OR contributor is NOT logged-in user, only return public elements
-	// if (user_id === null || (user_id != contrib_id && !contrib_openids.includes(user_id)))
-	//     query_str += "AND r.visibility=$public_visibility ";
 
 	if (private_only){
 	    query_str += "AND r.visibility=$visibility ";
@@ -716,16 +701,6 @@ async function getElementsCountByContributor(id, private_only=false){
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
     try{
-	// // get contributor ID and all associated openids
-	// const query_str1 = "MATCH(c:Contributor) " +
-	//       "WHERE c.id=$id_param OR $id_param IN c.openid " +
-	//       "RETURN c.id, c.openid"
-	// const contrib_results = await tx.run(query_str1,
-	// 				     {id_param: id},
-	// 				     {routing: 'READ', database: process.env.NEO4J_DB});
-	// const contrib_id = contrib_results.records[0].get('c.id');
-	// const contrib_openids = contrib_results.records[0].get('c.openid');
-
 	let query_params = {contrib_id: id};
 
 	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) " +
@@ -739,10 +714,7 @@ async function getElementsCountByContributor(id, private_only=false){
 	    query_str += "AND r.visibility=$visibility ";
 	    query_params['visibility'] = Visibility.PUBLIC;
 	}
-	// // if no user logged-in OR contributor is NOT logged-in user, only return public elements
-	// if (user_id === null || (user_id != contrib_id && !contrib_openids.includes(user_id)))
-	//     query_str += "AND r.visibility=$public_visibility ";
-
+	
 	query_str += "RETURN COUNT(r) AS count";
 
 	const {records, summary} =
@@ -1239,7 +1211,7 @@ async function setElementVisibilityForID(id, visibility){
     try {
 	const {_, summary} =
 	      await driver.executeQuery(query_str,
-					{id_param: id, visibilityvisibility},
+					{id_param: id, visibility:visibility},
 					{database: process.env.NEO4J_DB});
 	if (summary.counters.updates()['propertiesSet'] == 1){
 	    return true;
