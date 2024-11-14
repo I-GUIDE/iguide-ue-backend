@@ -878,7 +878,7 @@ export async function elementToNode(element, generate_id=true){
        } = element;
 
     node_type = utils.parseElementType(node_type);
-    node['thumbnail_image'] = thumbnail['orginal'];
+    node['thumbnail_image'] = thumbnail['original'];
     //node['visibility'] = parseVisibility(visibility);
 
     // (1) generate id (UUID)

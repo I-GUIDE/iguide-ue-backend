@@ -164,7 +164,7 @@ export function generateMultipleResolutionImagesFor(image_file_str, upload_dir_p
     const file_ext = path.extname(image_filename);
     const image_urls = {};
 
-    image_urls['orginal'] = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${image_filename}`;
+    image_urls['original'] = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${image_filename}`;
 
     for (const size of IMAGE_SIZES.thumbnail) {
         const resized_filename = `${filename_without_ext}${size.suffix}${file_ext}`;
