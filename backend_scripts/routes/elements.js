@@ -696,7 +696,7 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
     console.log('Updating element with id: ' + id);
 
     try {
-	const can_edit = await n4j.userCanEditElement(id, req.user.id, req.user.role);
+	const can_edit = await utils.userCanEditElement(id, req.user.id, req.user.role);
 	if (!can_edit){
 	    res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
 	}
@@ -793,7 +793,7 @@ router.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, async (req
     console.log('Setting visibility (' + visibility_str + ') for element with id: ' + id);
 
     try {
-	const can_edit = await n4j.userCanEditElement(id, req.user.id, req.user.role);
+	const can_edit = await utils.userCanEditElement(id, req.user.id, req.user.role);
 	if (!can_edit){
 	    res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
 	}

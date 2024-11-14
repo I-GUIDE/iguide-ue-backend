@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 // local imports
+import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
@@ -44,7 +45,7 @@ router.get('/private-elements/:id', jwtCorsMiddleware, authenticateJWT, async (r
     // const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
     // 				  user_role: n4j.Role.TRUSTED_USER};
     try {
-	const can_view = await n4j.userCanViewElement(element_id, user_id, user_role);
+	const can_view = await utils.userCanViewElement(element_id, user_id, user_role);
 	if (!can_view){
 	    res.status(403).json({ message: 'Forbidden: You do not have permission to view this element.' });
 	    return;
