@@ -1,9 +1,9 @@
 #!/bin/bash
 
-if [ -f "backend_neo4j.cjs" ]; then
-    rm backend_neo4j.cjs
-fi
-ln backend_neo4j.js backend_neo4j.cjs
+# if [ -f "backend_neo4j.cjs" ]; then
+#     rm backend_neo4j.cjs
+# fi
+# ln backend_neo4j.js backend_neo4j.cjs
 
 ROLLOVER_LOG_FILE_NAME=server-$(date +"%Y-%m-%dT%H:%M:%S").log
 if [ -f "server.log" ]; then

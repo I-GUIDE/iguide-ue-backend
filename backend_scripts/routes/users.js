@@ -4,17 +4,24 @@
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 // local imports
-import * as n4j from '../backend_neo4j.cjs'
-import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js'
+import * as n4j from '../backend_neo4j.js';
+import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
 
 const router = express.Router();
 
+// Ensure required directories exist
+const avatar_dir = path.join(process.env.UPLOAD_FOLDER, 'avatars');
+fs.mkdirSync(avatar_dir, { recursive: true });
+// Serve static files from the thumbnails directory
+router.use('/user-uploads/avatars', express.static(avatar_dir));
 // Configure storage for avatars
 const avatarStorage = multer.diskStorage({
     destination: (req, file, cb) => {
-	cb(null, avatarDir);
+	cb(null, avatar_dir);
     },
     filename: (req, file, cb) => {
 	// It's a good practice to sanitize the original file name
@@ -187,7 +194,7 @@ router.post('/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.si
 	}
 	if (oldAvatarUrl) {
 	    // Delete the old avatar file
-	    const oldAvatarFilePath = path.join(avatarDir, path.basename(oldAvatarUrl));
+	    const oldAvatarFilePath = path.join(avatar_dir, path.basename(oldAvatarUrl));
 	    if (fs.existsSync(oldAvatarFilePath)) {
 		fs.unlinkSync(oldAvatarFilePath);
 	    }
