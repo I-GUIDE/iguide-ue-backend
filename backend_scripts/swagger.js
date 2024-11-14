@@ -31,6 +31,7 @@ const options = {
       , './routes/private_elements.js'
       , './routes/users.js'
       , './routes/documentation.js'
+      , './routes/elements.js'
   ], // Path to the API docs
 };
 
