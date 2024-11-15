@@ -59,7 +59,6 @@ const SSLOptions = {
     key: fs.readFileSync(process.env.SSL_KEY),
     cert: fs.readFileSync(process.env.SSL_CERT)
 };
-
 /****************************************************************************
  * JWT Specific Functions
  ****************************************************************************/

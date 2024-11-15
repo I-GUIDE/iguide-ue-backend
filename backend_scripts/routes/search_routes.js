@@ -331,6 +331,11 @@ router.get('/search', cors(), async (req, res) => {
             }
             
         }
+	// frontend expects multiple resolutions for thumbnail images
+	if (results['thumbnail-image']){
+	    results['thumbnail-image'] =
+		utils.generateMultipleResolutionImagesFor(results['thumbnail-image']);
+	}
         res.json({ elements: results, total_count: searchResponse.body.hits.total.value });
     } catch (error) {
         console.error('Error querying OpenSearch:', error);
