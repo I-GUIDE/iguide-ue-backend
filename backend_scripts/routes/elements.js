@@ -131,7 +131,7 @@ router.get('/api/elements/titles', cors(), async (req, res) => {
     try {
 	// Initial search request with scrolling
 	const initialSearchResponse = await os.client.search({
-	    index: os_index,
+	    index: os.os_index,
 	    scroll: scrollTimeout,
 	    body: {
         size: 100, // Number of results to fetch per scroll request
@@ -594,7 +594,7 @@ router.post('/api/elements',
             console.log('Indexing element: ' + os_element);
             const response = await os.client.index({
                 id: element_id,
-                index: os_index,
+                index: os.os_index,
                 body: os_element,
                 refresh: true,
             });
@@ -646,11 +646,11 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
 	if (response) {
 	    // Delete from OpenSearch
 	    const response = await os.client.delete({
-		index: os_index,
+		index: os.os_index,
 		id: resourceId
 	    });
 	    console.log(response['body']['result']);
-	    await os.client.indices.refresh({ index: os_index });
+	    await os.client.indices.refresh({ index: os.os_index });
 
 	    res.status(200).json({ message: 'Resource deleted successfully' });
 	} else {
@@ -722,7 +722,7 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 		// Update in OpenSearch
 		const response = await os.client.update({
 		    id: id,
-		    index: os_index,
+		    index: os.os_index,
 		    body: {
 			doc: {
 			    'title': updates['title'],
@@ -817,7 +817,7 @@ router.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, async (req
 	    // // Update in OpenSearch
 	    // const response = await os.client.update({
 	    // 	id: id,
-	    // 	index: os_index,
+	    // 	index: os.os_index,
 	    // 	body: {
 	    // 	    doc: {
 	    // 		'visibility': visibility

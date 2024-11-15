@@ -54,31 +54,11 @@ app.use('/api', documentation);
 // Use elements route
 app.use(elements);
 
-// const os_node = process.env.OPENSEARCH_NODE;
-// const os_usr = process.env.OPENSEARCH_USERNAME;
-// const os_pswd = process.env.OPENSEARCH_PASSWORD;
-// const os_index = process.env.OPENSEARCH_INDEX; //'neo4j-elements-dev';
-// const target_domain = process.env.JWT_TARGET_DOMAIN;
-
+const target_domain = process.env.JWT_TARGET_DOMAIN;
 const SSLOptions = {
     key: fs.readFileSync(process.env.SSL_KEY),
     cert: fs.readFileSync(process.env.SSL_CERT)
 };
-
-// export const client = new Client({
-//     node: os_node, // OpenSearch endpoint
-//     auth: {
-// 	username: os_usr,
-// 	password: os_pswd,
-//     },
-//     ssl: {
-// 	rejectUnauthorized: false, // Use this only if you encounter SSL certificate issues
-//     },
-// });
-
-// console.log('Connectd to OpenSearch: ' + os_node);
-// console.log('\t- Using OpenSearch User: ' + os_usr);
-// console.log('\t- Using OpenSearch Index: ' + os_index);
 
 /****************************************************************************
  * JWT Specific Functions

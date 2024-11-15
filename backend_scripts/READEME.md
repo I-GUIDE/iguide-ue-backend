@@ -32,12 +32,13 @@ sh stop.sh
 |:----------|:----------|
 | `server_neo4j.js`    | Main entry point to the middleware server    |
 | `backend_neo4j.js`   | All functionalities to access and work with `neo4j` database    |
+| `backend_opensearch.js`   | All functionalities to access and work with `opensearch` backend    |
 | `iguide_cors.js`     | Common CORS policy configurations used by the server components |
 | `utils.js`     | System `Enum`s + General utility functions |
 | `routes/users.js`    | All `/api/users*` endpoint implementations    |
 | `routes/elements.js`    | All `/api/elements*` endpoint implementations    |
 | `routes/documentation.js`| All `/api/document*` endpoint implementations    |
-| `routes/private_elements.js`| All `/api/document*` endpoint implementations    |
+| `routes/private_elements.js`| All `/api/private-elements*` endpoint implementations    |
 
 
 ### Creating a new endpoint

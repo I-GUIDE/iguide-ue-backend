@@ -5,9 +5,8 @@ import { Client } from '@opensearch-project/opensearch';
 const os_node = process.env.OPENSEARCH_NODE;
 const os_usr = process.env.OPENSEARCH_USERNAME;
 const os_pswd = process.env.OPENSEARCH_PASSWORD;
-const os_index = process.env.OPENSEARCH_INDEX; //'neo4j-elements-dev';
-const target_domain = process.env.JWT_TARGET_DOMAIN;
 
+export const os_index = process.env.OPENSEARCH_INDEX; //'neo4j-elements-dev';
 export const client = new Client({
     node: os_node, // OpenSearch endpoint
     auth: {
