@@ -6,6 +6,9 @@ const router = express.Router();
 import { Filter } from 'bad-words'
 const customFilter = new Filter();
 
+// local imports
+import * as utils from '../utils.js';
+
 // Override the replace method to replace bad words with an empty string
 customFilter.replaceWord = (word) => '';
 
@@ -239,7 +242,7 @@ router.get('/search/count', cors(), async (req, res) => {
 router.options('/search', cors());
 router.get('/search', cors(), async (req, res) => {
     const { keyword, 'element-type': element_type, 'sort-by': sort_by = '_score', order = 'desc', from = 0, size = 15, ...additionalFields } = req.query;
-    
+
     let query = {
         bool: {
             must: [
@@ -329,7 +332,7 @@ router.get('/search', cors(), async (req, res) => {
             if (cleaned_keyword === keyword){
                 await saveSearchKeyword(cleaned_keyword);
             }
-            
+
         }
 	// frontend expects multiple resolutions for thumbnail images
 	if (results['thumbnail-image']){
