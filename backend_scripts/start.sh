@@ -17,5 +17,5 @@ echo "Starting server ..."
 #node server_neo4j.js >> $LOG_FILE_NAME &
 node server_neo4j.js > $LOG_FILE_NAME 2>&1 &
 BACKGROUND_PID=$!
-echo "BACKGROUND PID: ${BACKGROUND_PID}" >> $LOG_FILE_NAME
+#(echo "BACKGROUND PID: ${BACKGROUND_PID}" > /dev/stdout) > $LOG_FILE_NAME 2>&1
 echo "Server started with PID: $BACKGROUND_PID"

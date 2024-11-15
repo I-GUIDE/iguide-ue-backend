@@ -49,8 +49,16 @@ function makeFrontendCompatible(element) {
     // );
     function replaceUnderscores(obj) {
 	const keyValues = Object.entries(obj).map(([k1, v1]) => {
-	    if (k1 === 'created_at' || k1 === 'updated_at')
-		return [k1.replaceAll("_","-"), v1];
+	    // if (k1 === 'created_at' || k1 === 'updated_at')
+	    // 	return [k1.replaceAll("_","-"), v1];
+	    if (k1 === 'thumbnail_image') {
+		return [k1.replaceAll("_","-"), utils.generateMultipleResolutionImagesFor(v1)];
+	    } else if (k1 === 'click_count') {
+		return [k1.replaceAll("_","-"), utils.parse64BitNumber(v1)];
+	    } else if (k1 === 'updated_at') {
+		return [k1.replaceAll("_","-"), utils.parseDate(v1)];
+	    }
+
 	    if (typeof v1 === 'object' && v1 !== null && !Array.isArray(v1)) {
 		v1 = replaceUnderscores(v1);
 	    } else if (Array.isArray(v1) && typeof v1[0] === 'object'){
@@ -69,19 +77,19 @@ function makeFrontendCompatible(element) {
     // handle 64-bit numbers returned from neo4j
     // if (ret['visibility'])
     // 	ret['visibility'] = parse64BitNumber(ret['visibility']);
-    if (ret['click-count']){
-	ret['click-count'] = utils.parse64BitNumber(ret['click-count']);
-    }
+    // if (ret['click-count']){
+    // 	ret['click-count'] = utils.parse64BitNumber(ret['click-count']);
+    // }
     // handle datetime values for created_at and updated_at properties
     //ret['created-at'] = parseDate(ret['created-at']);
-    if (ret['updated-at']){
-	ret['updated-at'] = utils.parseDate(ret['updated-at']);
-    }
+    // if (ret['updated-at']){
+    // 	ret['updated-at'] = utils.parseDate(ret['updated-at']);
+    // }
     // convert thumbnail
-    if (ret['thumbnail-image']){
-	const image_urls = utils.generateMultipleResolutionImagesFor(ret['thumbnail-image']);
-	ret['thumbnail-image'] = image_urls;
-    }
+    // if (ret['thumbnail-image']){
+    // 	const image_urls = utils.generateMultipleResolutionImagesFor(ret['thumbnail-image']);
+    // 	ret['thumbnail-image'] = image_urls;
+    // }
     return ret;
 }
 

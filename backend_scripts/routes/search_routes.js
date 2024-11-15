@@ -86,26 +86,15 @@ router.get('/search/count', cors(), async (req, res) => {
     const { keyword, 'element-type': element_type, 'sort-by': sort_by = '_score', order = 'desc', from = 0, size = 15, ...additionalFields } = req.query;
 
     let query = {
-        bool: {
-            must: [
-                {
-                    multi_match: {
-                        query: keyword,
-                        fields: [
-                            'title^3',    // Boost title matches
-                            'authors^3',  // Boost author matches
-                            'tags^2',     // Slightly boost tag matches
-                            'contents'    // Normal weight for content matches
-                        ],
-                    }
-                },
-                {
-                    term: {
-                        visibility: 10 // Filter to only documents with visibility 10
-                    }
-                }
-            ]
-        }
+	multi_match: {
+            query: keyword,
+            fields: [
+                'title^3',    // Boost title matches
+                'authors^3',  // Boost author matches
+                'tags^2',     // Slightly boost tag matches
+                'contents'    // Normal weight for content matches
+            ],
+        },
     };
 
     // Build a list of must conditions for bool query
@@ -244,26 +233,15 @@ router.get('/search', cors(), async (req, res) => {
     const { keyword, 'element-type': element_type, 'sort-by': sort_by = '_score', order = 'desc', from = 0, size = 15, ...additionalFields } = req.query;
 
     let query = {
-        bool: {
-            must: [
-                {
-                    multi_match: {
-                        query: keyword,
-                        fields: [
-                            'title^3',    // Boost title matches
-                            'authors^3',  // Boost author matches
-                            'tags^2',     // Slightly boost tag matches
-                            'contents'    // Normal weight for content matches
-                        ],
-                    }
-                },
-                {
-                    term: {
-                        visibility: 10 // Filter to only documents with visibility 10
-                    }
-                }
-            ]
-        }
+        multi_match: {
+            query: keyword,
+            fields: [
+                'title^3',    // Boost title matches
+                'authors^3',  // Boost author matches
+                'tags^2',     // Slightly boost tag matches
+                'contents'    // Normal weight for content matches
+            ],
+        },
     };
 
     // Build a list of must conditions for bool query
@@ -335,10 +313,10 @@ router.get('/search', cors(), async (req, res) => {
 
         }
 	// frontend expects multiple resolutions for thumbnail images
-	if (results['thumbnail-image']){
-	    results['thumbnail-image'] =
-		utils.generateMultipleResolutionImagesFor(results['thumbnail-image']);
-	}
+	// if (results['thumbnail-image']){
+	//     results['thumbnail-image'] =
+	// 	utils.generateMultipleResolutionImagesFor(results['thumbnail-image']);
+	// }
         res.json({ elements: results, total_count: searchResponse.body.hits.total.value });
     } catch (error) {
         console.error('Error querying OpenSearch:', error);
