@@ -769,7 +769,7 @@ export async function updateElement(id, element){
 
     try{
 	const {node, node_type, related_elements} =
-	      await elementToNode(element, generate_id=false);
+	      await elementToNode(element, false);
 
 	const this_element_match = "MATCH (n:"+node_type+"{id:$id}) ";
 	var this_element_set = "";

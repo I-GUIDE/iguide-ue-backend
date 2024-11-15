@@ -8,6 +8,7 @@ import path from 'path';
 import fs from 'fs';
 // local imports
 import * as n4j from '../backend_neo4j.js';
+import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
 
@@ -256,7 +257,7 @@ router.post('/users', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
 	}
 	// [ToDo] Add contributor name to OpenSearch
 
-	// const response = await client.index({
+	// const response = await os.client.index({
 	//     index: 'users',
 	//     id: user.openid,
 	//     body: user,
@@ -353,7 +354,7 @@ router.put('/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) =>
 
 //   try {
 //   throw Error('Neo4j: Delete user is not implemented');
-//   // const response = await client.delete({
+//   // const response = await os.client.delete({
 //   //     index: 'users',
 //   //     id: openid
 //   // });

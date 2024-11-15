@@ -11,6 +11,7 @@ import path from 'path';
 // local imports
 import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
+import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
 
@@ -129,7 +130,7 @@ router.get('/api/elements/titles', cors(), async (req, res) => {
 
     try {
 	// Initial search request with scrolling
-	const initialSearchResponse = await client.search({
+	const initialSearchResponse = await os.client.search({
 	    index: os_index,
 	    scroll: scrollTimeout,
 	    body: {
@@ -152,7 +153,7 @@ router.get('/api/elements/titles', cors(), async (req, res) => {
 	// Function to handle scrolling
 	const fetchAllTitles = async (scrollId) => {
 	    while (true) {
-		const scrollResponse = await client.scroll({
+		const scrollResponse = await os.client.scroll({
 		    scroll_id: scrollId,
 		    scroll: scrollTimeout,
 		});
@@ -591,7 +592,7 @@ router.post('/api/elements',
             os_element['contributor'] = contributor_name;
 
             console.log('Indexing element: ' + os_element);
-            const response = await client.index({
+            const response = await os.client.index({
                 id: element_id,
                 index: os_index,
                 body: os_element,
@@ -644,12 +645,12 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
 	const response = await n4j.deleteElementByID(resourceId);
 	if (response) {
 	    // Delete from OpenSearch
-	    const response = await client.delete({
+	    const response = await os.client.delete({
 		index: os_index,
 		id: resourceId
 	    });
 	    console.log(response['body']['result']);
-	    await client.indices.refresh({ index: os_index });
+	    await os.client.indices.refresh({ index: os_index });
 
 	    res.status(200).json({ message: 'Resource deleted successfully' });
 	} else {
@@ -719,7 +720,7 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 	    const visibility = utils.parseVisibility(updates['visibility']);
 	    if (visibility === utils.Visibility.PUBLIC) {
 		// Update in OpenSearch
-		const response = await client.update({
+		const response = await os.client.update({
 		    id: id,
 		    index: os_index,
 		    body: {
@@ -814,7 +815,7 @@ router.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, async (req
 	    }
 
 	    // // Update in OpenSearch
-	    // const response = await client.update({
+	    // const response = await os.client.update({
 	    // 	id: id,
 	    // 	index: os_index,
 	    // 	body: {

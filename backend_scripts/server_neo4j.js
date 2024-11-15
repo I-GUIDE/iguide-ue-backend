@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { Client } from '@opensearch-project/opensearch';
+// import { Client } from '@opensearch-project/opensearch';
 // import path from 'path';
 import fs from 'fs';
 // import { exec } from 'child_process';
@@ -19,6 +19,7 @@ import cookieParser from 'cookie-parser';
 // local imports
 import * as utils from './utils.js';
 import * as n4j from './backend_neo4j.js';
+import * as os from './backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from './iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from './jwtUtils.js';
 // local imports for endpoints
@@ -53,31 +54,31 @@ app.use('/api', documentation);
 // Use elements route
 app.use(elements);
 
-const os_node = process.env.OPENSEARCH_NODE;
-const os_usr = process.env.OPENSEARCH_USERNAME;
-const os_pswd = process.env.OPENSEARCH_PASSWORD;
-const os_index = process.env.OPENSEARCH_INDEX; //'neo4j-elements-dev';
-const target_domain = process.env.JWT_TARGET_DOMAIN;
+// const os_node = process.env.OPENSEARCH_NODE;
+// const os_usr = process.env.OPENSEARCH_USERNAME;
+// const os_pswd = process.env.OPENSEARCH_PASSWORD;
+// const os_index = process.env.OPENSEARCH_INDEX; //'neo4j-elements-dev';
+// const target_domain = process.env.JWT_TARGET_DOMAIN;
 
 const SSLOptions = {
     key: fs.readFileSync(process.env.SSL_KEY),
     cert: fs.readFileSync(process.env.SSL_CERT)
 };
 
-const client = new Client({
-    node: os_node, // OpenSearch endpoint
-    auth: {
-	username: os_usr,
-	password: os_pswd,
-    },
-    ssl: {
-	rejectUnauthorized: false, // Use this only if you encounter SSL certificate issues
-    },
-});
+// export const client = new Client({
+//     node: os_node, // OpenSearch endpoint
+//     auth: {
+// 	username: os_usr,
+// 	password: os_pswd,
+//     },
+//     ssl: {
+// 	rejectUnauthorized: false, // Use this only if you encounter SSL certificate issues
+//     },
+// });
 
-console.log('Connectd to OpenSearch: ' + os_node);
-console.log('\t- Using OpenSearch User: ' + os_usr);
-console.log('\t- Using OpenSearch Index: ' + os_index);
+// console.log('Connectd to OpenSearch: ' + os_node);
+// console.log('\t- Using OpenSearch User: ' + os_usr);
+// console.log('\t- Using OpenSearch Index: ' + os_index);
 
 /****************************************************************************
  * JWT Specific Functions
@@ -127,7 +128,7 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
     }
 
     // Verify the refresh token exists in OpenSearch
-    const { body } = await client.search({
+    const { body } = await os.client.search({
 	index: 'refresh_tokens',
 	body: {
 	    query: {
