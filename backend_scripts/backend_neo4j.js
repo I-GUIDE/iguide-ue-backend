@@ -574,12 +574,13 @@ async function getElementsByType(type, from, size, sort_by=SortBy.TITLE, order="
 	const node_type = parseElementType(type);
 	const order_by = parseSortBy(sort_by);
 
-	const query_str = "MATCH (n:"+ node_type +")-[:CONTRIBUTED]-(c) " +
-	      "WHERE n.visibility=$public_visibility " +
-	      "RETURN n{.id, .title, .contents, .tags, .thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name)}} " +
-	      "ORDER BY n." + order_by + " " + order + " " +
-	      "SKIP $from " +
-	      "LIMIT $size";
+	const query_str = "MATCH (n:" + node_type + ")-[:CONTRIBUTED]-(c) " +
+	    "WHERE n.visibility=$public_visibility " +
+	    "RETURN n{.id, .title, .contents, .tags, .thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name)}} " +
+	    "ORDER BY n." + order_by + " " + order + ", n.id " + order + " " +
+	    "SKIP $from " +
+	    "LIMIT $size";
+
 
 
 	const {records, summary} =
