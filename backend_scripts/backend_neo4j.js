@@ -1089,7 +1089,9 @@ export async function registerContributor(contributor){
 	}
 	// default role
 	return neo4j.int(utils.Role.UNTRUSTED_USER);
-	})();
+    })();
+    // (3) get avatar URL
+    contributor['avatar_url'] = contributor['avatar_url']['original'];
     const query_str = "CREATE (c: Contributor $contr_param)";
     try{
 	const {_, summary} =
@@ -1117,7 +1119,11 @@ export async function updateContributor(id, contributor_attributes){
     let i=0;
     for (const [key, value] of Object.entries(contributor_attributes)) {
 	query_set += "SET c." + key + "=$attr" + i + " ";
-	query_params['attr' + i] = value;
+	if (key === 'avatar_url') {
+	    query_params['attr' + i] = value['original'];
+	} else {
+	    query_params['attr' + i] = value;
+	}
 	i+=1;
     }
 
@@ -1135,9 +1141,9 @@ export async function updateContributor(id, contributor_attributes){
     return false;
 }
 /**
- * Get contributor by ID with all related content
+ * Set contributor avatar given ID
  * @param {string} id
- * @param {string} avatar_url
+ * @param {Object} avatar_url {original: <url>, low: <url>, high: <url>}
  * @return {Boolean} True if avatar set successfully. False if contributor not found
  */
 export async function setContributorAvatar(id, avatar_url){
@@ -1162,7 +1168,7 @@ export async function setContributorAvatar(id, avatar_url){
 	query_str = contributorMatchQuery(id)+" " +
 	    "SET c.avatar_url=$avatar_url";
 	let {_, summary} = await tx.run(query_str,
-				    {contrib_id: id, avatar_url: avatar_url},
+				    {contrib_id: id, avatar_url: avatar_url['original']},
 				    {database: process.env.NEO4J_DB});
 	if (summary.counters.updates()['propertiesSet'] == 1){
 	    ret = true;
