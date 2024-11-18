@@ -7,11 +7,13 @@ import sharp from 'sharp'; // Import the sharp library for image processing
 const IMAGE_SIZES = {
     thumbnail: [
         { width: 300, suffix: '-300px', name: 'low' },
-        { width: 765, suffix: '-756px', name: 'medium' },
+        { width: 765, suffix: '-765px', name: 'medium' },
         { width: 1024, suffix: '-1024px', name:'high' },
     ],
     avatar: [
-        { width: 96, suffix: '-150px', name: 'low' },
+        { width: 150, suffix: '-150px', name: 'low' },
+        { width: 765, suffix: '-765px', name: 'high' },
+        
     ]
 };
 
@@ -102,5 +104,5 @@ const updateAvatarInFolder = async (folderPath) => {
 
 
 
-//updateThumbnailInFolder("/media/volume/dwn-backend-data/user-uploads/thumbnails");
+updateThumbnailInFolder("/media/volume/dwn-backend-data/user-uploads/thumbnails");
 updateAvatarInFolder("/media/volume/dwn-backend-data/user-uploads/avatars");
