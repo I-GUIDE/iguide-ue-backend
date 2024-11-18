@@ -168,13 +168,13 @@ export function generateMultipleResolutionImagesFor(image_file_str,
     const file_ext = path.extname(image_filename);
     const image_urls = {};
 
-    let url_prefix = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/`;
+    let url_prefix = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads`;
     let size_array = [];
     if (is_avatar) {
-	url_prefix = `${url_prefix}/avatars/`;
+	url_prefix = `${url_prefix}/avatars`;
 	size_array = IMAGE_SIZES.avatar;
     } else {
-	url_prefix = `${url_prefix}/thumbnails/`;
+	url_prefix = `${url_prefix}/thumbnails`;
 	size_array = IMAGE_SIZES.thumbnail;
     }
 
