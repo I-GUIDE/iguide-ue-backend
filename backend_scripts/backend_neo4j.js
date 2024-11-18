@@ -1143,7 +1143,7 @@ export async function updateContributor(id, contributor_attributes){
 /**
  * Set contributor avatar given ID
  * @param {string} id
- * @param {Object} avatar_url {original: <url>, low: <url>, high: <url>}
+ * @param {string} avatar_url
  * @return {Boolean} True if avatar set successfully. False if contributor not found
  */
 export async function setContributorAvatar(id, avatar_url){
@@ -1168,7 +1168,7 @@ export async function setContributorAvatar(id, avatar_url){
 	query_str = contributorMatchQuery(id)+" " +
 	    "SET c.avatar_url=$avatar_url";
 	let {_, summary} = await tx.run(query_str,
-				    {contrib_id: id, avatar_url: avatar_url['original']},
+				    {contrib_id: id, avatar_url: avatar_url},
 				    {database: process.env.NEO4J_DB});
 	if (summary.counters.updates()['propertiesSet'] == 1){
 	    ret = true;

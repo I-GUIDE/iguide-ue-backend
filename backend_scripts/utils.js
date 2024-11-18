@@ -138,7 +138,7 @@ export function parseDate(neo4jDateTime){
 const IMAGE_SIZES = {
     thumbnail: [
         { width: 300, suffix: '-300px', name: 'low' },
-        { width: 765, suffix: '-756px', name: 'medium' },
+        { width: 765, suffix: '-765px', name: 'medium' },
         { width: 1024, suffix: '-1024px', name:'high' },
     ],
     avatar: [
@@ -168,9 +168,17 @@ export function generateMultipleResolutionImagesFor(image_file_str,
     const file_ext = path.extname(image_filename);
     const image_urls = {};
 
-    image_urls['original'] = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${image_filename}`;
+    let url_prefix = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/`;
+    let size_array = [];
+    if (is_avatar) {
+	url_prefix = `${url_prefix}/avatars/`;
+	size_array = IMAGE_SIZES.avatar;
+    } else {
+	url_prefix = `${url_prefix}/thumbnails/`;
+	size_array = IMAGE_SIZES.thumbnail;
+    }
 
-    const size_array = (is_avatar)? IMAGE_SIZES.avatar : IMAGE_SIZES.thumbnail;
+    image_urls['original'] = `${url_prefix}/${image_filename}`;
     for (const size of size_array) {
         const resized_filename = `${filename_without_ext}${size.suffix}${file_ext}`;
 
@@ -180,7 +188,7 @@ export function generateMultipleResolutionImagesFor(image_file_str,
 		.toFile(path.join(upload_dir_path, resized_filename));
 	}
 
-	image_urls[size.name] = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${resized_filename}`;
+	image_urls[size.name] = `${url_prefix}/${resized_filename}`;
     }
     //console.log(image_urls);
     return image_urls;

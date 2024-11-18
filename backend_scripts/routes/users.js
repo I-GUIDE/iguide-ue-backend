@@ -180,24 +180,35 @@ router.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvata
     try {
 	const body = JSON.parse(JSON.stringify(req.body));
 	const id = body.id;
-	const newAvatarFile = req.file;
+	const new_avatar_file = req.file;
 
-	if (!id || !newAvatarFile) {
+	if (!id || !new_avatar_file) {
 	    return res.status(400).json({ message: 'ID and new avatar file are required' });
 	}
 
 	// Update the user's avatar URL with the new file URL
-	const newAvatarUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${newAvatarFile.filename}`;
+	// const newAvatarUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${newAvatarFile.filename}`;
 
-	const {result, oldAvatarUrl} = await n4j.setContributorAvatar(id, newAvatarUrl);
+	const new_avatar_images =
+	      utils.generateMultipleResolutionImagesFor(new_avatar_file.filename,
+							avatar_dir,
+							true);
+
+	// DB only stores the original image
+	const new_avatar_image = (new_avatar_images === null) ?
+	      null :
+	      new_avatar_images['original'];
+	
+	const {result, old_avatar_url} =
+	      await n4j.setContributorAvatar(id, new_avatar_image);
 	if (result == false){
 	    return res.status(404).json({ message: 'User not found' });
 	}
-	if (oldAvatarUrl) {
+	if (old_avatar_url) {
 	    // Delete the old avatar file
-	    const oldAvatarFilePath = path.join(avatar_dir, path.basename(oldAvatarUrl));
-	    if (fs.existsSync(oldAvatarFilePath)) {
-		fs.unlinkSync(oldAvatarFilePath);
+	    const old_avatar_filepath = path.join(avatar_dir, path.basename(old_avatar_url));
+	    if (fs.existsSync(old_avatar_filepath)) {
+		fs.unlinkSync(old_avatar_filepath);
 	    }
 	    var ret_message = 'Avatar updated successfully'
 	} else {
@@ -206,7 +217,7 @@ router.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvata
 
 	res.json({
 	    message: ret_message,
-	    url: newAvatarUrl,
+	    'image-urls': new_avatar_images,
 	});
     } catch (error) {
 	console.error('Error updating avatar:', error);
