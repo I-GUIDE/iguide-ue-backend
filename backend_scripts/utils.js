@@ -159,6 +159,7 @@ const IMAGE_SIZES = {
  * @returns {Object} {low: {string}, medium: {string}, high: {string}, original: {string}}
  */
 export function generateMultipleResolutionImagesFor(image_file_str, upload_dir_path=null){
+    if (image_file_str === null || image_file_str === '') return null;
     const image_filename = path.basename(image_file_str);
     const filename_without_ext = image_filename.replace(/\.[^/.]+$/, '');
     const file_ext = path.extname(image_filename);

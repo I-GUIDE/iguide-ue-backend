@@ -335,7 +335,7 @@ export async function getRelatedElementsForID(id, depth=2){
 	}
 	return related_elements;
 	//return makeFrontendCompatible(records[0]['_fields'][0]);
-    } catch(err){console.log('getElementsByType() Error in query: '+ err);}
+    } catch(err){console.log('getRelatedElementsForID() Error in query: '+ err);}
     // something went wrong
     return {};
 }
@@ -372,7 +372,7 @@ export async function getAllRelatedElements(){
 	}
 	return related_elements;
 	//return makeFrontendCompatible(records[0]['_fields'][0]);
-    } catch(err){console.log('getElementsByType() Error in query: '+ err);}
+    } catch(err){console.log('getAllRelatedElements() Error in query: '+ err);}
     // something went wrong
     return {};
 }
@@ -684,12 +684,12 @@ export async function getFeaturedElementsByType(type, limit){
 		// relax the connectivity check for featured elements for now
 		return "MATCH(n:"+ element_type +") " +
 		    "WHERE n.visibility=$public_visibility " +
-		    "RETURN n{id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), contents:n.contents}, rand() as random ORDER BY random LIMIT $limit";
+		    "RETURN n{.id, .title, .thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), contents:n.contents}, rand() as random ORDER BY random LIMIT $limit";
 	    } else {
 		return "MATCH(n:"+ element_type +")-[r:RELATED]-() WITH n, COUNT(r) as rel_count " +
 		    "WHERE rel_count>=$rel_count " +
 		    "AND n.visibility=$public_visibility " +
-		    "RETURN n{id: n.id, title:n.title, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), contents:n.contents}, rand() as random ORDER BY random LIMIT $limit";
+		    "RETURN n{.id, .title, .thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), contents:n.contents}, rand() as random ORDER BY random LIMIT $limit";
 	    }
 	})();
 
@@ -712,7 +712,7 @@ export async function getFeaturedElementsByType(type, limit){
 	    ret.push(makeFrontendCompatible(record.get('n')));
 	}
 	return {elements: ret};
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getFeaturedElementsByType() Error in query: '+ err);}
     // something went wrong
     return [];
 }

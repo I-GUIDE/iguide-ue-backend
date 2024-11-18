@@ -16,8 +16,6 @@ const router = express.Router();
 
 // Ensure required directories exist
 const avatar_dir = path.join(process.env.UPLOAD_FOLDER, 'avatars');
-console.log(avatar_dir);
-
 fs.mkdirSync(avatar_dir, { recursive: true });
 // Serve static files from the thumbnails directory
 router.use('/user-uploads/avatars', express.static(avatar_dir));
