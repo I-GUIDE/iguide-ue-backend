@@ -53,6 +53,9 @@ function makeFrontendCompatible(element) {
 	    // 	return [k1.replaceAll("_","-"), v1];
 	    if (k1 === 'thumbnail_image') {
 		return [k1.replaceAll("_","-"), utils.generateMultipleResolutionImagesFor(v1)];
+	    } else if (k1 === 'avatar_url') {
+		return [k1.replaceAll("_","-"),
+			utils.generateMultipleResolutionImagesFor(v1, null, true)];
 	    } else if (k1 === 'click_count') {
 		return [k1.replaceAll("_","-"), utils.parse64BitNumber(v1)];
 	    } else if (k1 === 'updated_at') {
@@ -566,7 +569,7 @@ export async function getElementsByTag(tag, from, size, sort_by=utils.SortBy.TIT
 	const query_str = "MATCH (n)-[:CONTRIBUTED]-(c) " +
 	      "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) ) " +
 	      "AND n.visibility=$public_visibility " +
-	      "RETURN n{.id, .title, .contents, .tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: {id:c.id, name:(c.first_name + ' ' + c.last_name), `avatar-url`:c.avatar_url} } " +
+	      "RETURN n{.id, .title, .contents, .tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, name:(c.first_name + ' ' + c.last_name), .avatar_url} } " +
 	      "ORDER BY n." + order_by + " " + order + " " +
 	      "SKIP $from " +
 	      "LIMIT $size";

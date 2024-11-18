@@ -142,7 +142,8 @@ const IMAGE_SIZES = {
         { width: 1024, suffix: '-1024px', name:'high' },
     ],
     avatar: [
-        { width: 96, suffix: '-150px', name: 'low' },
+        { width: 150, suffix: '-150px', name: 'low' },
+        { width: 765, suffix: '-765px', name: 'high' },
     ]
 };
 
@@ -158,7 +159,9 @@ const IMAGE_SIZES = {
  * @param {string} Upload directory path. If null, generate URLs without creating images
  * @returns {Object} {low: {string}, medium: {string}, high: {string}, original: {string}}
  */
-export function generateMultipleResolutionImagesFor(image_file_str, upload_dir_path=null){
+export function generateMultipleResolutionImagesFor(image_file_str,
+						    upload_dir_path=null,
+						    is_avatar=false){
     if (image_file_str === null || image_file_str === '') return null;
     const image_filename = path.basename(image_file_str);
     const filename_without_ext = image_filename.replace(/\.[^/.]+$/, '');
@@ -167,7 +170,8 @@ export function generateMultipleResolutionImagesFor(image_file_str, upload_dir_p
 
     image_urls['original'] = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${image_filename}`;
 
-    for (const size of IMAGE_SIZES.thumbnail) {
+    const size_array = (is_avatar)? IMAGE_SIZES.avatar : IMAGE_SIZES.thumbnail;
+    for (const size of size_array) {
         const resized_filename = `${filename_without_ext}${size.suffix}${file_ext}`;
 
 	if (upload_dir_path) {
