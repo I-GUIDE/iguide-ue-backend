@@ -6,6 +6,9 @@ const router = express.Router();
 import { Filter } from 'bad-words'
 const customFilter = new Filter();
 
+// local imports
+import * as utils from '../utils.js';
+
 // Override the replace method to replace bad words with an empty string
 customFilter.replaceWord = (word) => '';
 
@@ -83,7 +86,7 @@ router.get('/search/count', cors(), async (req, res) => {
     const { keyword, 'element-type': element_type, 'sort-by': sort_by = '_score', order = 'desc', from = 0, size = 15, ...additionalFields } = req.query;
 
     let query = {
-        multi_match: {
+	multi_match: {
             query: keyword,
             fields: [
                 'title^3',    // Boost title matches
@@ -226,29 +229,16 @@ router.get('/search/count', cors(), async (req, res) => {
  *         description: Error querying OpenSearch
  */
 router.options('/search', cors());
+
+router.options('/search', cors());
+
 router.get('/search', cors(), async (req, res) => {
     const { keyword, 'element-type': element_type, 'sort-by': sort_by = '_score', order = 'desc', from = 0, size = 15, ...additionalFields } = req.query;
-    
-    let query = {
-        multi_match: {
-            query: keyword,
-            fields: [
-                'title^3',    // Boost title matches
-                'authors^3',  // Boost author matches
-                'tags^2',     // Slightly boost tag matches
-                'contents'    // Normal weight for content matches
-            ],
-        },
-    };
 
-    // Build a list of must conditions for bool query
+    // Build must conditions for both main query and aggregation
     const mustConditions = [
         { multi_match: { query: keyword, fields: ['title^3', 'authors^3', 'tags^2', 'contents'] } }
     ];
-
-    if (element_type && element_type !== 'any') {
-        mustConditions.push({ term: { 'resource-type': element_type } });
-    }
 
     // Add additional fields as match conditions
     for (const [field, value] of Object.entries(additionalFields)) {
@@ -257,64 +247,105 @@ router.get('/search', cors(), async (req, res) => {
         }
     }
 
-    // Combine all must conditions into the bool query
-    if (mustConditions.length > 1) {
-        query = {
-            bool: {
-                must: mustConditions,
-            },
-        };
-    }
+    // Main query includes `element-type` if specified
+    const mainQuery = {
+        bool: {
+            must: [...mustConditions],
+            ...(element_type && element_type !== 'any' ? { filter: [{ term: { 'resource-type': element_type } }] } : {}),
+        },
+    };
 
-    // Replace title and authors with their keyword sub-fields for sorting
-    let sortBy = sort_by;
-    if (sortBy === 'title') {
-        sortBy = 'title.keyword';
-    } else if (sortBy === 'authors') {
-        sortBy = 'authors.keyword';
-    }
+    // Aggregation query excludes `element-type` filter but includes other filters
+    const aggregationQuery = {
+        bool: {
+            must: [...mustConditions],
+        },
+    };
 
     try {
+        // Main query for search results
         const searchParams = {
             index: process.env.OPENSEARCH_INDEX,
             body: {
                 from: parseInt(from, 10),
                 size: parseInt(size, 10),
-                query: query,
+                query: mainQuery,
             },
         };
 
-        // Add sorting unless sort_by is "prioritize_title_author"
+        // Aggregation query for total count by types
+        const aggregationParams = {
+            index: process.env.OPENSEARCH_INDEX,
+            body: {
+                size: 0, // No documents returned
+                query: aggregationQuery,
+                aggs: {
+                    resource_type_counts: {
+                        terms: {
+                            field: 'resource-type',
+                        },
+                    },
+                },
+            },
+        };
+
+        // Add sorting to the main query unless sort_by is "prioritize_title_author"
         if (sort_by !== 'prioritize_title_author') {
             searchParams.body.sort = [
                 {
-                    [sortBy]: {
+                    [sort_by === 'title' ? 'title.keyword' : sort_by === 'authors' ? 'authors.keyword' : sort_by]: {
                         order: order,
                     },
                 },
             ];
         }
 
-        const searchResponse = await client.search(searchParams);
+        // Execute both queries concurrently
+        const [searchResponse, aggregationResponse] = await Promise.all([
+            client.search(searchParams),
+            client.search(aggregationParams),
+        ]);
+
+        // Process search results
         const results = searchResponse.body.hits.hits.map(hit => {
             const { _id, _source } = hit;
             const { metadata, ...rest } = _source; // Remove metadata
             return { _id, ...rest };
         });
-        if (searchResponse.body.hits.total.value > 0){
-            var cleaned_keyword = customFilter.clean(keyword).trim()
-            //cleaned_keyword = cleaned_keyword.replace(/\s\s+/g, ' ');
-            if (cleaned_keyword === keyword){
-                await saveSearchKeyword(cleaned_keyword);
+
+        // Process aggregation results
+        const resourceTypeCounts = aggregationResponse.body.aggregations.resource_type_counts.buckets.map(bucket => ({
+            "element-type": bucket.key,
+            count: bucket.doc_count,
+        }));
+
+        // Save the keyword if it's valid and cleaned
+        if (searchResponse.body.hits.total.value > 0) {
+            const cleanedKeyword = customFilter.clean(keyword).trim();
+            if (cleanedKeyword === keyword) {
+                await saveSearchKeyword(cleanedKeyword);
             }
-            
         }
-        res.json({ elements: results, total_count: searchResponse.body.hits.total.value });
+
+        // Generate multiple resolution images if available
+        results.forEach(result => {
+            if (result['thumbnail-image']) {
+                result['thumbnail-image'] = utils.generateMultipleResolutionImagesFor(result['thumbnail-image']);
+            }
+        });
+
+        res.json({
+            elements: results,
+            total_count: searchResponse.body.hits.total.value,
+            total_count_by_types: resourceTypeCounts, // Include counts by type considering additionalFields
+        });
     } catch (error) {
         console.error('Error querying OpenSearch:', error);
         res.status(500).json({ error: 'Error querying OpenSearch' });
     }
 });
+
+
 /**
  * @swagger
  * /api/top-keywords:
