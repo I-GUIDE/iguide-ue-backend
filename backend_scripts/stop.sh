@@ -3,21 +3,23 @@
 exe=`exec 2>/dev/null; readlink "/proc/$$/exe"`
 case "$exe" in
 */busybox)
-    echo "It's a busybox shell (Local environment)";
     line=$(ps -a | grep 'node server_neo4j.js')
     set -- junk $line
     shift
     PID=$1
-    echo "Stopping running server with PID: $PID"
+    echo "Stopping running server (BusyBox Shell) with PID: $PID"
     kill -9 $PID
     exit 0
 esac
 
-echo "Not busybox shell";
 line=$(ps -aux | grep 'node server_neo4j.js')
 set -- junk $line
 shift
-PID=$1
+PID=$2
+# re='^[0-9]+$'
+# if ! [[ $PID =~ $re ]] ; then
+#    PID=$2
+# fi
 echo "Stopping running server with PID: $PID"
 kill -9 $PID
 

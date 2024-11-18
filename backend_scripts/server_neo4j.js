@@ -47,10 +47,10 @@ app.use('/proxy', anvil_proxy);
 app.use('/api', search_routes);
 // Use the private-elements route
 app.use('/api', private_elements);
-// Use users/contributors route
-app.use('/api', users);
 // Use documentation route
 app.use('/api', documentation);
+// Use users/contributors route
+app.use(users);
 // Use elements route
 app.use(elements);
 

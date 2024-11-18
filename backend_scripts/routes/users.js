@@ -16,6 +16,8 @@ const router = express.Router();
 
 // Ensure required directories exist
 const avatar_dir = path.join(process.env.UPLOAD_FOLDER, 'avatars');
+console.log(avatar_dir);
+
 fs.mkdirSync(avatar_dir, { recursive: true });
 // Serve static files from the thumbnails directory
 router.use('/user-uploads/avatars', express.static(avatar_dir));
@@ -54,7 +56,7 @@ const uploadAvatar = multer({ storage: avatarStorage });
  *         description: Error fetching the user
  */
 //router.options('/users/:id', cors());
-router.get('/users/:id', cors(), async (req, res) => {
+router.get('/api/users/:id', cors(), async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     try {
 	const response = await n4j.getContributorByID(id);
@@ -91,8 +93,8 @@ router.get('/users/:id', cors(), async (req, res) => {
  *       500:
  *         description: Error fetching the user
  */
-router.options('/users/:id/role', cors());
-router.get('/users/:id/role', cors(), async (req, res) => {
+router.options('/api/users/:id/role', cors());
+router.get('/api/users/:id/role', cors(), async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     try {
 	const response = await n4j.getContributorByID(id);
@@ -126,8 +128,8 @@ router.get('/users/:id/role', cors(), async (req, res) => {
  *       500:
  *         description: Error checking the user
  */
-router.options('/users/:id/valid', cors());
-router.get('/users/:id/valid', cors(), async (req, res) => {
+router.options('/api/users/:id/valid', cors());
+router.get('/api/users/:id/valid', cors(), async (req, res) => {
     const id = decodeURIComponent(req.params.id);
 
     console.log('Check user ...' + id);
@@ -164,8 +166,8 @@ router.get('/users/:id/valid', cors(), async (req, res) => {
  *       400:
  *         description: No file uploaded
  */
-router.options('/users/avatar', jwtCorsMiddleware);
-router.post('/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
+router.options('/api/users/avatar', jwtCorsMiddleware);
+router.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
     // if (!req.file) {
     // 	return res.status(400).json({ message: 'No file uploaded' });
     // }
@@ -240,8 +242,8 @@ router.post('/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.si
  *       500:
  *         description: Internal server error
  */
-router.options('/users', jwtCorsMiddleware);
-router.post('/users', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.options('/api/users', jwtCorsMiddleware);
+router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
     const user = req.body;
     console.log('Adding new user');
     //console.log(user);
@@ -296,7 +298,7 @@ router.post('/users', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
  *         description: Internal server error
  */
 // Handle OPTIONS requests for both methods
-router.options('/users/:id', (req, res) => {
+router.options('/api/users/:id', (req, res) => {
     const method = req.header('Access-Control-Request-Method');
     if (method === 'PUT') {
         res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
@@ -310,7 +312,7 @@ router.options('/users/:id', (req, res) => {
     }
     res.sendStatus(204); // No content
 });
-router.put('/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     const updates = req.body;
 
