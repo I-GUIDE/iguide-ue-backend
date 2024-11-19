@@ -4,17 +4,26 @@
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 // local imports
-import * as n4j from '../backend_neo4j.cjs'
-import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js'
+import * as utils from '../utils.js';
+import * as n4j from '../backend_neo4j.js';
+import * as os from '../backend_opensearch.js';
+import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
 
 const router = express.Router();
 
+// Ensure required directories exist
+const avatar_dir = path.join(process.env.UPLOAD_FOLDER, 'avatars');
+fs.mkdirSync(avatar_dir, { recursive: true });
+// Serve static files from the thumbnails directory
+router.use('/user-uploads/avatars', express.static(avatar_dir));
 // Configure storage for avatars
 const avatarStorage = multer.diskStorage({
     destination: (req, file, cb) => {
-	cb(null, avatarDir);
+	cb(null, avatar_dir);
     },
     filename: (req, file, cb) => {
 	// It's a good practice to sanitize the original file name
@@ -46,7 +55,7 @@ const uploadAvatar = multer({ storage: avatarStorage });
  *         description: Error fetching the user
  */
 //router.options('/users/:id', cors());
-router.get('/users/:id', cors(), async (req, res) => {
+router.get('/api/users/:id', cors(), async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     try {
 	const response = await n4j.getContributorByID(id);
@@ -83,8 +92,8 @@ router.get('/users/:id', cors(), async (req, res) => {
  *       500:
  *         description: Error fetching the user
  */
-router.options('/users/:id/role', cors());
-router.get('/users/:id/role', cors(), async (req, res) => {
+router.options('/api/users/:id/role', cors());
+router.get('/api/users/:id/role', cors(), async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     try {
 	const response = await n4j.getContributorByID(id);
@@ -118,8 +127,8 @@ router.get('/users/:id/role', cors(), async (req, res) => {
  *       500:
  *         description: Error checking the user
  */
-router.options('/users/:id/valid', cors());
-router.get('/users/:id/valid', cors(), async (req, res) => {
+router.options('/api/users/:id/valid', cors());
+router.get('/api/users/:id/valid', cors(), async (req, res) => {
     const id = decodeURIComponent(req.params.id);
 
     console.log('Check user ...' + id);
@@ -156,8 +165,8 @@ router.get('/users/:id/valid', cors(), async (req, res) => {
  *       400:
  *         description: No file uploaded
  */
-router.options('/users/avatar', jwtCorsMiddleware);
-router.post('/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
+router.options('/api/users/avatar', jwtCorsMiddleware);
+router.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
     // if (!req.file) {
     // 	return res.status(400).json({ message: 'No file uploaded' });
     // }
@@ -172,24 +181,35 @@ router.post('/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.si
     try {
 	const body = JSON.parse(JSON.stringify(req.body));
 	const id = body.id;
-	const newAvatarFile = req.file;
+	const new_avatar_file = req.file;
 
-	if (!id || !newAvatarFile) {
+	if (!id || !new_avatar_file) {
 	    return res.status(400).json({ message: 'ID and new avatar file are required' });
 	}
 
 	// Update the user's avatar URL with the new file URL
-	const newAvatarUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${newAvatarFile.filename}`;
+	// const newAvatarUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${newAvatarFile.filename}`;
 
-	const {result, oldAvatarUrl} = await n4j.setContributorAvatar(id, newAvatarUrl);
+	const new_avatar_images =
+	      utils.generateMultipleResolutionImagesFor(new_avatar_file.filename,
+							avatar_dir,
+							true);
+
+	// DB only stores the original image
+	const new_avatar_image = (new_avatar_images === null) ?
+	      null :
+	      new_avatar_images['original'];
+	
+	const {result, old_avatar_url} =
+	      await n4j.setContributorAvatar(id, new_avatar_image);
 	if (result == false){
 	    return res.status(404).json({ message: 'User not found' });
 	}
-	if (oldAvatarUrl) {
+	if (old_avatar_url) {
 	    // Delete the old avatar file
-	    const oldAvatarFilePath = path.join(avatarDir, path.basename(oldAvatarUrl));
-	    if (fs.existsSync(oldAvatarFilePath)) {
-		fs.unlinkSync(oldAvatarFilePath);
+	    const old_avatar_filepath = path.join(avatar_dir, path.basename(old_avatar_url));
+	    if (fs.existsSync(old_avatar_filepath)) {
+		fs.unlinkSync(old_avatar_filepath);
 	    }
 	    var ret_message = 'Avatar updated successfully'
 	} else {
@@ -198,7 +218,7 @@ router.post('/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.si
 
 	res.json({
 	    message: ret_message,
-	    url: newAvatarUrl,
+	    'image-urls': new_avatar_images,
 	});
     } catch (error) {
 	console.error('Error updating avatar:', error);
@@ -232,8 +252,8 @@ router.post('/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.si
  *       500:
  *         description: Internal server error
  */
-router.options('/users', jwtCorsMiddleware);
-router.post('/users', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.options('/api/users', jwtCorsMiddleware);
+router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
     const user = req.body;
     console.log('Adding new user');
     //console.log(user);
@@ -249,7 +269,7 @@ router.post('/users', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
 	}
 	// [ToDo] Add contributor name to OpenSearch
 
-	// const response = await client.index({
+	// const response = await os.client.index({
 	//     index: 'users',
 	//     id: user.openid,
 	//     body: user,
@@ -288,7 +308,7 @@ router.post('/users', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
  *         description: Internal server error
  */
 // Handle OPTIONS requests for both methods
-router.options('/users/:id', (req, res) => {
+router.options('/api/users/:id', (req, res) => {
     const method = req.header('Access-Control-Request-Method');
     if (method === 'PUT') {
         res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
@@ -302,7 +322,7 @@ router.options('/users/:id', (req, res) => {
     }
     res.sendStatus(204); // No content
 });
-router.put('/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     const updates = req.body;
 
@@ -346,7 +366,7 @@ router.put('/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) =>
 
 //   try {
 //   throw Error('Neo4j: Delete user is not implemented');
-//   // const response = await client.delete({
+//   // const response = await os.client.delete({
 //   //     index: 'users',
 //   //     id: openid
 //   // });

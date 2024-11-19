@@ -5,8 +5,9 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 // local imports
-import * as n4j from '../backend_neo4j.cjs'
-import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js'
+import * as utils from '../utils.js';
+import * as n4j from '../backend_neo4j.js';
+import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
 
 const router = express.Router();
@@ -149,7 +150,11 @@ router.get('/documentation', cors(), async (req, res) => {
  *       500:
  *         description: Internal server error
  */
-router.post('/documentation', jwtCorsMiddleware, authenticateJWT, authorizeRole(n4j.Role.ADMIN), async (req, res) => {
+router.post('/documentation',
+	    jwtCorsMiddleware,
+	    authenticateJWT,
+	    authorizeRole(utils.Role.ADMIN),
+	    async (req, res) => {
     const documentation = req.body;
     try {
 	const {response, documentation_id} = await n4j.registerDocumentation(documentation);
@@ -197,7 +202,11 @@ router.post('/documentation', jwtCorsMiddleware, authenticateJWT, authorizeRole(
  *       500:
  *         description: Internal server error
  */
-router.put('/documentation/:id', jwtCorsMiddleware, authenticateJWT, authorizeRole(n4j.Role.ADMIN), async (req, res) => {
+router.put('/documentation/:id',
+	   jwtCorsMiddleware,
+	   authenticateJWT,
+	   authorizeRole(utils.Role.ADMIN),
+	   async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     const updates = req.body;
 
@@ -233,7 +242,11 @@ router.put('/documentation/:id', jwtCorsMiddleware, authenticateJWT, authorizeRo
  *       500:
  *         description: Internal server error
  */
-router.delete('/documentation/:id', jwtCorsMiddleware, authenticateJWT, authorizeRole(n4j.Role.ADMIN), async (req, res) => {
+router.delete('/documentation/:id',
+	      jwtCorsMiddleware,
+	      authenticateJWT,
+	      authorizeRole(utils.Role.ADMIN),
+	      async (req, res) => {
     const doc_id = req.params['id'];
 
     try {
