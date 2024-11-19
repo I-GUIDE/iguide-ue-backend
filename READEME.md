@@ -1,14 +1,22 @@
-## I-GUIDE Platform Backend Server
-This directory contains the backend scripts for the I-GUIDE platform.
+# I-GUIDE Platform Backend
+The backend middleware server for the next-gen I-GUIDE platform. The middleware serves as a bridge between `React.js` frontend and data layer consisting of `neo4j` and `OpenSearch`. `neo4j` provides consistent and reliable data storage for the system along with providing graph based data manipulation capabilities. On the other hand `OpenSearch` replicates searchable data from the data store and provides robust and scalable search functionalities including keyword search, llm search etc.
 
 ## Getting Started
+### Clone the repo from GitHub:
+```bash
+git clone https://github.com/I-GUIDE/iguide-ue-backend.git
+```
 ### Install the dependencies:
+If `package.json` is available 
+```bash
+npm install 
+```
+Otherwise
 ```bash
 npm i express multer cors dotenv '@opensearch-project/opensearch' node-fetch '@aws-sdk/client-s3' multer-s3 axios swagger-ui-express swagger-jsdoc neo4j-driver compromise bad-words sharp
 ```
 ### Update configurations:
- - `.env`
- - `neo4j.env`
+Create `.env` file with configuration options for OpenSearch, SSL certificates, JWT secrets, neo4j etc. (NOTE: `.env.example` is provided for reference)
 
 
 ### Start the development server:
@@ -16,6 +24,8 @@ npm i express multer cors dotenv '@opensearch-project/opensearch' node-fetch '@a
 sh start.sh
 ```
 The server logs will be written to `server.log`. If restarted, the logs are rolled over with timestamp (e.g. `server-2024-09-12T20:01:19.log`) with latest server logs always written to `server.log`.
+
+Swagger UI for endpoints will be accessible at `${HOST}:${PORT}/api-docs` as specified in the `.env` file.
 
 Running server can be stopped by 
 ```bash

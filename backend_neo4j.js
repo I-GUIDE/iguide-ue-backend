@@ -10,7 +10,7 @@ import * as utils from './utils.js';
 
 // For deployment on JetStream VM
 import dotenv from 'dotenv';
-dotenv.config({path: 'neo4j.env'});
+dotenv.config();
 console.log(process.env.NEO4J_CONNECTION_STRING);
 
 /**
