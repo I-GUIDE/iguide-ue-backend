@@ -68,7 +68,7 @@ const processImages = async (folderPath, imageSizes, type) => {
         for (const file of files) {
             const filePath = path.join(folderPath, file);
 
-            if (!shouldIgnoreFile(file) && (file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg'))) {
+            if (!shouldIgnoreFile(file)) {
                 const fileNameWithoutExt = file.replace(/\.[^/.]+$/, '');
                 const fileExt = file.slice(file.lastIndexOf('.'));
 
