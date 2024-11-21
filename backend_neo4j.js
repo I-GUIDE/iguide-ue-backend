@@ -1300,7 +1300,7 @@ export async function toggleElementSavedByContributor(contributor_id,
 	} else {
 	    // remove relation between contributor and element
 	    if (element_type) {
-		query_str += "MATCH(c)-[s:SAVED]-(e:" + element_type +"{id:$elem_id}) "+
+		query_str += "MATCH(c)-[s:SAVED]-(e:" + element_type +"{id:$elem_id}) ";
 	    } else {
 		// inefficient query
 		query_str += "MATCH(c)-[s:SAVED]-(e{id:$elem_id}) ";
