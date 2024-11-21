@@ -292,7 +292,7 @@ export async function getElementByID(id, user_id=null, user_role=null){
 
 	return makeFrontendCompatible(ret);
     } catch(err){
-	console.log('Error in query: '+ err);
+	console.log('getElementByID() - Error in query: '+ err);
     }
     finally {await session.close();}
     // something went wrong
@@ -421,7 +421,7 @@ export async function getElementsByType(type, from, size, sort_by=utils.SortBy.T
 	    ret.push(makeFrontendCompatible(record.get('n')));
 	}
 	return ret;
-    } catch(err){console.log('getElementsByType() Error in query: '+ err);}
+    } catch(err){console.log('getElementsByType() - Error in query: '+ err);}
     // something went wrong
     return [];
 }
@@ -447,7 +447,7 @@ export async function getElementsCountByType(type){
 	    return -1;
 	}
 	return utils.parse64BitNumber(records[0].get('count'));
-    } catch(err){console.log('getElementsCountByType() Error in query: '+ err);}
+    } catch(err){console.log('getElementsCountByType() - Error in query: '+ err);}
     // something went wrong
     return -1;
 }
@@ -514,7 +514,7 @@ export async function getElementsByContributor(id,
 	    ret.push(makeFrontendCompatible(record.get('element')));
 	}
 	return ret;
-    } catch(err){console.log('getElementsByContributor() Error in query: '+ err);}
+    } catch(err){console.log('getElementsByContributor() - Error in query: '+ err);}
     finally {await session.close();}
     // something went wrong
     return [];
@@ -558,7 +558,7 @@ export async function getElementsCountByContributor(id,
 	    return -1;
 	}
 	return utils.parse64BitNumber(records[0].get('count'));
-    } catch(err){console.log('getElementsCountByContributor() Error in query: '+ err);}
+    } catch(err){console.log('getElementsCountByContributor() - Error in query: '+ err);}
     finally {await session.close();}
     // something went wrong
     return -1;
@@ -599,7 +599,7 @@ export async function getElementsByTag(tag, from, size, sort_by=utils.SortBy.TIT
 	    ret.push(makeFrontendCompatible(record['_fields'][0]));
 	}
 	return ret;
-    } catch(err){console.log('getElementsByTag() Error in query: '+ err);}
+    } catch(err){console.log('getElementsByTag() - Error in query: '+ err);}
     // something went wrong
     return [];
 }
@@ -625,7 +625,7 @@ export async function getElementsCountByTag(tag){
 	}
 	var ret = records[0]['_fields'][0]['low'];
 	return ret;
-    } catch(err){console.log('getElementsCountByTag() Error in query: '+ err);}
+    } catch(err){console.log('getElementsCountByTag() - Error in query: '+ err);}
     // something went wrong
     return -1;
 }
@@ -672,7 +672,7 @@ export async function getFeaturedElements(){
 	// }
 	// return ret;
 	return records[0]['_fields'][0];
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getFeaturedElements() - Error in query: '+ err);}
     // something went wrong
     return [];
 }
@@ -724,7 +724,7 @@ export async function getFeaturedElementsByType(type, limit){
 	    ret.push(makeFrontendCompatible(record.get('n')));
 	}
 	return {elements: ret};
-    } catch(err){console.log('getFeaturedElementsByType() Error in query: '+ err);}
+    } catch(err){console.log('getFeaturedElementsByType() - Error in query: '+ err);}
     // something went wrong
     return [];
 }
@@ -745,7 +745,7 @@ export async function setElementFeaturedForID(id){
 	if (summary.counters.updates()['propertiesSet'] >= 1){
 	    return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('setElementFeaturedForID() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -777,7 +777,7 @@ export async function checkDuplicatesForField(field_name, value){
 	}
 	// no duplicates found
 	return {response: false, element_id: null};
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('checkDuplicatesForField() - Error in query: '+ err);}
     // something went wrong
     return {response: false, element_id: null};
 }
@@ -833,7 +833,7 @@ export async function updateElement(id, element){
 
 	await tx.commit();
 	return ret;
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('updateElement() - Error in query: '+ err);}
     finally {await session.close();}
     // something went wrong
     return false;
@@ -1021,7 +1021,7 @@ export async function deleteElementByID(id){
 	if (summary.counters.updates()['nodesDeleted'] == 1){
 	    return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('deleteElementByID() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1046,7 +1046,7 @@ export async function setElementVisibilityForID(id, visibility){
 	if (summary.counters.updates()['propertiesSet'] == 1){
 	    return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('setElementVisibilityForID() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1071,7 +1071,7 @@ export async function getElementVisibilityForID(id){
 	}
 	//const visibility = parseVisibility(parse64BitNumber(records[0]['_fields'][0]));
 	return records[0].get('visibility');
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getElementVisibilityForID() - Error in query: '+ err);}
     // something went wrong
     return -1;
 }
@@ -1112,7 +1112,7 @@ export async function registerContributor(contributor){
 	if (summary.counters.updates()['nodesCreated'] == 1){
 	    return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('registerContributor() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1147,7 +1147,7 @@ export async function updateContributor(id, contributor_attributes){
 	if (summary.counters.updates()['propertiesSet'] >= 1){
 	    return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('updateContributor() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1186,7 +1186,7 @@ export async function setContributorAvatar(id, avatar_url){
 	}
 
 	await tx.commit();
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('setContributorAvatar() - Error in query: '+ err);}
     finally {await session.close();}
 
     return {result: ret, old_avatar_url:old_url};
@@ -1216,7 +1216,7 @@ export async function getContributorByID(id){
 	contributor['role'] = utils.parse64BitNumber(contributor['role']);
 
 	return makeFrontendCompatible(contributor);
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getContributorByID() - Error in query: '+ err);}
     // something went wrong
     return {};
 }
@@ -1236,7 +1236,7 @@ export async function checkContributorByID(id){
 					{routing: 'READ', database: process.env.NEO4J_DB});
 	const resp = records[0]['_fields'][0];
 	return resp;
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('checkContributorByID() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1260,7 +1260,7 @@ export async function getContributorIdForElement(e_id){
 	    return {id:null, openid:null};
 	}
 	return records[0]['_fields'][0];
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getContributorIdForElement() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1314,7 +1314,7 @@ export async function toggleElementSavedByContributor(contributor_id,
 		return true;
 	    }
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('toggleElementSavedByContributor() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1344,7 +1344,7 @@ export async function getIfElementSavedByContributor(contributor_id,
 					{contrib_id: contributor_id, elem_id: element_id},
 					{database: process.env.NEO4J_DB});
 	return records[0].get('status');
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getIfElementSavedByContributor() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1372,7 +1372,7 @@ export async function registerDocumentation(documentation){
 	if (summary.counters.updates()['nodesCreated'] == 1){
 	    return {response:true, documentation_id:documentation['id']};
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('registerDocumentation() - Error in query: '+ err);}
     // something went wrong
     return {response:false, documentation_id:''};
 }
@@ -1399,7 +1399,7 @@ export async function getDocumentationByID(id) {
 	}
 	const documentation = records[0]['_fields'][0];
 	return documentation;
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getDocumentationByID() - Error in query: '+ err);}
     // something went wrong
     return {};
 }
@@ -1425,7 +1425,7 @@ export async function getAllDocumentation(from, size) {
 	    ret.push(record['_fields'][0]);
 	}
 	return ret;
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getAllDocumentation() - Error in query: '+ err);}
     // something went wrong
     return [];
 }
@@ -1457,7 +1457,7 @@ export async function updateDocumentation(id, documentation_attributes) {
 	if (summary.counters.updates()['propertiesSet'] >= 1){
 	    return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('updateDocumentation() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1477,7 +1477,7 @@ export async function deleteDocumentationByID(id){
 	if (summary.counters.updates()['nodesDeleted'] == 1){
 	    return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('deleteDocumentationByID() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
