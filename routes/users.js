@@ -346,7 +346,7 @@ router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
  * @swagger
  * /api/users/save/{elementId}:
  *   put:
- *     summary: Toggle element like/save by user
+ *     summary: Toggle element like/save by logged-in user
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -376,24 +376,24 @@ router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
  *       500:
  *         description: Internal server error
  */
-// router.options('/api/users/save/:elementId', (req, res) => {
-//     const method = req.header('Access-Control-Request-Method');
-//     if (method === 'PUT') {
-//         res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
-//         res.header('Access-Control-Allow-Methods', 'PUT');
-//         res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-//         res.header('Access-Control-Allow-Credentials', 'true');
-//     } else if (method === 'GET') {
-//         res.header('Access-Control-Allow-Origin', '*');
-//         res.header('Access-Control-Allow-Methods', 'GET');
-//         res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-//     }
-//     res.sendStatus(204); // No content
-// });
-//router.put('/api/users/save/:elementId', jwtCorsMiddleware);
-//router.put('/api/users/save/:elementId', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
-router.options('/api/users/save/:elementId', cors());
-router.put('/api/users/save/:elementId', async (req, res) => {
+router.options('/api/users/save/:elementId', (req, res) => {
+    const method = req.header('Access-Control-Request-Method');
+    if (method === 'PUT') {
+        res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+        res.header('Access-Control-Allow-Methods', 'PUT');
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Credentials', 'true');
+    } else if (method === 'GET') {
+        res.header('Access-Control-Allow-Origin', '*');
+        res.header('Access-Control-Allow-Methods', 'GET');
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    }
+    res.sendStatus(204); // No content
+});
+router.put('/api/users/save/:elementId', jwtCorsMiddleware);
+router.put('/api/users/save/:elementId', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+// router.options('/api/users/save/:elementId', cors());
+// router.put('/api/users/save/:elementId', async (req, res) => {
     const element_id = decodeURIComponent(req.params['elementId']);
     const mark_saved = req.query['save'];
     const element_type = (() => {
@@ -461,9 +461,11 @@ router.put('/api/users/save/:elementId', async (req, res) => {
  *       500:
  *         description: Internal server error
  */
-router.options('/api/users/save/:elementId', cors());
-router.get('/api/users/save/:elementId', async (req, res) => {
+//router.options('/api/users/save/:elementId', cors());
+//router.get('/api/users/save/:elementId', async (req, res) => {
+router.get('/api/users/save/:elementId', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
     const element_id = decodeURIComponent(req.params['elementId']);
+    //const user_id = decodeURIComponent(req.params['userId']);
     const element_type = (() => {
 	if (req.query['elementType']){
 	    return utils.parseElementType(req.query['elementType']);
