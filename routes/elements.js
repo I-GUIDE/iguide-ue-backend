@@ -993,8 +993,8 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
 					 nodes:[],
 					 neighbors:[] });
 	}
-	console.log('Number of connected nodes: ' + response['nodes'].length);
-	console.log('Number of relations: ' + response['neighbors'].length);
+	//console.log('Number of connected nodes: ' + response['nodes'].length);
+	//console.log('Number of relations: ' + response['neighbors'].length);
 	res.status(200).json(response);
     } catch (error) {
 	console.error('Error getting related elememts:', error);
@@ -1002,5 +1002,82 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/elements/saved/{userId}:
+ *   get:
+ *     summary: Get all saved elements by user with userId
+ *     tags: ['elements']
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: sort-by
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [click_count, creation_time, title]
+ *         description: The field to sort the elements by
+ *       - in: query
+ *         name: order
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *         description: Sort order of returned elements
+ *       - in: query
+ *         name: from
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The offset value for pagination
+ *       - in: query
+ *         name: size
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The limit value for pagination
+ *     responses:
+ *       200:
+ *         description: Saved elements by user found
+ *       404:
+ *         description: No saved elements found
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/api/elements/saved/:userId', cors());
+router.get('/api/elements/saved/:userId', cors(), async (req, res) => {
+    const user_id = decodeURIComponent(req.params['userId']);
+    const { 'sort-by': sort_by,
+	    'order': order,
+	    'from': from,
+	    'size': size,
+	    'count-only':count_only} = req.query;
+    
+    try {
+	const response = await n4j.getElementsByContributor(user_id,
+							    from,
+							    size,
+							    sort_by,
+							    order,
+							    false,
+							    utils.Relations.SAVED
+							   );
+	const total_count = await n4j.getElementsCountByContributor(user_id,
+								    false,
+								    utils.Relations.SAVED
+								   );
+	if (response.length == 0){
+	    return res.status(404).json({message: 'No saved elements found'});
+	}
+	res.status(200).json({elements:response, 'total-count': total_count});
+    } catch (error) {
+	console.error('Error getting saved elememts:', error);
+	res.status(500).json({ message: 'Error getting saved elememts' });
+    }
+});
 
 export default router;

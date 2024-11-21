@@ -453,20 +453,24 @@ export async function getElementsCountByType(type){
 }
 /**
  * Get elements by contributor
- * @param {string} id ID of the contributor
- * @param {string} user_id ID of logged-in user
- * @param {int}    from For pagintion, get elements from this number
- * @param {int}    size For pagintion, get this number of elements
- * @param {Enum}   sort_by Enum for sorting the results. Default is by title
- * @param {Enum}   order Enum for order of sorting the results. Default is DESC
+ * @param {string}  id ID of the contributor
+ * @param {string}  user_id ID of logged-in user
+ * @param {int}     from For pagintion, get elements from this number
+ * @param {int}     size For pagintion, get this number of elements
+ * @param {Enum}    sort_by Enum for sorting the results. Default is by title
+ * @param {Enum}    order Enum for order of sorting the results. Default is DESC
+ * @param {boolean} private_only Only return private elements contributed by the user
+ * @param {Enum}    relation_type Enum for query relation between Contributor and Elements
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
 export async function getElementsByContributor(id,
-					from,
-					size,
-					sort_by=utils.SortBy.TITLE,
-					order="DESC",
-				       	private_only=false){
+					       from,
+					       size,
+					       sort_by=utils.SortBy.TITLE,
+					       order="DESC",
+					       private_only=false,
+					       relation_type=utils.Relations.CONTRIBUTED
+				       	      ){
 
     // There are two cases where this function is called
     // (1) For showing up elements on user profile page. This should return all public and private
@@ -479,7 +483,8 @@ export async function getElementsByContributor(id,
 	const order_by = utils.parseSortBy(sort_by);
 	let query_params = {contrib_id: id, from: neo4j.int(from), size: neo4j.int(size)};
 
-	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) " +
+	//let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) " +
+	let query_str = "MATCH (c:Contributor)-[:" + relation_type + "]-(r) " +
 	    "WHERE (c.id=$contrib_id OR $contrib_id IN c.openid) ";
 
 	if (private_only){
@@ -520,13 +525,16 @@ export async function getElementsByContributor(id,
  * @param {string} user_id ID of logged-in user
  * @return {int} Count
  */
-export async function getElementsCountByContributor(id, private_only=false){
+export async function getElementsCountByContributor(id,
+						    private_only=false,
+						    relation_type=utils.Relations.CONTRIBUTED){
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
     try{
 	let query_params = {contrib_id: id};
 
-	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) " +
+	//let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) " +
+	let query_str = "MATCH (c:Contributor)-[:" + relation_type + "]-(r) " +
 	    "WHERE (c.id=$contrib_id OR $contrib_id IN c.openid) ";
 
 	if (private_only){
@@ -1028,7 +1036,7 @@ export async function setElementVisibilityForID(id, visibility){
     const query_str = "MATCH (n{id:$id_param}) " +
 	  "SET n.visibility=$visibility";
 
-    console.log(visibility);
+    //console.log(visibility);
 
     try {
 	const {_, summary} =
@@ -1067,6 +1075,8 @@ export async function getElementVisibilityForID(id){
     // something went wrong
     return -1;
 }
+
+
 /****************************************************************************
  * Contributor/User Functions
  ****************************************************************************/
@@ -1232,7 +1242,7 @@ export async function checkContributorByID(id){
 }
 
 /**
- * Set contrib ID for the element
+ * Get contrib ID for the element
  * @param {string} e_id Element ID
  * @return {Object} Contributors {id, openid}
  */
@@ -1250,6 +1260,91 @@ export async function getContributorIdForElement(e_id){
 	    return {id:null, openid:null};
 	}
 	return records[0]['_fields'][0];
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return false;
+}
+
+/**
+ * Set element liked/saved by contrib
+ * @param {string} contributor_id Looged-in user/contributor ID
+ * @param {string} element_id Element ID
+ * @param {string} element_type If provided will make DB querying more efficient
+ * @param {boolean} mark_save
+ * @return {boolean} true if saved status updated, false otherwise
+ */
+export async function toggleElementSavedByContributor(contributor_id,
+						       element_id,
+						       element_type,
+						       mark_save){
+    try {
+	if (mark_save === 'true'){
+	    // create a new SAVED relation between contributor and element
+	    let query_str = "MATCH(c:Contributor{id:$contrib_id}) ";
+	    if (element_type){
+		query_str += "MATCH (e:" + element_type + "{id:$elem_id}) ";
+	    }
+	    else {
+		// inefficient query
+		query_str += "MATCH (e{id:$elem_id}) ";
+	    }
+	    query_str += "MERGE (c)-[s:SAVED]-(e)";	    
+	    const {_, summary} =
+		  await driver.executeQuery(query_str,
+					    {contrib_id: contributor_id, elem_id: element_id},
+					    {database: process.env.NEO4J_DB});
+	    if (summary.counters.updates()['relationshipsCreated'] == 1){
+		return true;
+	    }
+	} else {
+	    // remove relation between contributor and element
+	    let query_str = "";
+	    if (element_type) {
+		query_str =
+		    "MATCH(c:Contributor{id:$contrib_id})-[s:SAVED]-(e:" + element_type +"{id:$elem_id}) ";
+	    } else {
+		// inefficient query
+		query_str = "MATCH(c:Contributor{id:$contrib_id})-[s:SAVED]-(e{id:$elem_id}) ";
+	    }
+	    query_str += "DELETE s";
+	    const {_, summary} =
+		  await driver.executeQuery(query_str,
+					    {contrib_id: contributor_id, elem_id: element_id},
+					    {database: process.env.NEO4J_DB});
+	    if (summary.counters.updates()['relationshipsDeleted'] == 1){
+		return true;
+	    }
+	}
+    } catch(err){console.log('Error in query: '+ err);}
+    // something went wrong
+    return false;
+}
+
+/**
+ * Get if element liked/saved by contrib
+ * @param {string} contributor_id Looged-in user/contributor ID
+ * @param {string} element_id Element ID
+ * @param {string} element_type If provided will make DB querying more efficient
+ * @return {boolean} true if element saved by user, false otherwise 
+ */
+export async function getIfElementSavedByContributor(contributor_id,
+						      element_id,
+						      element_type){
+    try {
+	let query_str = "MATCH(c:Contributor{id:$contrib_id}) ";
+	if (element_type){
+	    query_str += "MATCH (e:" + element_type + "{id:$elem_id}) ";
+	}
+	else {
+	    // inefficient query
+	    query_str += "MATCH (e{id:$elem_id}) ";
+	}
+	query_str += "RETURN EXISTS ((c)-[:SAVED]-(e)) as status";	    
+	const {records, _} =
+	      await driver.executeQuery(query_str,
+					{contrib_id: contributor_id, elem_id: element_id},
+					{database: process.env.NEO4J_DB});
+	return records[0].get('status');
     } catch(err){console.log('Error in query: '+ err);}
     // something went wrong
     return false;

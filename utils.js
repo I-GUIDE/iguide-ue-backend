@@ -18,7 +18,7 @@ export const ElementType = Object.freeze({
 export const Relations = Object.freeze({
     RELATED: "RELATED", // Default relation type
     CONTRIBUTED: "CONTRIBUTED", // e.g. User CONTRIBUTED Element
-    LIKED: "LIKED", // e.g. User LIKED Element
+    SAVED: "SAVED", // e.g. User LIKED Element
 
     USES: "USES", // e.g. Notebook USES Dataset
 });

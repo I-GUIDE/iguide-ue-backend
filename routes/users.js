@@ -135,7 +135,7 @@ router.get('/api/users/:id/valid', cors(), async (req, res) => {
     // [ToDo] Return {true, version_num} OR {false, -1}
     try {
 	const response = await n4j.checkContributorByID(id);
-	res.json(response);
+	res.status(200).json(response);
     } catch (error) {
 	console.error('Error checking user:', error);
 	res.status(500).json({ message: 'Error checking the user' });
@@ -199,7 +199,7 @@ router.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvata
 	const new_avatar_image = (new_avatar_images === null) ?
 	      null :
 	      new_avatar_images['original'];
-	
+
 	const {result, old_avatar_url} =
 	      await n4j.setContributorAvatar(id, new_avatar_image);
 	if (result == false){
@@ -336,6 +336,157 @@ router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
 	    console.log('Error updating user');
 	    res.json({ message: 'Error updating user', result: response });
 	}
+    } catch (error) {
+	console.error('Error updating user:', error);
+	res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/users/save/{elementId}:
+ *   put:
+ *     summary: Toggle element like/save by user
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: elementId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the element user saved/un-saved
+ *       - in: query
+ *         name: save
+ *         required: true
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: elementType
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [dataset, notebook, publication, oer, map]
+ *         description: Type of the element to save. Will make DB querying efficient
+
+ *     responses:
+ *       200:
+ *         description: Element marked as saved by user successfully
+ *       401:
+ *         description: Error setting element save status. Can be due to multiple reasons i.e. (1) Element does not exists, (2) Invalid contributor ID, (3) Saved relation already exists.
+ *       500:
+ *         description: Internal server error
+ */
+// router.options('/api/users/save/:elementId', (req, res) => {
+//     const method = req.header('Access-Control-Request-Method');
+//     if (method === 'PUT') {
+//         res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+//         res.header('Access-Control-Allow-Methods', 'PUT');
+//         res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+//         res.header('Access-Control-Allow-Credentials', 'true');
+//     } else if (method === 'GET') {
+//         res.header('Access-Control-Allow-Origin', '*');
+//         res.header('Access-Control-Allow-Methods', 'GET');
+//         res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+//     }
+//     res.sendStatus(204); // No content
+// });
+//router.put('/api/users/save/:elementId', jwtCorsMiddleware);
+//router.put('/api/users/save/:elementId', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.options('/api/users/save/:elementId', cors());
+router.put('/api/users/save/:elementId', async (req, res) => {
+    const element_id = decodeURIComponent(req.params['elementId']);
+    const mark_saved = req.query['save'];
+    const element_type = (() => {
+	if (req.query['elementType']){
+	    return utils.parseElementType(req.query['elementType']);
+	}
+	return null;
+    })();
+    
+    const {user_id, user_role} = (() => {
+	if (!req.user || req.user == null || typeof req.user === 'undefined'){
+	    return {user_id:null, user_role:null};
+	}
+	return {user_id:req.user.id, user_role:req.user.role}
+    })();
+
+    // 'http://cilogon.org/serverA/users/48835826'
+    // const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
+    // 				  user_role: utils.Role.TRUSTED_USER};
+
+    console.log('User: ' + user_id +
+		' setting element: ' + element_id +
+		' save status: ' + mark_saved );
+    try {
+	const response = await n4j.toggleElementSavedByContributor(user_id,
+								   element_id,
+								   element_type,
+								   mark_saved);
+	if (response) {
+	    res.status(200).json({ message: 'Toggle element saved status by user successfully' });
+	} else {
+	    console.log('Error setting element save status');
+	    res.status(401).json({ message: 'Error setting element save status' });
+	}
+    } catch (error) {
+	console.error('Error updating user:', error);
+	res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/users/save/{elementId}:
+ *   get:
+ *     summary: Get whether this element is saved by the user or not
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: elementId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the element user saved/un-saved
+ *       - in: query
+ *         name: elementType
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [dataset, notebook, publication, oer, map]
+ *         description: Type of the element to save. Will make DB querying efficient
+
+ *     responses:
+ *       200:
+ *         description: True if element saved by user, False otherwise 
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/api/users/save/:elementId', cors());
+router.get('/api/users/save/:elementId', async (req, res) => {
+    const element_id = decodeURIComponent(req.params['elementId']);
+    const element_type = (() => {
+	if (req.query['elementType']){
+	    return utils.parseElementType(req.query['elementType']);
+	}
+	return null;
+    })();
+    
+    const {user_id, user_role} = (() => {
+	if (!req.user || req.user == null || typeof req.user === 'undefined'){
+	    return {user_id:null, user_role:null};
+	}
+	return {user_id:req.user.id, user_role:req.user.role}
+    })();
+
+    // // 'http://cilogon.org/serverA/users/48835826'
+    // const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
+    // 				  user_role: utils.Role.TRUSTED_USER};
+
+    try {
+	const response = await n4j.getIfElementSavedByContributor(user_id,
+								   element_id,
+								   element_type);
+	res.status(200).json(response);
     } catch (error) {
 	console.error('Error updating user:', error);
 	res.status(500).json({ message: 'Internal server error' });

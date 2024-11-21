@@ -110,8 +110,6 @@ router.get('/private-elements/:id', jwtCorsMiddleware, authenticateJWT, async (r
  *       500:
  *         description: Internal server error
  */
-//router.options('/private-elements', cors());
-//router.get('/private-elements', cors(), async (req, res) => {
 router.options('/private-elements', jwtCorsMiddleware);
 router.get('/private-elements', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
 
