@@ -390,7 +390,6 @@ router.options('/api/users/save/:elementId', (req, res) => {
     }
     res.sendStatus(204); // No content
 });
-router.put('/api/users/save/:elementId', jwtCorsMiddleware);
 router.put('/api/users/save/:elementId', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
 // router.options('/api/users/save/:elementId', cors());
 // router.put('/api/users/save/:elementId', async (req, res) => {

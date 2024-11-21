@@ -1278,9 +1278,10 @@ export async function toggleElementSavedByContributor(contributor_id,
 						       element_type,
 						       mark_save){
     try {
+	let query_str = "MATCH(c:Contributor) " +
+	    "WHERE (c.id=$contrib_id OR $contrib_id IN c.openid) ";
 	if (mark_save === 'true'){
 	    // create a new SAVED relation between contributor and element
-	    let query_str = "MATCH(c:Contributor{id:$contrib_id}) ";
 	    if (element_type){
 		query_str += "MATCH (e:" + element_type + "{id:$elem_id}) ";
 	    }
@@ -1288,7 +1289,7 @@ export async function toggleElementSavedByContributor(contributor_id,
 		// inefficient query
 		query_str += "MATCH (e{id:$elem_id}) ";
 	    }
-	    query_str += "MERGE (c)-[s:SAVED]-(e)";	    
+	    query_str += "MERGE (c)-[s:SAVED]-(e)";
 	    const {_, summary} =
 		  await driver.executeQuery(query_str,
 					    {contrib_id: contributor_id, elem_id: element_id},
@@ -1298,13 +1299,11 @@ export async function toggleElementSavedByContributor(contributor_id,
 	    }
 	} else {
 	    // remove relation between contributor and element
-	    let query_str = "";
 	    if (element_type) {
-		query_str =
-		    "MATCH(c:Contributor{id:$contrib_id})-[s:SAVED]-(e:" + element_type +"{id:$elem_id}) ";
+		query_str += "MATCH(c)-[s:SAVED]-(e:" + element_type +"{id:$elem_id}) "+
 	    } else {
 		// inefficient query
-		query_str = "MATCH(c:Contributor{id:$contrib_id})-[s:SAVED]-(e{id:$elem_id}) ";
+		query_str += "MATCH(c)-[s:SAVED]-(e{id:$elem_id}) ";
 	    }
 	    query_str += "DELETE s";
 	    const {_, summary} =
@@ -1325,7 +1324,7 @@ export async function toggleElementSavedByContributor(contributor_id,
  * @param {string} contributor_id Looged-in user/contributor ID
  * @param {string} element_id Element ID
  * @param {string} element_type If provided will make DB querying more efficient
- * @return {boolean} true if element saved by user, false otherwise 
+ * @return {boolean} true if element saved by user, false otherwise
  */
 export async function getIfElementSavedByContributor(contributor_id,
 						      element_id,
@@ -1339,7 +1338,7 @@ export async function getIfElementSavedByContributor(contributor_id,
 	    // inefficient query
 	    query_str += "MATCH (e{id:$elem_id}) ";
 	}
-	query_str += "RETURN EXISTS ((c)-[:SAVED]-(e)) as status";	    
+	query_str += "RETURN EXISTS ((c)-[:SAVED]-(e)) as status";
 	const {records, _} =
 	      await driver.executeQuery(query_str,
 					{contrib_id: contributor_id, elem_id: element_id},
