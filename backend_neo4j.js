@@ -451,6 +451,80 @@ export async function getElementsCountByType(type){
     // something went wrong
     return -1;
 }
+
+/**
+ * Get elements bookmarked by contributor (including those from other contributors)
+ * @param {string}  id ID of the contributor
+ * @param {string}  user_id ID of logged-in user
+ * @param {int}     from For pagintion, get elements from this number
+ * @param {int}     size For pagintion, get this number of elements
+ * @param {Enum}    sort_by Enum for sorting the results. Default is by title
+ * @param {Enum}    order Enum for order of sorting the results. Default is DESC
+ * @param {boolean} private_only Only return private elements contributed by the user
+ * @return {Object} Map of object with given ID. Empty map if ID not found or error
+ */
+export async function getElementsBookmarkedByContributor(id,
+							 from,
+							 size,
+							 sort_by=utils.SortBy.TITLE,
+							 order="DESC",
+							 private_only=false,
+							 count_only=false
+				       			){
+    const session = driver.session({database: process.env.NEO4J_DB});
+    const tx = await session.beginTransaction();
+    
+    try{
+	let query_params = {contrib_id: id};
+	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r)-[:BOOKMARKED]-(u:Contributor) " +
+	    "WHERE (u.id=$contrib_id OR $contrib_id IN u.openid) ";
+
+	if (private_only){
+	    query_str += "AND r.visibility=$visibility ";
+	    query_params['visibility'] = utils.Visibility.PRIVATE;
+	}
+	else {
+	    query_str += "AND r.visibility=$visibility ";
+	    query_params['visibility'] = utils.Visibility.PUBLIC;
+	}
+
+	let count_query_str = query_str;
+	var ret = [];
+	if (!count_only) {
+	    // add paginated query to get elements with limit to the transaction
+	    const order_by = utils.parseSortBy(sort_by);
+	    query_params['from'] = neo4j.int(from);
+	    query_params['size'] = neo4j.int(size);
+
+	    query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name) }} AS element " +
+		"ORDER BY r." + order_by + " " + order + " " +
+		"SKIP $from " +
+		"LIMIT $size";
+
+	    const {records, summary} = await tx.run(query_str,
+						    query_params,
+						    {routing: 'READ',
+						     database: process.env.NEO4J_DB}
+						   );
+	    for (let record of records){
+		ret.push(makeFrontendCompatible(record.get('element')));
+	    }
+	}
+
+	count_query_str += "RETURN COUNT(r) AS count";
+	const {records, summary} = await tx.run(count_query_str,
+						query_params,
+						{routing: 'READ', database: process.env.NEO4J_DB});
+
+	await tx.commit();
+	return {elements: ret,
+		'total-count':utils.parse64BitNumber(records[0].get('count'))};
+    } catch(err){console.log('getElementsBookmarkedByContributor() - Error in query: '+ err);}
+    finally {await session.close();}
+    // something went wrong
+    return [];
+}
+
 /**
  * Get elements by contributor
  * @param {string}  id ID of the contributor
@@ -460,8 +534,7 @@ export async function getElementsCountByType(type){
  * @param {Enum}    sort_by Enum for sorting the results. Default is by title
  * @param {Enum}    order Enum for order of sorting the results. Default is DESC
  * @param {boolean} private_only Only return private elements contributed by the user
- * @param {Enum}    relation_type Enum for query relation between Contributor and Elements
- * @return {Object} Map of object with given ID. Empty map if ID not found or error
+ * @return {Object} List of element objects contributed by the contributor with given ID.
  */
 export async function getElementsByContributor(id,
 					       from,
@@ -469,7 +542,7 @@ export async function getElementsByContributor(id,
 					       sort_by=utils.SortBy.TITLE,
 					       order="DESC",
 					       private_only=false,
-					       relation_type=utils.Relations.CONTRIBUTED
+					       count_only=false
 				       	      ){
 
     // There are two cases where this function is called
@@ -480,11 +553,9 @@ export async function getElementsByContributor(id,
     const tx = await session.beginTransaction();
 
     try{
-	const order_by = utils.parseSortBy(sort_by);
-	let query_params = {contrib_id: id, from: neo4j.int(from), size: neo4j.int(size)};
+	let query_params = {contrib_id: id};
 
-	//let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) " +
-	let query_str = "MATCH (c:Contributor)-[:" + relation_type + "]-(r) " +
+	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) " +
 	    "WHERE (c.id=$contrib_id OR $contrib_id IN c.openid) ";
 
 	if (private_only){
@@ -496,28 +567,41 @@ export async function getElementsByContributor(id,
 	    query_params['visibility'] = utils.Visibility.PUBLIC;
 	}
 
-	query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name) }} AS element " +
-	      "ORDER BY r." + order_by + " " + order + " " +
-	      "SKIP $from " +
-	      "LIMIT $size";
+	let count_query_str = query_str;
+	var ret = [];
+	if (!count_only) {
+	    // add paginated query to get elements with limit to the transaction
+	    const order_by = utils.parseSortBy(sort_by);
+	    query_params['from'] = neo4j.int(from);
+	    query_params['size'] = neo4j.int(size);
 
-	const {records, summary} = await tx.run(query_str,
+	    query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name) }} AS element " +
+		"ORDER BY r." + order_by + " " + order + " " +
+		"SKIP $from " +
+		"LIMIT $size";
+
+	    const {records, summary} = await tx.run(query_str,
+						    query_params,
+						    {routing: 'READ',
+						     database: process.env.NEO4J_DB}
+						   );
+	    for (let record of records){
+		ret.push(makeFrontendCompatible(record.get('element')));
+	    }
+	}
+
+	count_query_str += "RETURN COUNT(r) AS count";
+	const {records, summary} = await tx.run(count_query_str,
 						query_params,
 						{routing: 'READ', database: process.env.NEO4J_DB});
+
 	await tx.commit();
-	if (records.length <= 0){
-	    // No elements found by contributor
-	    return [];
-	}
-	var ret = []
-	for (let record of records){
-	    ret.push(makeFrontendCompatible(record.get('element')));
-	}
-	return ret;
+	return {elements: ret,
+		'total-count':utils.parse64BitNumber(records[0].get('count'))};
     } catch(err){console.log('getElementsByContributor() - Error in query: '+ err);}
     finally {await session.close();}
     // something went wrong
-    return [];
+    return {elements:[], 'total-count':-1};
 }
 /**
  * Get elements count by contributor
@@ -525,43 +609,16 @@ export async function getElementsByContributor(id,
  * @param {string} user_id ID of logged-in user
  * @return {int} Count
  */
-export async function getElementsCountByContributor(id,
-						    private_only=false,
-						    relation_type=utils.Relations.CONTRIBUTED){
-    const session = driver.session({database: process.env.NEO4J_DB});
-    const tx = await session.beginTransaction();
-    try{
-	let query_params = {contrib_id: id};
-
-	//let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) " +
-	let query_str = "MATCH (c:Contributor)-[:" + relation_type + "]-(r) " +
-	    "WHERE (c.id=$contrib_id OR $contrib_id IN c.openid) ";
-
-	if (private_only){
-	    query_str += "AND r.visibility=$visibility ";
-	    query_params['visibility'] = utils.Visibility.PRIVATE;
-	}
-	else {
-	    query_str += "AND r.visibility=$visibility ";
-	    query_params['visibility'] = utils.Visibility.PUBLIC;
-	}
-
-	query_str += "RETURN COUNT(r) AS count";
-
-	const {records, summary} =
-	      await tx.run(query_str,
-			   query_params,
-			   {routing: 'READ', database: process.env.NEO4J_DB});
-	await tx.commit();
-	if (records.length <= 0){
-	    // Error running query
-	    return -1;
-	}
-	return utils.parse64BitNumber(records[0].get('count'));
-    } catch(err){console.log('getElementsCountByContributor() - Error in query: '+ err);}
-    finally {await session.close();}
-    // something went wrong
-    return -1;
+export async function getElementsCountByContributor(id, private_only=false){
+    const response = await getElementsByContributor(id,
+						    undefined,
+						    undefined,
+						    undefined,
+						    undefined,
+						    private_only,
+						    true
+						   );
+    return response['total-count'];
 }
 /**
  * Get elements by tag
@@ -879,7 +936,7 @@ export async function generateQueryStringForRelatedElements(related_elements){
     return {query_match:query_match, query_merge:query_merge, query_params:query_params}
 }
 
-export async function elementToNode(element, generate_id=true){
+async function elementToNode(element, generate_id=true){
     // separate common and specific element properties
     let{metadata:_,
 	'thumbnail-image': thumbnail,

@@ -152,22 +152,18 @@ router.get('/api/elements/bookmark', jwtCorsMiddleware, authenticateJWT, async (
 	    'count-only':count_only} = req.query;
 
     try {
-	const response = await n4j.getElementsByContributor(user_id,
-							    from,
-							    size,
-							    sort_by,
-							    order,
-							    false,
-							    utils.Relations.BOOKMARKED
-							   );
-	const total_count = await n4j.getElementsCountByContributor(user_id,
-								    false,
-								    utils.Relations.BOOKMARKED
-								   );
-	if (response.length == 0){
+	const response = await n4j.getElementsBookmarkedByContributor(user_id,
+								      from,
+								      size,
+								      sort_by,
+								      order,
+								      false
+								     );
+	if (response['total-count'] == 0){
 	    return res.status(404).json({message: 'No bookmarked elements found'});
 	}
-	res.status(200).json({elements:response, 'total-count': total_count});
+	res.status(200).json({elements:response['elements'],
+			      'total-count': response['total-count']});
     } catch (error) {
 	console.error('Error getting bookmarked elememts:', error);
 	res.status(500).json({ message: 'Error getting bookmarked elememts' });
@@ -509,8 +505,9 @@ router.get('/api/elements', cors(), async (req, res) => {
 									  size,
 									  sort_by,
 									  order);
-			total_count += await n4j.getElementsCountByContributor(val);
-			resources.push(...resource);
+			//total_count += await n4j.getElementsCountByContributor(val);
+			total_count += resource['total-count'];
+			resources.push(...resource['elements']);
 		    }
 		    res.json({elements:resources, 'total-count': total_count});
 		    return;

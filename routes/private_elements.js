@@ -121,19 +121,21 @@ router.get('/elements/private', jwtCorsMiddleware, authenticateJWT, async (req, 
 	 'size': size} = req.query;
 
     try {
-	const elements = await n4j.getElementsByContributor(contributor_id,
+	const response = await n4j.getElementsByContributor(contributor_id,
 							    from,
 							    size,
 							    sort_by,
 							    order,
 							    true
 							   );
-	const total_count = await n4j.getElementsCountByContributor(contributor_id, true);
+	//const total_count = await n4j.getElementsCountByContributor(contributor_id, true);
+	
 	if (total_count === 0){
 	    res.status(404).json({ message: 'Element not found' });
 	    return;
 	}
-	res.status(200).json({elements:elements, 'total-count': total_count});
+	res.status(200).json({elements:response['elements'],
+			      'total-count': response['total-count']});
     } catch (error) {
 	console.error('Error querying:', error);
 	res.status(500).json({ message: 'Internal server error' });
