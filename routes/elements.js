@@ -1004,13 +1004,13 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
 
 /**
  * @swagger
- * /api/elements/bookmark/{userId}:
+ * /api/elements/bookmark:
  *   get:
  *     summary: Get all bookmarked elements by user with userId
  *     tags: ['elements']
  *     parameters:
- *       - in: path
- *         name: userId
+ *       - in: query
+ *         name: user-id
  *         required: true
  *         schema:
  *           type: string
@@ -1048,15 +1048,16 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
  *       500:
  *         description: Internal server error
  */
-router.options('/api/elements/bookmark/:userId', cors());
-router.get('/api/elements/bookmark/:userId', cors(), async (req, res) => {
-    const user_id = decodeURIComponent(req.params['userId']);
-    const { 'sort-by': sort_by,
+router.options('/api/elements/bookmark', jwtCorsMiddleware);
+router.get('/api/elements/bookmark', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+    //const user_id = decodeURIComponent(req.params['userId']);
+    const { 'user-id': user_id,
+	    'sort-by': sort_by,
 	    'order': order,
 	    'from': from,
 	    'size': size,
 	    'count-only':count_only} = req.query;
-    
+
     try {
 	const response = await n4j.getElementsByContributor(user_id,
 							    from,

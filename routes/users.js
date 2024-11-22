@@ -410,7 +410,8 @@ router.put('/api/users/bookmark/:elementId',
 								      element_type,
 								      bookmark);
 	if (response) {
-	    res.status(200).json({ message: 'Toggle element bookmark success' });
+	    //res.status(200).json({ message: 'Toggle element bookmark success' });
+	    res.json({ message: 'Toggle element bookmark success' });
 	} else {
 	    console.log('Error setting element bookmark');
 	    res.status(401).json({ message: 'Error setting element bookmark' });
