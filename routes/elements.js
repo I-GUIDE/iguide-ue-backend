@@ -1004,9 +1004,9 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
 
 /**
  * @swagger
- * /api/elements/saved/{userId}:
+ * /api/elements/bookmark/{userId}:
  *   get:
- *     summary: Get all saved elements by user with userId
+ *     summary: Get all bookmarked elements by user with userId
  *     tags: ['elements']
  *     parameters:
  *       - in: path
@@ -1042,14 +1042,14 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
  *         description: The limit value for pagination
  *     responses:
  *       200:
- *         description: Saved elements by user found
+ *         description: Bookmarked elements by user found
  *       404:
- *         description: No saved elements found
+ *         description: No bookmarked elements found
  *       500:
  *         description: Internal server error
  */
-router.options('/api/elements/saved/:userId', cors());
-router.get('/api/elements/saved/:userId', cors(), async (req, res) => {
+router.options('/api/elements/bookmark/:userId', cors());
+router.get('/api/elements/bookmark/:userId', cors(), async (req, res) => {
     const user_id = decodeURIComponent(req.params['userId']);
     const { 'sort-by': sort_by,
 	    'order': order,
@@ -1064,19 +1064,19 @@ router.get('/api/elements/saved/:userId', cors(), async (req, res) => {
 							    sort_by,
 							    order,
 							    false,
-							    utils.Relations.SAVED
+							    utils.Relations.BOOKMARKED
 							   );
 	const total_count = await n4j.getElementsCountByContributor(user_id,
 								    false,
-								    utils.Relations.SAVED
+								    utils.Relations.BOOKMARKED
 								   );
 	if (response.length == 0){
-	    return res.status(404).json({message: 'No saved elements found'});
+	    return res.status(404).json({message: 'No bookmarked elements found'});
 	}
 	res.status(200).json({elements:response, 'total-count': total_count});
     } catch (error) {
-	console.error('Error getting saved elememts:', error);
-	res.status(500).json({ message: 'Error getting saved elememts' });
+	console.error('Error getting bookmarked elememts:', error);
+	res.status(500).json({ message: 'Error getting bookmarked elememts' });
     }
 });
 

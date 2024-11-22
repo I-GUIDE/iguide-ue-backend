@@ -1266,22 +1266,22 @@ export async function getContributorIdForElement(e_id){
 }
 
 /**
- * Set element liked/saved by contrib
+ * Toggle element bookmark by user
  * @param {string} contributor_id Looged-in user/contributor ID
  * @param {string} element_id Element ID
  * @param {string} element_type If provided will make DB querying more efficient
- * @param {boolean} mark_save
- * @return {boolean} true if saved status updated, false otherwise
+ * @param {boolean} bookmark
+ * @return {boolean} true if bookmark status updated, false otherwise
  */
-export async function toggleElementSavedByContributor(contributor_id,
-						       element_id,
-						       element_type,
-						       mark_save){
+export async function toggleElementBookmarkByContributor(contributor_id,
+							 element_id,
+							 element_type,
+							 bookmark){
     try {
 	let query_str = "MATCH(c:Contributor) " +
 	    "WHERE (c.id=$contrib_id OR $contrib_id IN c.openid) ";
-	if (mark_save === 'true'){
-	    // create a new SAVED relation between contributor and element
+	if (bookmark === 'true'){
+	    // create a new BOOKMARKED relation between contributor and element
 	    if (element_type){
 		query_str += "MATCH (e:" + element_type + "{id:$elem_id}) ";
 	    }
@@ -1289,7 +1289,7 @@ export async function toggleElementSavedByContributor(contributor_id,
 		// inefficient query
 		query_str += "MATCH (e{id:$elem_id}) ";
 	    }
-	    query_str += "MERGE (c)-[s:SAVED]-(e)";
+	    query_str += "MERGE (c)-[s:BOOKMARKED]-(e)";
 	    const {_, summary} =
 		  await driver.executeQuery(query_str,
 					    {contrib_id: contributor_id, elem_id: element_id},
@@ -1300,10 +1300,11 @@ export async function toggleElementSavedByContributor(contributor_id,
 	} else {
 	    // remove relation between contributor and element
 	    if (element_type) {
-		query_str += "MATCH(c)-[s:SAVED]-(e:" + element_type +"{id:$elem_id}) ";
+		query_str += "MATCH(c)-[s:BOOKMARKED]-(e:" + element_type +"{id:$elem_id}) ";
 	    } else {
 		// inefficient query
-		query_str += "MATCH(c)-[s:SAVED]-(e{id:$elem_id}) ";
+		console.warn('toggleElementBookmarkByContributor() - Inefficient query');
+		query_str += "MATCH(c)-[s:BOOKMARKED]-(e{id:$elem_id}) ";
 	    }
 	    query_str += "DELETE s";
 	    const {_, summary} =
@@ -1314,37 +1315,39 @@ export async function toggleElementSavedByContributor(contributor_id,
 		return true;
 	    }
 	}
-    } catch(err){console.log('toggleElementSavedByContributor() - Error in query: '+ err);}
+    } catch(err){console.log('toggleElementBookmarkByContributor() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
 
 /**
- * Get if element liked/saved by contrib
+ * Get if element bookmarked by contrib
  * @param {string} contributor_id Looged-in user/contributor ID
  * @param {string} element_id Element ID
  * @param {string} element_type If provided will make DB querying more efficient
- * @return {boolean} true if element saved by user, false otherwise
+ * @return {boolean} true if element bookmarked by user, false otherwise
  */
-export async function getIfElementSavedByContributor(contributor_id,
-						      element_id,
-						      element_type){
+export async function getIfElementBookmarkedByContributor(contributor_id,
+							  element_id,
+							  element_type){
     try {
-	let query_str = "MATCH(c:Contributor{id:$contrib_id}) ";
+	let query_str = "MATCH(c:Contributor) " +
+	    "WHERE (c.id=$contrib_id OR $contrib_id IN c.openid) ";
 	if (element_type){
 	    query_str += "MATCH (e:" + element_type + "{id:$elem_id}) ";
 	}
 	else {
 	    // inefficient query
+	    console.warn('getIfElementBookmarkedByContributor() - Inefficient query');
 	    query_str += "MATCH (e{id:$elem_id}) ";
 	}
-	query_str += "RETURN EXISTS ((c)-[:SAVED]-(e)) as status";
+	query_str += "RETURN EXISTS ((c)-[:BOOKMARKED]-(e)) as status";
 	const {records, _} =
 	      await driver.executeQuery(query_str,
 					{contrib_id: contributor_id, elem_id: element_id},
 					{database: process.env.NEO4J_DB});
 	return records[0].get('status');
-    } catch(err){console.log('getIfElementSavedByContributor() - Error in query: '+ err);}
+    } catch(err){console.log('getIfElementBookmarkedByContributor() - Error in query: '+ err);}
     // something went wrong
     return false;
 }

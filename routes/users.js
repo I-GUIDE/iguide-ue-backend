@@ -344,9 +344,9 @@ router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
 
 /**
  * @swagger
- * /api/users/save/{elementId}:
+ * /api/users/bookmark/{elementId}:
  *   put:
- *     summary: Toggle element like/save by logged-in user
+ *     summary: Toggle element bookmark by logged-in user
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -354,9 +354,9 @@ router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
  *         required: true
  *         schema:
  *           type: string
- *         description: The ID of the element user saved/un-saved
+ *         description: The ID of the element user is trying to (un)bookmark
  *       - in: query
- *         name: save
+ *         name: bookmark
  *         required: true
  *         schema:
  *           type: boolean
@@ -366,35 +366,23 @@ router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
  *         schema:
  *           type: string
  *           enum: [dataset, notebook, publication, oer, map]
- *         description: Type of the element to save. Will make DB querying efficient
+ *         description: Type of the element to bookmark. Will make DB querying efficient
 
  *     responses:
  *       200:
- *         description: Element marked as saved by user successfully
+ *         description: Element bookmark set by user successfully
  *       401:
- *         description: Error setting element save status. Can be due to multiple reasons i.e. (1) Element does not exists, (2) Invalid contributor ID, (3) Saved relation already exists.
+ *         description: Error setting element bookmark. Can be due to multiple reasons i.e. (1) Element does not exists, (2) Invalid contributor ID, (3) Bookamrked relation already exists.
  *       500:
  *         description: Internal server error
  */
-router.options('/api/users/save/:elementId', (req, res) => {
-    const method = req.header('Access-Control-Request-Method');
-    if (method === 'PUT') {
-        res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
-        res.header('Access-Control-Allow-Methods', 'PUT');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-        res.header('Access-Control-Allow-Credentials', 'true');
-    } else if (method === 'GET') {
-        res.header('Access-Control-Allow-Origin', '*');
-        res.header('Access-Control-Allow-Methods', 'GET');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-    }
-    res.sendStatus(204); // No content
-});
-router.put('/api/users/save/:elementId', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
-// router.options('/api/users/save/:elementId', cors());
-// router.put('/api/users/save/:elementId', async (req, res) => {
+router.options('/api/users/bookmark/:elementId', jwtCorsMiddleware);
+router.put('/api/users/bookmark/:elementId',
+	   jwtCorsMiddleware,
+	   authenticateJWT,
+	   async (req, res) => {
     const element_id = decodeURIComponent(req.params['elementId']);
-    const mark_saved = req.query['save'];
+    const bookmark = req.query['bookmark'];
     const element_type = (() => {
 	if (req.query['elementType']){
 	    return utils.parseElementType(req.query['elementType']);
@@ -415,29 +403,29 @@ router.put('/api/users/save/:elementId', jwtCorsMiddleware, authenticateJWT, asy
 
     console.log('User: ' + user_id +
 		' setting element: ' + element_id +
-		' save status: ' + mark_saved );
+		' bookmark: ' + bookmark );
     try {
-	const response = await n4j.toggleElementSavedByContributor(user_id,
-								   element_id,
-								   element_type,
-								   mark_saved);
+	const response = await n4j.toggleElementBookmarkByContributor(user_id,
+								      element_id,
+								      element_type,
+								      bookmark);
 	if (response) {
-	    res.status(200).json({ message: 'Toggle element saved status by user successfully' });
+	    res.status(200).json({ message: 'Toggle element bookmark success' });
 	} else {
-	    console.log('Error setting element save status');
-	    res.status(401).json({ message: 'Error setting element save status' });
+	    console.log('Error setting element bookmark');
+	    res.status(401).json({ message: 'Error setting element bookmark' });
 	}
     } catch (error) {
-	console.error('Error updating user:', error);
+	console.error('Error setting element bookmark:', error);
 	res.status(500).json({ message: 'Internal server error' });
     }
 });
 
 /**
  * @swagger
- * /api/users/save/{elementId}:
+ * /api/users/bookmark/{elementId}:
  *   get:
- *     summary: Get whether this element is saved by the user or not
+ *     summary: Get whether element is bookmarked by the user or not
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -445,24 +433,26 @@ router.put('/api/users/save/:elementId', jwtCorsMiddleware, authenticateJWT, asy
  *         required: true
  *         schema:
  *           type: string
- *         description: The ID of the element user saved/un-saved
+ *         description: The ID of the bookmark element
  *       - in: query
  *         name: elementType
  *         required: false
  *         schema:
  *           type: string
  *           enum: [dataset, notebook, publication, oer, map]
- *         description: Type of the element to save. Will make DB querying efficient
+ *         description: Type of the element to bookmark. Will make DB querying efficient
 
  *     responses:
  *       200:
- *         description: True if element saved by user, False otherwise 
+ *         description: True if element bookmarked by user, False otherwise 
  *       500:
  *         description: Internal server error
  */
-//router.options('/api/users/save/:elementId', cors());
-//router.get('/api/users/save/:elementId', async (req, res) => {
-router.get('/api/users/save/:elementId', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.options('/api/users/bookmark/:elementId', jwtCorsMiddleware);
+router.get('/api/users/bookmark/:elementId',
+	   jwtCorsMiddleware,
+	   authenticateJWT,
+	   async (req, res) => {
     const element_id = decodeURIComponent(req.params['elementId']);
     //const user_id = decodeURIComponent(req.params['userId']);
     const element_type = (() => {
@@ -484,9 +474,9 @@ router.get('/api/users/save/:elementId', jwtCorsMiddleware, authenticateJWT, asy
     // 				  user_role: utils.Role.TRUSTED_USER};
 
     try {
-	const response = await n4j.getIfElementSavedByContributor(user_id,
-								   element_id,
-								   element_type);
+	const response = await n4j.getIfElementBookmarkedByContributor(user_id,
+								       element_id,
+								       element_type);
 	res.status(200).json(response);
     } catch (error) {
 	console.error('Error updating user:', error);
