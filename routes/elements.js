@@ -97,6 +97,85 @@ async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
 
 /**
  * @swagger
+ * /api/elements/bookmark:
+ *   get:
+ *     summary: Get all bookmarked elements by user with userId
+ *     tags: ['elements']
+ *     parameters:
+ *       - in: query
+ *         name: user-id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: sort-by
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [click_count, creation_time, title]
+ *         description: The field to sort the elements by
+ *       - in: query
+ *         name: order
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *         description: Sort order of returned elements
+ *       - in: query
+ *         name: from
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The offset value for pagination
+ *       - in: query
+ *         name: size
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The limit value for pagination
+ *     responses:
+ *       200:
+ *         description: Bookmarked elements by user found
+ *       404:
+ *         description: No bookmarked elements found
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/api/elements/bookmark', jwtCorsMiddleware);
+router.get('/api/elements/bookmark', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+    //const user_id = decodeURIComponent(req.params['userId']);
+    const { 'user-id': user_id,
+	    'sort-by': sort_by,
+	    'order': order,
+	    'from': from,
+	    'size': size,
+	    'count-only':count_only} = req.query;
+
+    try {
+	const response = await n4j.getElementsByContributor(user_id,
+							    from,
+							    size,
+							    sort_by,
+							    order,
+							    false,
+							    utils.Relations.BOOKMARKED
+							   );
+	const total_count = await n4j.getElementsCountByContributor(user_id,
+								    false,
+								    utils.Relations.BOOKMARKED
+								   );
+	if (response.length == 0){
+	    return res.status(404).json({message: 'No bookmarked elements found'});
+	}
+	res.status(200).json({elements:response, 'total-count': total_count});
+    } catch (error) {
+	console.error('Error getting bookmarked elememts:', error);
+	res.status(500).json({ message: 'Error getting bookmarked elememts' });
+    }
+});
+
+/**
+ * @swagger
  * /api/elements/titles:
  *   get:
  *     summary: Fetch all titles of a given type of elements
@@ -1001,84 +1080,5 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
 	res.status(500).json({ message: 'Error getting related elememts' });
     }
 });
-
-// /**
-//  * @swagger
-//  * /api/elements/bookmark:
-//  *   get:
-//  *     summary: Get all bookmarked elements by user with userId
-//  *     tags: ['elements']
-//  *     parameters:
-//  *       - in: query
-//  *         name: user-id
-//  *         required: true
-//  *         schema:
-//  *           type: string
-//  *       - in: query
-//  *         name: sort-by
-//  *         required: false
-//  *         schema:
-//  *           type: string
-//  *           enum: [click_count, creation_time, title]
-//  *         description: The field to sort the elements by
-//  *       - in: query
-//  *         name: order
-//  *         required: false
-//  *         schema:
-//  *           type: string
-//  *           enum: [asc, desc]
-//  *         description: Sort order of returned elements
-//  *       - in: query
-//  *         name: from
-//  *         required: true
-//  *         schema:
-//  *           type: integer
-//  *         description: The offset value for pagination
-//  *       - in: query
-//  *         name: size
-//  *         required: true
-//  *         schema:
-//  *           type: integer
-//  *         description: The limit value for pagination
-//  *     responses:
-//  *       200:
-//  *         description: Bookmarked elements by user found
-//  *       404:
-//  *         description: No bookmarked elements found
-//  *       500:
-//  *         description: Internal server error
-//  */
-// router.options('/api/elements/bookmark', jwtCorsMiddleware);
-// router.get('/api/elements/bookmark', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
-//     //const user_id = decodeURIComponent(req.params['userId']);
-//     const { 'user-id': user_id,
-// 	    'sort-by': sort_by,
-// 	    'order': order,
-// 	    'from': from,
-// 	    'size': size,
-// 	    'count-only':count_only} = req.query;
-
-//     try {
-// 	const response = await n4j.getElementsByContributor(user_id,
-// 							    from,
-// 							    size,
-// 							    sort_by,
-// 							    order,
-// 							    false,
-// 							    utils.Relations.BOOKMARKED
-// 							   );
-// 	const total_count = await n4j.getElementsCountByContributor(user_id,
-// 								    false,
-// 								    utils.Relations.BOOKMARKED
-// 								   );
-// 	if (response.length == 0){
-// 	    return res.status(404).json({message: 'No bookmarked elements found'});
-// 	}
-// 	res.status(200).json({elements:response, 'total-count': total_count});
-//     } catch (error) {
-// 	console.error('Error getting bookmarked elememts:', error);
-// 	res.status(500).json({ message: 'Error getting bookmarked elememts' });
-//     }
-// });
 
 export default router;
