@@ -6,10 +6,10 @@ dotenv.config();
 
 // initialize opensearch client with authentication
 const client = new Client({
-  node: "https://149.165.153.78:9200",
+  node: process.env.OPENSEARCH_NODE,
   auth: {
-    username: process.env.OpenSearch_username,
-    password: process.env.OpenSearch_password,
+    username: process.env.OPENSEARCH_USERNAME,
+    password: process.env.OPENSEARCH_PASSWORD,
   },
   ssl: { rejectUnauthorized: false },
 });
@@ -28,8 +28,8 @@ function createQueryPayload(model, systemMessage, userMessage, stream) {
 
 // send request to llama model with payload
 async function callLlamaModel(queryPayload) {
-  const llamaApiUrl = "https://anvilgpt.rcac.purdue.edu/ollama/api/chat";
-  const anvilGptApiKey = process.env.API_KEY;
+  const llamaApiUrl = process.env.ANVILGPT_URL;;
+  const anvilGptApiKey = process.env.ANVILGPT_KEY;
 
   try {
     const response = await fetch(llamaApiUrl, {
@@ -54,7 +54,7 @@ async function callLlamaModel(queryPayload) {
 async function getSearchResults(userQuery) {
   try {
     const response = await client.search({
-      index: "neo4j-elements",
+      index: process.env.OPENSEARCH_INDEX,
       body: { query: { match: { contents: userQuery } } },
     });
     return response.body.hits.hits; // return search results
