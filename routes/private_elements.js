@@ -128,7 +128,7 @@ router.get('/elements/private', jwtCorsMiddleware, authenticateJWT, async (req, 
 							    order,
 							    true
 							   );
-	if (response['total_count'] === 0){
+	if (response['total-count'] === 0){
 	    res.status(404).json({ message: 'Element not found' });
 	    return;
 	}

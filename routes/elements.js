@@ -541,10 +541,10 @@ router.get('/api/elements', cors(), async (req, res) => {
 		let total_count = 0;
 		for (let val of element_type){
 		    let resource = await n4j.getElementsByType(val, from, size, sort_by, order);
-		    if (resource.length > 0){
-			resources.push(...resource);
+		    if (resource['total-count'] > 0){
+			resources.push(...resource['elements']);
 		    }
-		    total_count += await n4j.getElementsCountByType(val);
+		    total_count += resource['total-count'];
 		}
 		res.json({elements:resources, 'total-count': total_count});
 		return;

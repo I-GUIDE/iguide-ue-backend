@@ -388,42 +388,52 @@ export async function getAllRelatedElements(){
  * @param {Enum}   order Enum for order of sorting the results. Default is DESC
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
-export async function getElementsByType(type, from, size, sort_by=utils.SortBy.TITLE, order="DESC"){
+export async function getElementsByType(type,
+					from,
+					size,
+					sort_by=utils.SortBy.TITLE,
+					order="DESC",
+					count_only=false){
     // Only called to show elements on main page filtered by type
     // Note: Private elements will never show up on main pages even for the owner
     // Owner will be able to access them in his/her own profile
+    const session = driver.session({database: process.env.NEO4J_DB});
+    const tx = await session.beginTransaction();
     try{
 	const node_type = utils.parseElementType(type);
-	const order_by = utils.parseSortBy(sort_by);
+	let query_str = "MATCH (n:" + node_type + ")-[:CONTRIBUTED]-(c) " +
+	    "WHERE n.visibility=$public_visibility ";
 
-	const query_str = "MATCH (n:" + node_type + ")-[:CONTRIBUTED]-(c) " +
-	    "WHERE n.visibility=$public_visibility " +
-	    "RETURN n{.id, .title, .contents, .tags, .thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name)}} " +
+	let count_query_str = query_str;
+	var ret = [];
+	if (!count_only) {
+	    const order_by = utils.parseSortBy(sort_by);
+	    query_str += "RETURN n{.id, .title, .contents, .tags, .thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name)}} " +
 	    "ORDER BY n." + order_by + " " + order + ", n.id " + order + " " +
 	    "SKIP $from " +
 	    "LIMIT $size";
-
-
-
-	const {records, summary} =
-	      await driver.executeQuery(query_str,
-					{from: neo4j.int(from),
-					 size: neo4j.int(size),
-					 public_visibility: utils.Visibility.PUBLIC},
-					{routing: 'READ', database: process.env.NEO4J_DB});
-
-	if (records.length <= 0){
-	    // No elements found
-	    return [];
+	    
+	    const {records, summary} = await tx.run(query_str,
+						    {from: neo4j.int(from),
+						     size: neo4j.int(size),
+						     public_visibility: utils.Visibility.PUBLIC},
+						    {routing: 'READ', database: process.env.NEO4J_DB});
+	    for (let record of records){
+		ret.push(makeFrontendCompatible(record.get('n')));
+	    }
 	}
-	var ret = []
-	for (let record of records){
-	    ret.push(makeFrontendCompatible(record.get('n')));
-	}
-	return ret;
+
+	count_query_str += "RETURN COUNT(n) AS count";
+	const {records, summary} = await tx.run(count_query_str,
+						{public_visibility: utils.Visibility.PUBLIC},
+						{routing: 'READ', database: process.env.NEO4J_DB});
+
+	await tx.commit();
+	return {elements: ret,
+		'total-count':utils.parse64BitNumber(records[0].get('count'))};
     } catch(err){console.log('getElementsByType() - Error in query: '+ err);}
     // something went wrong
-    return [];
+    return {elements:[], 'total-count':-1};
 }
 /**
  * Get elements count by given type
@@ -432,24 +442,31 @@ export async function getElementsByType(type, from, size, sort_by=utils.SortBy.T
  */
 export async function getElementsCountByType(type){
 
-    try{
-	const node_type = utils.parseElementType(type);
-	const query_str = "MATCH (n:"+ node_type +") " +
-	      "WHERE n.visibility=$public_visibility " +
-	      "RETURN COUNT(n) AS count";
+    const response = await getElementsByType(type,
+					     null,
+					     null,
+					     null,
+					     null,
+					     true);
+    return response['total-count'];
+    // try{
+    // 	const node_type = utils.parseElementType(type);
+    // 	const query_str = "MATCH (n:"+ node_type +") " +
+    // 	      "WHERE n.visibility=$public_visibility " +
+    // 	      "RETURN COUNT(n) AS count";
 
-	const {records, summary} =
-	      await driver.executeQuery(query_str,
-					{public_visibility: utils.Visibility.PUBLIC},
-					{routing: 'READ', database: process.env.NEO4J_DB});
-	if (records.length <= 0){
-	    // Error running query
-	    return -1;
-	}
-	return utils.parse64BitNumber(records[0].get('count'));
-    } catch(err){console.log('getElementsCountByType() - Error in query: '+ err);}
-    // something went wrong
-    return -1;
+    // 	const {records, summary} =
+    // 	      await driver.executeQuery(query_str,
+    // 					{public_visibility: utils.Visibility.PUBLIC},
+    // 					{routing: 'READ', database: process.env.NEO4J_DB});
+    // 	if (records.length <= 0){
+    // 	    // Error running query
+    // 	    return -1;
+    // 	}
+    // 	return utils.parse64BitNumber(records[0].get('count'));
+    // } catch(err){console.log('getElementsCountByType() - Error in query: '+ err);}
+    // // something went wrong
+    // return -1;
 }
 
 /**
@@ -461,6 +478,7 @@ export async function getElementsCountByType(type){
  * @param {Enum}    sort_by Enum for sorting the results. Default is by title
  * @param {Enum}    order Enum for order of sorting the results. Default is DESC
  * @param {boolean} private_only Only return private elements contributed by the user
+ * @param {boolean} count_only Only return elements count contributed by the user
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
 export async function getElementsBookmarkedByContributor(id,
@@ -522,7 +540,7 @@ export async function getElementsBookmarkedByContributor(id,
     } catch(err){console.log('getElementsBookmarkedByContributor() - Error in query: '+ err);}
     finally {await session.close();}
     // something went wrong
-    return [];
+    return {elements:[], 'total-count':-1};
 }
 
 /**
@@ -534,6 +552,7 @@ export async function getElementsBookmarkedByContributor(id,
  * @param {Enum}    sort_by Enum for sorting the results. Default is by title
  * @param {Enum}    order Enum for order of sorting the results. Default is DESC
  * @param {boolean} private_only Only return private elements contributed by the user
+ * @param {boolean} count_only Only return elements count contributed by the user
  * @return {Object} List of element objects contributed by the contributor with given ID.
  */
 export async function getElementsByContributor(id,
