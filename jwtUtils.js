@@ -18,7 +18,8 @@ const client = new Client({
 });
 
 export const authenticateJWT = (req, res, next) => {
-  const token = req.cookies.jwt;
+  // updated to new variable name 
+  const token = req.cookies[process.env.JWT_ACCESS_TOKEN_NAME]
 
   if (token) {
     jwt.verify(token, process.env.JWT_ACCESS_TOKEN_SECRET, (err, user) => {
