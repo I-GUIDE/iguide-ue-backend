@@ -135,7 +135,7 @@ router.get('/api/users/:id/valid', cors(), async (req, res) => {
     // [ToDo] Return {true, version_num} OR {false, -1}
     try {
 	const response = await n4j.checkContributorByID(id);
-	res.json(response);
+	res.status(200).json(response);
     } catch (error) {
 	console.error('Error checking user:', error);
 	res.status(500).json({ message: 'Error checking the user' });
@@ -199,7 +199,7 @@ router.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvata
 	const new_avatar_image = (new_avatar_images === null) ?
 	      null :
 	      new_avatar_images['original'];
-	
+
 	const {result, old_avatar_url} =
 	      await n4j.setContributorAvatar(id, new_avatar_image);
 	if (result == false){
@@ -336,6 +336,149 @@ router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
 	    console.log('Error updating user');
 	    res.json({ message: 'Error updating user', result: response });
 	}
+    } catch (error) {
+	console.error('Error updating user:', error);
+	res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/users/bookmark/{elementId}:
+ *   put:
+ *     summary: Toggle element bookmark by logged-in user
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: elementId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the element user is trying to (un)bookmark
+ *       - in: query
+ *         name: bookmark
+ *         required: true
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: elementType
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [dataset, notebook, publication, oer, map]
+ *         description: Type of the element to bookmark. Will make DB querying efficient
+
+ *     responses:
+ *       200:
+ *         description: Element bookmark set by user successfully
+ *       401:
+ *         description: Error setting element bookmark. Can be due to multiple reasons i.e. (1) Element does not exists, (2) Invalid contributor ID, (3) Bookamrked relation already exists.
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/api/users/bookmark/:elementId', jwtCorsMiddleware);
+router.put('/api/users/bookmark/:elementId',
+	   jwtCorsMiddleware,
+	   authenticateJWT,
+	   async (req, res) => {
+    const element_id = decodeURIComponent(req.params['elementId']);
+    const bookmark = req.query['bookmark'];
+    const element_type = (() => {
+	if (req.query['elementType']){
+	    return utils.parseElementType(req.query['elementType']);
+	}
+	return null;
+    })();
+    
+    const {user_id, user_role} = (() => {
+	if (!req.user || req.user == null || typeof req.user === 'undefined'){
+	    return {user_id:null, user_role:null};
+	}
+	return {user_id:req.user.id, user_role:req.user.role}
+    })();
+
+    // 'http://cilogon.org/serverA/users/48835826'
+    // const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
+    // 				  user_role: utils.Role.TRUSTED_USER};
+
+    console.log('User: ' + user_id +
+		' setting element: ' + element_id +
+		' bookmark: ' + bookmark );
+    try {
+	const response = await n4j.toggleElementBookmarkByContributor(user_id,
+								      element_id,
+								      element_type,
+								      bookmark);
+	if (response) {
+	    //res.status(200).json({ message: 'Toggle element bookmark success' });
+	    res.json({ message: 'Toggle element bookmark success' });
+	} else {
+	    console.log('Error setting element bookmark');
+	    res.status(401).json({ message: 'Error setting element bookmark' });
+	}
+    } catch (error) {
+	console.error('Error setting element bookmark:', error);
+	res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/users/bookmark/{elementId}:
+ *   get:
+ *     summary: Get whether element is bookmarked by the user or not
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: elementId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the bookmark element
+ *       - in: query
+ *         name: elementType
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [dataset, notebook, publication, oer, map]
+ *         description: Type of the element to bookmark. Will make DB querying efficient
+
+ *     responses:
+ *       200:
+ *         description: True if element bookmarked by user, False otherwise 
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/api/users/bookmark/:elementId', jwtCorsMiddleware);
+router.get('/api/users/bookmark/:elementId',
+	   jwtCorsMiddleware,
+	   authenticateJWT,
+	   async (req, res) => {
+    const element_id = decodeURIComponent(req.params['elementId']);
+    //const user_id = decodeURIComponent(req.params['userId']);
+    const element_type = (() => {
+	if (req.query['elementType']){
+	    return utils.parseElementType(req.query['elementType']);
+	}
+	return null;
+    })();
+    
+    const {user_id, user_role} = (() => {
+	if (!req.user || req.user == null || typeof req.user === 'undefined'){
+	    return {user_id:null, user_role:null};
+	}
+	return {user_id:req.user.id, user_role:req.user.role}
+    })();
+
+    // // 'http://cilogon.org/serverA/users/48835826'
+    // const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
+    // 				  user_role: utils.Role.TRUSTED_USER};
+
+    try {
+	const response = await n4j.getIfElementBookmarkedByContributor(user_id,
+								       element_id,
+								       element_type);
+	res.status(200).json(response);
     } catch (error) {
 	console.error('Error updating user:', error);
 	res.status(500).json({ message: 'Internal server error' });

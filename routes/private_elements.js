@@ -9,13 +9,13 @@ import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils
 const router = express.Router();
 /**
  * @swagger
- * /api/private-elements/{id}:
+ * /api/elements/private/{elementId}:
  *   get:
  *     summary: Retrieve ONE private element using id.
  *     tags: ['private-elements']
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: elementId
  *         required: true
  *         schema:
  *           type: string
@@ -30,10 +30,10 @@ const router = express.Router();
  *       500:
  *         description: Internal server error
  */
-router.options('/private-elements/:id', jwtCorsMiddleware);
-router.get('/private-elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.options('/elements/private/:elementId', jwtCorsMiddleware);
+router.get('/elements/private/:elementId', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
 
-    const element_id = decodeURIComponent(req.params['id']);
+    const element_id = decodeURIComponent(req.params['elementId']);
     const {user_id, user_role} = (() => {
 	if (!req.user || req.user == null || typeof req.user === 'undefined'){
 	    return {user_id:null, user_role:null};
@@ -66,7 +66,7 @@ router.get('/private-elements/:id', jwtCorsMiddleware, authenticateJWT, async (r
 
 /**
  * @swagger
- * /api/private-elements:
+ * /api/elements/private:
  *   get:
  *     summary: Retrieve private elements for given user ID
  *     tags: ['private-elements']
@@ -110,10 +110,8 @@ router.get('/private-elements/:id', jwtCorsMiddleware, authenticateJWT, async (r
  *       500:
  *         description: Internal server error
  */
-//router.options('/private-elements', cors());
-//router.get('/private-elements', cors(), async (req, res) => {
-router.options('/private-elements', jwtCorsMiddleware);
-router.get('/private-elements', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.options('/elements/private', jwtCorsMiddleware);
+router.get('/elements/private', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
 
     //const contributor_id = decodeURIComponent(req.params['id']);
     let {'user-id': contributor_id,
@@ -123,19 +121,19 @@ router.get('/private-elements', jwtCorsMiddleware, authenticateJWT, async (req, 
 	 'size': size} = req.query;
 
     try {
-	const elements = await n4j.getElementsByContributor(contributor_id,
+	const response = await n4j.getElementsByContributor(contributor_id,
 							    from,
 							    size,
 							    sort_by,
 							    order,
 							    true
 							   );
-	const total_count = await n4j.getElementsCountByContributor(contributor_id, true);
-	if (total_count === 0){
+	if (response['total-count'] === 0){
 	    res.status(404).json({ message: 'Element not found' });
 	    return;
 	}
-	res.status(200).json({elements:elements, 'total-count': total_count});
+	res.status(200).json({elements:response['elements'],
+			      'total-count': response['total-count']});
     } catch (error) {
 	console.error('Error querying:', error);
 	res.status(500).json({ message: 'Internal server error' });
