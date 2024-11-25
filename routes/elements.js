@@ -152,18 +152,33 @@ router.get('/api/elements/bookmark', jwtCorsMiddleware, authenticateJWT, async (
 	    'count-only':count_only} = req.query;
 
     try {
-	const response = await n4j.getElementsBookmarkedByContributor(user_id,
-								      from,
-								      size,
-								      sort_by,
-								      order,
-								      false
-								     );
-	if (response['total-count'] == 0){
+	let total_count = 0;
+	let bookmarked_elements = [];
+	// get all public bookmarked elements for user
+	const public_elemenets = await n4j.getElementsBookmarkedByContributor(user_id,
+									      from,
+									      size,
+									      sort_by,
+									      order,
+									      false
+									     );
+	total_count += public_elements['total-count'];
+	// get all private bookmarked elements for user
+	const private_elemenets = await n4j.getElementsBookmarkedByContributor(user_id,
+									       from,
+									       size,
+									       sort_by,
+									       order,
+									       true
+									      );
+	total_count += private_elements['total-count'];
+	bookmarked_elements = [...public_elements, ...private_elements];
+	if (total_count == 0){
 	    return res.status(404).json({message: 'No bookmarked elements found'});
 	}
-	res.status(200).json({elements:response['elements'],
-			      'total-count': response['total-count']});
+	
+	res.status(200).json({elements:bookmarked_elements,
+			      'total-count': total_count});
     } catch (error) {
 	console.error('Error getting bookmarked elememts:', error);
 	res.status(500).json({ message: 'Error getting bookmarked elememts' });
@@ -323,6 +338,7 @@ router.get('/api/elements/:id', cors(), async (req, res) => {
 
     const element_id = decodeURIComponent(req.params['id']);
     try {
+	// to avoid direct access to private elements via URL
 	const element_visibility = await n4j.getElementVisibilityForID(element_id);
 	if (element_visibility === utils.Visibility.PRIVATE){
 	    res.status(404).json({ message: 'Element not found' });
