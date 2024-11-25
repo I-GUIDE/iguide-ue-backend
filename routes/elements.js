@@ -323,6 +323,11 @@ router.get('/api/elements/:id', cors(), async (req, res) => {
 
     const element_id = decodeURIComponent(req.params['id']);
     try {
+	const element_visibility = await n4j.getElementVisibilityForID(element_id);
+	if (element_visibility === utils.Visibility.PRIVATE){
+	    res.status(404).json({ message: 'Element not found' });
+	    return;
+	}
 	const element = await n4j.getElementByID(element_id);
 	if (JSON.stringify(element) === '{}'){
 	    res.status(404).json({ message: 'Element not found' });
