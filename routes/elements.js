@@ -155,7 +155,7 @@ router.get('/api/elements/bookmark', jwtCorsMiddleware, authenticateJWT, async (
 	let total_count = 0;
 	let bookmarked_elements = [];
 	// get all public bookmarked elements for user
-	const public_elemenets = await n4j.getElementsBookmarkedByContributor(user_id,
+	const public_elements = await n4j.getElementsBookmarkedByContributor(user_id,
 									      from,
 									      size,
 									      sort_by,
@@ -164,7 +164,7 @@ router.get('/api/elements/bookmark', jwtCorsMiddleware, authenticateJWT, async (
 									     );
 	total_count += public_elements['total-count'];
 	// get all private bookmarked elements for user
-	const private_elemenets = await n4j.getElementsBookmarkedByContributor(user_id,
+	const private_elements = await n4j.getElementsBookmarkedByContributor(user_id,
 									       from,
 									       size,
 									       sort_by,
