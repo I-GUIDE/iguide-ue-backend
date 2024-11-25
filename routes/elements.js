@@ -172,11 +172,12 @@ router.get('/api/elements/bookmark', jwtCorsMiddleware, authenticateJWT, async (
 									       true
 									      );
 	total_count += private_elements['total-count'];
-	bookmarked_elements = [...public_elements, ...private_elements];
+	bookmarked_elements = [...public_elements['elements'],
+			       ...private_elements['elements']];
 	if (total_count == 0){
 	    return res.status(404).json({message: 'No bookmarked elements found'});
 	}
-	
+
 	res.status(200).json({elements:bookmarked_elements,
 			      'total-count': total_count});
     } catch (error) {
