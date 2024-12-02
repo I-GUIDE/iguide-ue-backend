@@ -7,61 +7,226 @@ const router = express.Router();
 
 // Initialize OpenSearch client
 const client = new Client({
-    node: process.env.OPENSEARCH_NODE,
-    auth: {
-        username: process.env.OPENSEARCH_USERNAME,
-        password: process.env.OPENSEARCH_PASSWORD,
-    },
-    ssl: {
-        rejectUnauthorized: false,
-    },
+  node: process.env.OPENSEARCH_NODE,
+  auth: {
+    username: process.env.OPENSEARCH_USERNAME,
+    password: process.env.OPENSEARCH_PASSWORD,
+  },
+  ssl: {
+    rejectUnauthorized: false,
+  },
 });
 
-// Function to create memory in OpenSearch
-async function createMemory(conversationName) {
-    try {
-        const response = await client.transport.request({
-            method: 'POST',
-            path: '/_plugins/_ml/memory/',
-            body: {
-                name: conversationName
-            }
-        });
-        return response.body.memory_id;
-    } catch (error) {
-        console.error('Error creating memory:', error);
-        throw error;
-    }
+// Helper: Create query payload for Llama model
+function createQueryPayload(model, systemMessage, userMessage, stream = false) {
+  return {
+    model,
+    messages: [
+      { role: "system", content: systemMessage },
+      { role: "user", content: userMessage },
+    ],
+    stream,
+  };
 }
 
-// Function to perform search with memory in OpenSearch
-async function performSearchWithMemory(userQuery, memoryId) {
-    try {
-        const searchResponse = await client.search({
-            index: process.env.OPENSEARCH_INDEX,
-            search_pipeline: 'rag_pipeline_local', //Specify the optional search pipeline
-            body: {
-                query: {
-                    multi_match: {
-                        query: userQuery,
-                        fields: ["authors^2", "contents", "title^3", "contributors^2"],
-                        type: "best_fields" // "best_fields" selects the most relevant field for matching.
-                    }
-                },
-                ext: {
-                    generative_qa_parameters: {
-                        llm_model: "llama3:instruct", 
-                        llm_question: userQuery,
-                        memory_id: memoryId
-                    }
-                }
-            }
-        });
-        return searchResponse.body;
-    } catch (error) {
-        console.error('Error performing search with memory:', error);
-        throw error;
+// Helper: Call the Llama model
+async function callLlamaModel(queryPayload) {
+  const llamaApiUrl = process.env.ANVILGPT_URL;
+  const anvilGptApiKey = process.env.ANVILGPT_KEY;
+
+  try {
+    const response = await fetch(llamaApiUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${anvilGptApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(queryPayload),
+    });
+
+    if (response.ok) return await response.json();
+    const errorText = await response.text();
+    throw new Error(`Error: ${response.status}, ${errorText}`);
+  } catch (error) {
+    console.error("Error fetching from Llama model:", error);
+    throw error;
+  }
+}
+
+// Helper: Search OpenSearch index for user query
+async function getSearchResults(userQuery) {
+  try {
+    const response = await client.search({
+      index: process.env.OPENSEARCH_INDEX,
+      body: {
+        query: { match: { contents: userQuery } },
+      },
+    });
+    return response.body.hits.hits;
+  } catch (error) {
+    console.error("Error connecting to OpenSearch:", error);
+    return [];
+  }
+}
+
+// Function: Grade documents for relevance
+async function gradeDocuments(documents, question) {
+  const gradedDocuments = [];
+  console.log("---CHECK DOCUMENT RELEVANCE TO QUESTION---");
+
+  for (const doc of documents) {
+    const graderPrompt = `
+      Here is the retrieved document: \n\n ${doc._source.contents} \n\n Here is the user question: \n\n ${question}.
+      Carefully assess whether the document contains relevant information.
+      Return JSON with a single key, binary_score, with value 'yes' or 'no'.
+    `;
+
+    const queryPayload = createQueryPayload(
+      "llama3.2:latest",
+      "You are a grader assessing the relevance of retrieved documents to a user question.",
+      graderPrompt
+    );
+
+    const result = await callLlamaModel(queryPayload);
+
+    if (result?.message?.content?.toLowerCase().includes('"binary_score": "yes"')) {
+      console.log("---GRADE: DOCUMENT RELEVANT---");
+      gradedDocuments.push(doc);
+    } else {
+      console.log("---GRADE: DOCUMENT NOT RELEVANT---");
     }
+  }
+
+  return gradedDocuments;
+}
+
+// Helper: Format documents for Llama model prompt
+function formatDocs(docs) {
+  return docs
+    .map(doc => `title: ${doc._source.title}\ncontent: ${doc._source.contents}\ncontributor: ${doc._source.contributor}`)
+    .join("\n\n");
+}
+
+// Function: Generate an answer using relevant documents
+async function generateAnswer(state) {
+  console.log("---GENERATE---");
+  const { question, documents, loop_step = 0 } = state;
+
+  const docsTxt = formatDocs(documents);
+  const generationPrompt = `User Query: ${question}\nSearch Results:\n${docsTxt}`;
+
+  const llmResponse = await callLlamaModel(
+    createQueryPayload("llama3.2:latest", "You are an assistant summarizing search results.", generationPrompt)
+  );
+
+  return {
+    documents,
+    generation: llmResponse?.message?.content || "No response from LLM.",
+    question,
+    loop_step: loop_step + 1,
+  };
+}
+
+// Function: Grade generation against documents and question
+async function gradeGenerationVsDocumentsAndQuestion(state, showReason = false) {
+  console.log("---CHECK HALLUCINATIONS---");
+  const { question, documents, generation, loop_step = 0 } = state;
+  const maxRetries = state.max_retries || 3;
+
+  // Grade for hallucinations
+  const hallucinationGraderPrompt = `
+    FACTS: \n\n ${formatDocs(documents)} \n\n STUDENT ANSWER: ${generation}.
+    Ensure the answer is grounded in the facts and does not contain hallucinated information.
+    Return JSON with keys binary_score ('yes' or 'no') and explanation.
+  `;
+  const hallucinationResponse = await callLlamaModel(
+    createQueryPayload("llama3.2:latest", "You are a teacher grading a student's answer for factual accuracy.", hallucinationGraderPrompt)
+  );
+
+  if (showReason) console.log(hallucinationResponse?.message?.content);
+  const hallucinationGrade = hallucinationResponse?.message?.content?.toLowerCase().includes('"binary_score": "yes"') ? "yes" : "no";
+
+  if (hallucinationGrade === "yes") {
+    console.log("---DECISION: GENERATION IS GROUNDED IN DOCUMENTS---");
+
+    // Grade for answering the question
+    const answerGraderPrompt = `
+      QUESTION: \n\n ${question} \n\n STUDENT ANSWER: ${generation}.
+      Ensure the answer addresses the question effectively.
+      Return JSON with keys binary_score ('yes' or 'no') and explanation.
+    `;
+    const answerResponse = await callLlamaModel(
+      createQueryPayload("llama3.2:latest", "You are a teacher grading a student's answer for relevance.", answerGraderPrompt)
+    );
+
+    if (showReason) console.log(answerResponse?.message?.content);
+    const answerGrade = answerResponse?.message?.content?.toLowerCase().includes('"binary_score": "yes"') ? "yes" : "no";
+
+    if (answerGrade === "yes") {
+      console.log("---DECISION: GENERATION ADDRESSES QUESTION---");
+      return "useful";
+    } else if (loop_step < maxRetries) {
+      console.log("---DECISION: GENERATION DOES NOT ADDRESS QUESTION---");
+      return "not useful";
+    }
+  } else if (loop_step < maxRetries) {
+    console.log("---DECISION: GENERATION IS NOT GROUNDED IN DOCUMENTS---");
+    return "not supported";
+  }
+  console.log("---DECISION: MAX RETRIES REACHED---");
+  return "max retries";
+}
+
+// Function: Handle a user query
+async function handleUserQuery(userQuery) {
+  console.log("Fetching search results...");
+  const searchResults = await getSearchResults(userQuery);
+
+  if (!searchResults || searchResults.length === 0) {
+    console.log("No search results found.");
+    return { error: "No search results found." };
+  }
+
+  console.log("Grading documents...");
+  const relevantDocuments = await gradeDocuments(searchResults, userQuery);
+
+  if (relevantDocuments.length === 0) {
+    console.log("No relevant documents found.");
+    return { error: "No relevant documents found." };
+  }
+
+  let state = { question: userQuery, documents: relevantDocuments };
+  let generationState = await generateAnswer(state);
+
+  console.log("\nGenerated Answer:", generationState.generation);
+
+  let verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
+  while (verdict !== "useful") {
+    if (verdict === "not supported" || verdict === "not useful") {
+      generationState = await generateAnswer(generationState);
+      verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
+    } else if (verdict === "max retries") {
+      console.log("Unable to get a satisfactory answer.");
+      return { error: "Max retries reached. Unable to generate a satisfactory answer." };
+    }
+  }
+
+  return {
+    answer: generationState.generation,
+    message_id: uuidv4(),
+    elements: relevantDocuments.map(doc => ({
+      _id: doc._id,
+      _score: doc._score,
+      contributor: doc._source.contributor,
+      contents: doc._source.contents,
+      "resource-type": doc._source["resource-type"],
+      title: doc._source.title,
+      authors: doc._source.authors || [],
+      tags: doc._source.tags || [],
+      "thumbnail-image": doc._source["thumbnail-image"],
+    })),
+    count: relevantDocuments.length,
+  };
 }
 
 /**
@@ -173,61 +338,22 @@ router.post('/llm/memory-id', cors(), async (req, res) => {
  */
 router.options('/llm/search', cors());
 router.post('/llm/search', cors(), async (req, res) => {
-    const { userQuery, memoryId } = req.body;
+  const { userQuery } = req.body;
 
-    try {
-        let finalMemoryId = memoryId;
+  if (!userQuery) {
+    return res.status(400).json({ error: "Missing userQuery in request body." });
+  }
 
-        // If no memoryId is provided, create a new memory
-        if (!finalMemoryId) {
-            console.log("No memoryId provided, creating a new memory...");
-            finalMemoryId = await createMemory(userQuery);
-        }
-
-        console.log(`Searching "${userQuery}" with memoryID: ${finalMemoryId}`); 
-
-        // Perform the search with the provided or newly created memory ID
-        const searchResponse = await performSearchWithMemory(userQuery, finalMemoryId);
-        // handle no hits
-        const scoreThreshold = 5.0;  // Adjust the threshold as needed
-        const hits = searchResponse.hits.hits
-            .filter(hit => hit._score >= scoreThreshold)  // Filter by score
-            .map(hit => ({
-                _id: hit._id,  // Include the _id field
-                _score: hit._score, // Include score for relevance information
-                ...hit._source // Include the _source fields
-            }));
-	    console.log(hits)
-        //const hits = searchResponse.hits.hits || [];
-        //const totalHits = searchResponse.hits.total.value || 0;
-
-        // Limit the number of elements to at most 10 and handle null fields
-        const elements = hits.slice(0, 10).map(hit => {
-            const source = hit;
-            return {
-                ...source,
-                tags: source.tags === undefined || source.tags === null ? null : source.tags, // Set to null if undefined or null
-                authors: source.authors || null,  // Similar handling for other fields
-                contents: source.contents || null,  // Ensuring null for missing contents
-                title: source.title || null,  // Ensuring null for missing title
-                contributor: source.contributor || null  // Ensuring null for missing contributor
-            };
-        });
-
-        // Format the response
-        const formattedResponse = {
-            answer: searchResponse.ext.retrieval_augmented_generation?.answer || null, // Handle missing answer gracefully
-            message_id: searchResponse.ext.retrieval_augmented_generation?.message_id || null, // Handle missing message ID gracefully
-            elements: elements.length > 0 ? elements : [], // Return empty array if no elements
-            count: elements.length // Return the total number of hits
-        };
-
-        // Send the formatted response to the user
-        res.json(formattedResponse);
-    } catch (error) {
-        console.error('Error performing conversational search:', error);
-        res.status(500).json({ error: 'Error performing conversational search' });
+  try {
+    const response = await handleUserQuery(userQuery);
+    if (response.error) {
+      return res.status(500).json({ error: response.error });
     }
+    res.status(200).json(response);
+  } catch (error) {
+    console.error("Error performing conversational search:", error);
+    res.status(500).json({ error: "Error performing conversational search." });
+  }
 });
 
 export default router;
