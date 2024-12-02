@@ -8,6 +8,7 @@ import fs from 'fs';
 import { exec } from 'child_process';
 import fetch from 'node-fetch';
 import path from 'path';
+import axios from 'axios';
 // local imports
 import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
@@ -94,6 +95,97 @@ async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
 }
 
 /****************************************************************************/
+
+/**
+ * @swagger
+ * /api/elements/bookmark:
+ *   get:
+ *     summary: Get all bookmarked elements by user with userId
+ *     tags: ['elements']
+ *     parameters:
+ *       - in: query
+ *         name: user-id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: sort-by
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [click_count, creation_time, title]
+ *         description: The field to sort the elements by
+ *       - in: query
+ *         name: order
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *         description: Sort order of returned elements
+ *       - in: query
+ *         name: from
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The offset value for pagination
+ *       - in: query
+ *         name: size
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The limit value for pagination
+ *     responses:
+ *       200:
+ *         description: Bookmarked elements by user found
+ *       404:
+ *         description: No bookmarked elements found
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/api/elements/bookmark', jwtCorsMiddleware);
+router.get('/api/elements/bookmark', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+    //const user_id = decodeURIComponent(req.params['userId']);
+    const { 'user-id': user_id,
+	    'sort-by': sort_by,
+	    'order': order,
+	    'from': from,
+	    'size': size,
+	    'count-only':count_only} = req.query;
+
+    try {
+	let total_count = 0;
+	let bookmarked_elements = [];
+	// get all public bookmarked elements for user
+	const public_elements = await n4j.getElementsBookmarkedByContributor(user_id,
+									      from,
+									      size,
+									      sort_by,
+									      order,
+									      false
+									     );
+	total_count += public_elements['total-count'];
+	// get all private bookmarked elements for user
+	const private_elements = await n4j.getElementsBookmarkedByContributor(user_id,
+									       from,
+									       size,
+									       sort_by,
+									       order,
+									       true
+									      );
+	total_count += private_elements['total-count'];
+	bookmarked_elements = [...public_elements['elements'],
+			       ...private_elements['elements']];
+	if (total_count == 0){
+	    return res.status(404).json({message: 'No bookmarked elements found'});
+	}
+
+	res.status(200).json({elements:bookmarked_elements,
+			      'total-count': total_count});
+    } catch (error) {
+	console.error('Error getting bookmarked elememts:', error);
+	res.status(500).json({ message: 'Error getting bookmarked elememts' });
+    }
+});
 
 /**
  * @swagger
@@ -248,6 +340,12 @@ router.get('/api/elements/:id', cors(), async (req, res) => {
 
     const element_id = decodeURIComponent(req.params['id']);
     try {
+	// to avoid direct access to private elements via URL
+	const element_visibility = await n4j.getElementVisibilityForID(element_id);
+	if (element_visibility === utils.Visibility.PRIVATE){
+	    res.status(404).json({ message: 'Element not found' });
+	    return;
+	}
 	const element = await n4j.getElementByID(element_id);
 	if (JSON.stringify(element) === '{}'){
 	    res.status(404).json({ message: 'Element not found' });
@@ -430,8 +528,9 @@ router.get('/api/elements', cors(), async (req, res) => {
 									  size,
 									  sort_by,
 									  order);
-			total_count += await n4j.getElementsCountByContributor(val);
-			resources.push(...resource);
+			//total_count += await n4j.getElementsCountByContributor(val);
+			total_count += resource['total-count'];
+			resources.push(...resource['elements']);
 		    }
 		    res.json({elements:resources, 'total-count': total_count});
 		    return;
@@ -465,10 +564,10 @@ router.get('/api/elements', cors(), async (req, res) => {
 		let total_count = 0;
 		for (let val of element_type){
 		    let resource = await n4j.getElementsByType(val, from, size, sort_by, order);
-		    if (resource.length > 0){
-			resources.push(...resource);
+		    if (resource['total-count'] > 0){
+			resources.push(...resource['elements']);
 		    }
-		    total_count += await n4j.getElementsCountByType(val);
+		    total_count += resource['total-count'];
 		}
 		res.json({elements:resources, 'total-count': total_count});
 		return;
@@ -590,6 +689,21 @@ router.post('/api/elements',
                 contributor_name = `${contributor['first_name']} ${contributor['last_name']}`;
             }
             os_element['contributor'] = contributor_name;
+            try {
+		  // Get embedding from Flask endpoint
+		  const flaskUrl = process.env.FLASK_EMBEDDING_URL; // URL of the Flask endpoint from .env
+		  const embeddingResponse = await axios.post(`${flaskUrl}/get_embedding`, {
+		    text: resource['contents']
+		  });
+
+		  if (embeddingResponse && embeddingResponse.data && embeddingResponse.data.embedding) {
+		    os_element['contents-embedding'] = embeddingResponse.data.embedding;
+		  } else {
+		    console.log('No embedding returned for the content');
+		  }
+		} catch (embeddingError) {
+		  console.error('Error fetching embedding:', embeddingError.message);
+		}
 
             console.log('Indexing element: ' + os_element);
             const response = await os.client.index({
@@ -993,14 +1107,13 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
 					 nodes:[],
 					 neighbors:[] });
 	}
-	console.log('Number of connected nodes: ' + response['nodes'].length);
-	console.log('Number of relations: ' + response['neighbors'].length);
+	//console.log('Number of connected nodes: ' + response['nodes'].length);
+	//console.log('Number of relations: ' + response['neighbors'].length);
 	res.status(200).json(response);
     } catch (error) {
 	console.error('Error getting related elememts:', error);
 	res.status(500).json({ message: 'Error getting related elememts' });
     }
 });
-
 
 export default router;
