@@ -106,12 +106,12 @@ async function getSemanticSearchResults(userQuery) {
     const response = await client.search({
       index: process.env.OPENSEARCH_INDEX,
       body: {
-        size: 5,  // Number of nearest neighbors to return
+        size: 15,  // Number of nearest neighbors to return
         query: {
           knn: {
             'contents-embedding': {
               vector: embedding,
-              k: 5 // How many documents OpenSearch searches for when performing the k-NN calculation
+              k: 15 // How many documents OpenSearch searches for when performing the k-NN calculation
             }
           }
         }
@@ -236,9 +236,9 @@ async function gradeGenerationVsDocumentsAndQuestion(state, showReason = false) 
 }
 
 // Function: Handle a user query
-async function handleUserQuery(userQuery) {
+async function handleUserQuery(userQuery, checkGenerationQuality) {
   console.log("Fetching search results...");
-  const searchResults = await getSearchResults(userQuery);
+  const searchResults = await getSemanticSearchResults(userQuery);
 
   if (!searchResults || searchResults.length === 0) {
     console.log("No search results found.");
@@ -258,14 +258,16 @@ async function handleUserQuery(userQuery) {
 
   console.log("\nGenerated Answer:", generationState.generation);
 
-  let verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
-  while (verdict !== "useful") {
-    if (verdict === "not supported" || verdict === "not useful") {
-      generationState = await generateAnswer(generationState);
-      verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
-    } else if (verdict === "max retries") {
-      console.log("Unable to get a satisfactory answer.");
-      return { error: "Max retries reached. Unable to generate a satisfactory answer." };
+  if(checkGenerationQuality){
+    let verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
+    while (verdict !== "useful") {
+      if (verdict === "not supported" || verdict === "not useful") {
+        generationState = await generateAnswer(generationState);
+        verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
+      } else if (verdict === "max retries") {
+        console.log("Unable to get a satisfactory answer.");
+        return { error: "Max retries reached. Unable to generate a satisfactory answer." };
+      }
     }
   }
 
@@ -403,7 +405,7 @@ router.post('/llm/search', cors(), async (req, res) => {
   }
 
   try {
-    const response = await handleUserQuery(userQuery);
+    const response = await handleUserQuery(userQuery, false);
     if (response.error) {
       return res.status(500).json({ error: response.error });
     }
