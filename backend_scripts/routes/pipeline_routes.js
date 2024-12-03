@@ -69,6 +69,63 @@ async function getSearchResults(userQuery) {
   }
 }
 
+// Function to get the embedding for a user query from Flask server
+async function getEmbeddingFromFlask(userQuery) {
+  try {
+    const response = await fetch('http://127.0.0.1:5000/get_embedding', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: userQuery }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error from Flask server: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.embedding;
+  } catch (error) {
+    console.error("Error getting embedding from Flask server:", error);
+    return null;
+  }
+}
+
+// Function to get search results from OpenSearch
+async function getSemanticSearchResults(userQuery) {
+  try {
+    // Step 1: Get the embedding from Flask for the user's query
+    const embedding = await getEmbeddingFromFlask(userQuery);
+    if (!embedding) {
+      return [];
+    }
+
+    // Step 2: Perform a k-NN search in OpenSearch with the embedding
+    const response = await client.search({
+      index: process.env.OPENSEARCH_INDEX,
+      body: {
+        size: 5,  // Number of nearest neighbors to return
+        query: {
+          knn: {
+            'contents-embedding': {
+              vector: embedding,
+              k: 5 // How many documents OpenSearch searches for when performing the k-NN calculation
+            }
+          }
+        }
+      }
+    });
+
+    // Step 3: Return the search results
+    return response.body.hits.hits;
+  } catch (error) {
+    console.error("Error connecting to OpenSearch:", error);
+    return [];
+  }
+}
+
+
 // Function: Grade documents for relevance
 async function gradeDocuments(documents, question) {
   const gradedDocuments = [];
