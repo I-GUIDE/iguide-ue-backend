@@ -72,7 +72,8 @@ async function getSearchResults(userQuery) {
 // Function to get the embedding for a user query from Flask server
 async function getEmbeddingFromFlask(userQuery) {
   try {
-    const response = await fetch('http://127.0.0.1:5000/get_embedding', {
+    const flaskUrl = process.env.FLASK_EMBEDDING_URL; // URL of the Flask endpoint from .env
+    const response = await fetch(`${flaskUrl}/get_embedding`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
