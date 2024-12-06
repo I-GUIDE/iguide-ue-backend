@@ -240,17 +240,20 @@ async function handleUserQuery(userQuery, checkGenerationQuality) {
   console.log("Fetching search results...");
   const searchResults = await getSemanticSearchResults(userQuery);
 
-  if (!searchResults || searchResults.length === 0) {
-    console.log("No search results found.");
-    return { error: "No search results found." };
+  let relevantDocuments = [];
+  if (searchResults && searchResults.length > 0) {
+    console.log("Grading documents...");
+    relevantDocuments = await gradeDocuments(searchResults, userQuery);
   }
-
-  console.log("Grading documents...");
-  const relevantDocuments = await gradeDocuments(searchResults, userQuery);
 
   if (relevantDocuments.length === 0) {
     console.log("No relevant documents found.");
-    return { error: "No relevant documents found." };
+    return {
+      answer: "Sorry, I couldn't find any relevant documents for your query.",
+      message_id: uuidv4(),
+      elements: [],
+      count: 0,
+    };
   }
 
   let state = { question: userQuery, documents: relevantDocuments };
@@ -258,7 +261,7 @@ async function handleUserQuery(userQuery, checkGenerationQuality) {
 
   console.log("\nGenerated Answer:", generationState.generation);
 
-  if(checkGenerationQuality){
+  if (checkGenerationQuality) {
     let verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
     while (verdict !== "useful") {
       if (verdict === "not supported" || verdict === "not useful") {
@@ -266,13 +269,18 @@ async function handleUserQuery(userQuery, checkGenerationQuality) {
         verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
       } else if (verdict === "max retries") {
         console.log("Unable to get a satisfactory answer.");
-        return { error: "Max retries reached. Unable to generate a satisfactory answer." };
+        return {
+          answer: "I'm sorry, I couldn't generate a satisfactory answer at the moment. Please try rephrasing your question.",
+          message_id: uuidv4(),
+          elements: [],
+          count: 0,
+        };
       }
     }
   }
 
   return {
-    answer: generationState.generation,
+    answer: generationState.generation || "I'm sorry, I couldn't generate a satisfactory answer at the moment.",
     message_id: uuidv4(),
     elements: relevantDocuments.map(doc => ({
       _id: doc._id,
@@ -288,7 +296,6 @@ async function handleUserQuery(userQuery, checkGenerationQuality) {
     count: relevantDocuments.length,
   };
 }
-
 /**
  * @swagger
  * /beta/llm/memory-id:
