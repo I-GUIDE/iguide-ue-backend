@@ -229,8 +229,7 @@ router.get('/api/elements/titles', cors(), async (req, res) => {
         query: {
             bool: {
                 must: [
-                    { term: { 'resource-type': elementType } },
-                    { term: { visibility: 10 } } // Filter for visibility 10
+                    { term: { 'resource-type': elementType } }
                 ]
             }
         },
