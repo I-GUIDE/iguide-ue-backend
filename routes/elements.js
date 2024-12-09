@@ -8,6 +8,7 @@ import fs from 'fs';
 import { exec } from 'child_process';
 import fetch from 'node-fetch';
 import path from 'path';
+import axios from 'axios';
 // local imports
 import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
@@ -220,6 +221,7 @@ router.get('/api/elements/titles', cors(), async (req, res) => {
     }
 
     try {
+        //console.log(os.os_index)
 	// Initial search request with scrolling
 	const initialSearchResponse = await os.client.search({
 	    index: os.os_index,
@@ -687,6 +689,21 @@ router.post('/api/elements',
                 contributor_name = `${contributor['first_name']} ${contributor['last_name']}`;
             }
             os_element['contributor'] = contributor_name;
+            try {
+		  // Get embedding from Flask endpoint
+		  const flaskUrl = process.env.FLASK_EMBEDDING_URL; // URL of the Flask endpoint from .env
+		  const embeddingResponse = await axios.post(`${flaskUrl}/get_embedding`, {
+		    text: resource['contents']
+		  });
+
+		  if (embeddingResponse && embeddingResponse.data && embeddingResponse.data.embedding) {
+		    os_element['contents-embedding'] = embeddingResponse.data.embedding;
+		  } else {
+		    console.log('No embedding returned for the content');
+		  }
+		} catch (embeddingError) {
+		  console.error('Error fetching embedding:', embeddingError.message);
+		}
 
             console.log('Indexing element: ' + os_element);
             const response = await os.client.index({
@@ -816,30 +833,85 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 	    // elements should ONLY be in OpenSearch if they are public
 	    const visibility = utils.parseVisibility(updates['visibility']);
 	    if (visibility === utils.Visibility.PUBLIC) {
-		// Update in OpenSearch
-		const response = await os.client.update({
-		    id: id,
-		    index: os.os_index,
-		    body: {
-			doc: {
-			    'title': updates['title'],
-			    'contents': updates['contents'],
-			    'authors': updates['authors'],
-			    'tags': updates['tags'],
-			    'thumbnail-image': updates['thumbnail-image']['original'],
-			    // spatial-temporal properties
-			    'spatial-coverage': updates['spatial-coverage'],
-			    'spatial-geometry': updates['spatial-geometry'],
-			    'spatial-bounding-box': updates['spatial-bounding-box'],
-			    'spatial-centroid': updates['spatial-centroid'],
-			    'spatial-georeferenced': updates['spatial-georeferenced'],
-			    'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
-			    'spatial-index-year': updates['spatial-index-year']
-			    // type and contributor should never be updated
-			}
-		    },
-		    refresh: true,
-		});
+			// Update in OpenSearch
+			try {
+				// Get embedding from Flask endpoint
+				const flaskUrl = process.env.FLASK_EMBEDDING_URL; // URL of the Flask endpoint from .env
+				let newEmbedding;
+			  
+				// Fetch the new embedding from the Flask API
+				const embeddingResponse = await axios.post(`${flaskUrl}/get_embedding`, {
+				  text: updates['contents']  // Use the updated content to generate a new embedding
+				});
+			  
+				if (embeddingResponse && embeddingResponse.data && embeddingResponse.data.embedding) {
+				  newEmbedding = embeddingResponse.data.embedding;
+				} else {
+				  console.log('No embedding returned for the content');
+				}
+				
+				// Proceed with the OpenSearch update only if newEmbedding is available
+				if (newEmbedding) {
+				  const response = await os.client.update({
+					id: id,
+					index: os.os_index,
+					body: {
+					  doc: {
+						'title': updates['title'],
+						'contents': updates['contents'],
+						// Update the embedding field
+						'contents-embedding': newEmbedding,
+						'authors': updates['authors'],
+						'tags': updates['tags'],
+						'thumbnail-image': updates['thumbnail-image']['original'],
+						// Spatial-temporal properties
+						'spatial-coverage': updates['spatial-coverage'],
+						'spatial-geometry': updates['spatial-geometry'],
+						'spatial-bounding-box': updates['spatial-bounding-box'],
+						'spatial-centroid': updates['spatial-centroid'],
+						'spatial-georeferenced': updates['spatial-georeferenced'],
+						'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
+						'spatial-index-year': updates['spatial-index-year']
+						// Type and contributor should never be updated
+					  }
+					},
+					refresh: true,
+				  });
+			  
+				  console.log('Document updated successfully:', response.body);
+				} else {
+				  console.log('Embedding generation failed ' + id);
+				  const response = await os.client.update({
+					id: id,
+					index: os.os_index,
+					body: {
+					  doc: {
+						'title': updates['title'],
+						'contents': updates['contents'],
+						// Update the embedding field
+						'contents-embedding': newEmbedding,
+						'authors': updates['authors'],
+						'tags': updates['tags'],
+						'thumbnail-image': updates['thumbnail-image']['original'],
+						// Spatial-temporal properties
+						'spatial-coverage': updates['spatial-coverage'],
+						'spatial-geometry': updates['spatial-geometry'],
+						'spatial-bounding-box': updates['spatial-bounding-box'],
+						'spatial-centroid': updates['spatial-centroid'],
+						'spatial-georeferenced': updates['spatial-georeferenced'],
+						'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
+						'spatial-index-year': updates['spatial-index-year']
+						// Type and contributor should never be updated
+					  }
+					},
+					refresh: true,
+				  });
+				}
+			  
+			  } catch (embeddingError) {
+				console.error('Error fetching embedding:', embeddingError.message);
+			  }
+			  
 	    } else {
 		// [ToDo] remove element from OpenSearch
 	    }
