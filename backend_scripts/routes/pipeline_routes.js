@@ -124,7 +124,7 @@ async function handleUserQuery(userQuery, checkGenerationQuality) {
   if (checkGenerationQuality) {
     let verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
     while (verdict !== "useful") {
-      if (verdict === "not supported" || verdict === "not useful") {
+      if (verdict === "not useful") {
         generationState = await generateAnswer(generationState);
         verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
       } else if (verdict === "max retries") {
