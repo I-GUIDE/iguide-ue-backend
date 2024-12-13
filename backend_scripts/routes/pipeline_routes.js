@@ -2,6 +2,10 @@ import express from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
+import { getOrCreateMemory, updateMemory, deleteMemory } from './rag_modules/memoryModules';
+import { getSemanticSearchResults } from './rag_modules/searchModule';
+import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_modules/graderModule';
+import { callLlamaModel } from './rag_modules/llmModules';
 
 const router = express.Router();
 
@@ -29,102 +33,7 @@ function createQueryPayload(model, systemMessage, userMessage, stream = false) {
   };
 }
 
-// Helper: Call the Llama model
-async function callLlamaModel(queryPayload) {
-  const llamaApiUrl = process.env.ANVILGPT_URL;
-  const anvilGptApiKey = process.env.ANVILGPT_KEY;
 
-  try {
-    const response = await fetch(llamaApiUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${anvilGptApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(queryPayload),
-    });
-
-    if (response.ok) return await response.json();
-    const errorText = await response.text();
-    throw new Error(`Error: ${response.status}, ${errorText}`);
-  } catch (error) {
-    console.error("Error fetching from Llama model:", error);
-    throw error;
-  }
-}
-
-// Helper: Search OpenSearch index for user query
-async function getSearchResults(userQuery) {
-  try {
-    const response = await client.search({
-      index: process.env.OPENSEARCH_INDEX,
-      body: {
-        query: { match: { contents: userQuery } },
-      },
-    });
-    return response.body.hits.hits;
-  } catch (error) {
-    console.error("Error connecting to OpenSearch:", error);
-    return [];
-  }
-}
-
-// Function to get the embedding for a user query from Flask server
-async function getEmbeddingFromFlask(userQuery) {
-  try {
-    const flaskUrl = process.env.FLASK_EMBEDDING_URL; // URL of the Flask endpoint from .env
-    const response = await fetch(`${flaskUrl}/get_embedding`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text: userQuery }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error from Flask server: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.embedding;
-  } catch (error) {
-    console.error("Error getting embedding from Flask server:", error);
-    return null;
-  }
-}
-
-// Function to get search results from OpenSearch
-async function getSemanticSearchResults(userQuery) {
-  try {
-    // Step 1: Get the embedding from Flask for the user's query
-    const embedding = await getEmbeddingFromFlask(userQuery);
-    if (!embedding) {
-      return [];
-    }
-
-    // Step 2: Perform a k-NN search in OpenSearch with the embedding
-    const response = await client.search({
-      index: process.env.OPENSEARCH_INDEX,
-      body: {
-        size: 15,  // Number of nearest neighbors to return
-        query: {
-          knn: {
-            'contents-embedding': {
-              vector: embedding,
-              k: 15 // How many documents OpenSearch searches for when performing the k-NN calculation
-            }
-          }
-        }
-      }
-    });
-
-    // Step 3: Return the search results
-    return response.body.hits.hits;
-  } catch (error) {
-    console.error("Error connecting to OpenSearch:", error);
-    return [];
-  }
-}
 
 
 // Function: Grade documents for relevance
@@ -185,55 +94,6 @@ async function generateAnswer(state) {
   };
 }
 
-// Function: Grade generation against documents and question
-async function gradeGenerationVsDocumentsAndQuestion(state, showReason = false) {
-  console.log("---CHECK HALLUCINATIONS---");
-  const { question, documents, generation, loop_step = 0 } = state;
-  const maxRetries = state.max_retries || 3;
-
-  // Grade for hallucinations
-  const hallucinationGraderPrompt = `
-    FACTS: \n\n ${formatDocs(documents)} \n\n STUDENT ANSWER: ${generation}.
-    Ensure the answer is grounded in the facts and does not contain hallucinated information.
-    Return JSON with keys binary_score ('yes' or 'no') and explanation.
-  `;
-  const hallucinationResponse = await callLlamaModel(
-    createQueryPayload("llama3.2:latest", "You are a teacher grading a student's answer for factual accuracy.", hallucinationGraderPrompt)
-  );
-
-  if (showReason) console.log(hallucinationResponse?.message?.content);
-  const hallucinationGrade = hallucinationResponse?.message?.content?.toLowerCase().includes('"binary_score": "yes"') ? "yes" : "no";
-
-  if (hallucinationGrade === "yes") {
-    console.log("---DECISION: GENERATION IS GROUNDED IN DOCUMENTS---");
-
-    // Grade for answering the question
-    const answerGraderPrompt = `
-      QUESTION: \n\n ${question} \n\n STUDENT ANSWER: ${generation}.
-      Ensure the answer addresses the question effectively.
-      Return JSON with keys binary_score ('yes' or 'no') and explanation.
-    `;
-    const answerResponse = await callLlamaModel(
-      createQueryPayload("llama3.2:latest", "You are a teacher grading a student's answer for relevance.", answerGraderPrompt)
-    );
-
-    if (showReason) console.log(answerResponse?.message?.content);
-    const answerGrade = answerResponse?.message?.content?.toLowerCase().includes('"binary_score": "yes"') ? "yes" : "no";
-
-    if (answerGrade === "yes") {
-      console.log("---DECISION: GENERATION ADDRESSES QUESTION---");
-      return "useful";
-    } else if (loop_step < maxRetries) {
-      console.log("---DECISION: GENERATION DOES NOT ADDRESS QUESTION---");
-      return "not useful";
-    }
-  } else if (loop_step < maxRetries) {
-    console.log("---DECISION: GENERATION IS NOT GROUNDED IN DOCUMENTS---");
-    return "not supported";
-  }
-  console.log("---DECISION: MAX RETRIES REACHED---");
-  return "max retries";
-}
 
 // Function: Handle a user query
 async function handleUserQuery(userQuery, checkGenerationQuality) {
