@@ -2,10 +2,10 @@ import express from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
-import { getOrCreateMemory, updateMemory, deleteMemory } from './rag_modules/memoryModules';
-import { getSemanticSearchResults } from './rag_modules/searchModule';
-import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_modules/graderModule';
-import { callLlamaModel } from './rag_modules/llmModules';
+import { getOrCreateMemory, updateMemory, deleteMemory } from './rag_modules/memory_modules';
+import { getSemanticSearchResults } from './rag_modules/search_modules';
+import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_modules/grader_modules';
+import { callLlamaModel } from './rag_modules/llm_modules';
 
 const router = express.Router();
 
