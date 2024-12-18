@@ -10,7 +10,7 @@ import * as utils from './utils.js';
 
 // For deployment on JetStream VM
 import dotenv from 'dotenv';
-dotenv.config({path: 'neo4j.env'});
+dotenv.config();
 console.log(process.env.NEO4J_CONNECTION_STRING);
 
 /**
@@ -292,7 +292,7 @@ export async function getElementByID(id, user_id=null, user_role=null){
 
 	return makeFrontendCompatible(ret);
     } catch(err){
-	console.log('Error in query: '+ err);
+	console.log('getElementByID() - Error in query: '+ err);
     }
     finally {await session.close();}
     // something went wrong
@@ -388,42 +388,52 @@ export async function getAllRelatedElements(){
  * @param {Enum}   order Enum for order of sorting the results. Default is DESC
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
-export async function getElementsByType(type, from, size, sort_by=utils.SortBy.TITLE, order="DESC"){
+export async function getElementsByType(type,
+					from,
+					size,
+					sort_by=utils.SortBy.TITLE,
+					order="DESC",
+					count_only=false){
     // Only called to show elements on main page filtered by type
     // Note: Private elements will never show up on main pages even for the owner
     // Owner will be able to access them in his/her own profile
+    const session = driver.session({database: process.env.NEO4J_DB});
+    const tx = await session.beginTransaction();
     try{
 	const node_type = utils.parseElementType(type);
-	const order_by = utils.parseSortBy(sort_by);
+	let query_str = "MATCH (n:" + node_type + ")-[:CONTRIBUTED]-(c) " +
+	    "WHERE n.visibility=$public_visibility ";
 
-	const query_str = "MATCH (n:" + node_type + ")-[:CONTRIBUTED]-(c) " +
-	    "WHERE n.visibility=$public_visibility " +
-	    "RETURN n{.id, .title, .contents, .tags, .thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name)}} " +
+	let count_query_str = query_str;
+	var ret = [];
+	if (!count_only) {
+	    const order_by = utils.parseSortBy(sort_by);
+	    query_str += "RETURN n{.id, .title, .contents, .tags, .thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name)}} " +
 	    "ORDER BY n." + order_by + " " + order + ", n.id " + order + " " +
 	    "SKIP $from " +
 	    "LIMIT $size";
-
-
-
-	const {records, summary} =
-	      await driver.executeQuery(query_str,
-					{from: neo4j.int(from),
-					 size: neo4j.int(size),
-					 public_visibility: utils.Visibility.PUBLIC},
-					{routing: 'READ', database: process.env.NEO4J_DB});
-
-	if (records.length <= 0){
-	    // No elements found
-	    return [];
+	    
+	    const {records, summary} = await tx.run(query_str,
+						    {from: neo4j.int(from),
+						     size: neo4j.int(size),
+						     public_visibility: utils.Visibility.PUBLIC},
+						    {routing: 'READ', database: process.env.NEO4J_DB});
+	    for (let record of records){
+		ret.push(makeFrontendCompatible(record.get('n')));
+	    }
 	}
-	var ret = []
-	for (let record of records){
-	    ret.push(makeFrontendCompatible(record.get('n')));
-	}
-	return ret;
-    } catch(err){console.log('getElementsByType() Error in query: '+ err);}
+
+	count_query_str += "RETURN COUNT(n) AS count";
+	const {records, summary} = await tx.run(count_query_str,
+						{public_visibility: utils.Visibility.PUBLIC},
+						{routing: 'READ', database: process.env.NEO4J_DB});
+
+	await tx.commit();
+	return {elements: ret,
+		'total-count':utils.parse64BitNumber(records[0].get('count'))};
+    } catch(err){console.log('getElementsByType() - Error in query: '+ err);}
     // something went wrong
-    return [];
+    return {elements:[], 'total-count':-1};
 }
 /**
  * Get elements count by given type
@@ -432,55 +442,60 @@ export async function getElementsByType(type, from, size, sort_by=utils.SortBy.T
  */
 export async function getElementsCountByType(type){
 
-    try{
-	const node_type = utils.parseElementType(type);
-	const query_str = "MATCH (n:"+ node_type +") " +
-	      "WHERE n.visibility=$public_visibility " +
-	      "RETURN COUNT(n) AS count";
+    const response = await getElementsByType(type,
+					     null,
+					     null,
+					     null,
+					     null,
+					     true);
+    return response['total-count'];
+    // try{
+    // 	const node_type = utils.parseElementType(type);
+    // 	const query_str = "MATCH (n:"+ node_type +") " +
+    // 	      "WHERE n.visibility=$public_visibility " +
+    // 	      "RETURN COUNT(n) AS count";
 
-	const {records, summary} =
-	      await driver.executeQuery(query_str,
-					{public_visibility: utils.Visibility.PUBLIC},
-					{routing: 'READ', database: process.env.NEO4J_DB});
-	if (records.length <= 0){
-	    // Error running query
-	    return -1;
-	}
-	return utils.parse64BitNumber(records[0].get('count'));
-    } catch(err){console.log('getElementsCountByType() Error in query: '+ err);}
-    // something went wrong
-    return -1;
+    // 	const {records, summary} =
+    // 	      await driver.executeQuery(query_str,
+    // 					{public_visibility: utils.Visibility.PUBLIC},
+    // 					{routing: 'READ', database: process.env.NEO4J_DB});
+    // 	if (records.length <= 0){
+    // 	    // Error running query
+    // 	    return -1;
+    // 	}
+    // 	return utils.parse64BitNumber(records[0].get('count'));
+    // } catch(err){console.log('getElementsCountByType() - Error in query: '+ err);}
+    // // something went wrong
+    // return -1;
 }
+
 /**
- * Get elements by contributor
- * @param {string} id ID of the contributor
- * @param {string} user_id ID of logged-in user
- * @param {int}    from For pagintion, get elements from this number
- * @param {int}    size For pagintion, get this number of elements
- * @param {Enum}   sort_by Enum for sorting the results. Default is by title
- * @param {Enum}   order Enum for order of sorting the results. Default is DESC
+ * Get elements bookmarked by contributor (including those from other contributors)
+ * @param {string}  id ID of the contributor
+ * @param {string}  user_id ID of logged-in user
+ * @param {int}     from For pagintion, get elements from this number
+ * @param {int}     size For pagintion, get this number of elements
+ * @param {Enum}    sort_by Enum for sorting the results. Default is by title
+ * @param {Enum}    order Enum for order of sorting the results. Default is DESC
+ * @param {boolean} private_only Only return private elements contributed by the user
+ * @param {boolean} count_only Only return elements count contributed by the user
  * @return {Object} Map of object with given ID. Empty map if ID not found or error
  */
-export async function getElementsByContributor(id,
-					from,
-					size,
-					sort_by=utils.SortBy.TITLE,
-					order="DESC",
-				       	private_only=false){
-
-    // There are two cases where this function is called
-    // (1) For showing up elements on user profile page. This should return all public and private
-    // (2) A user clicks on another user's profile. This should only return public elements
-
+export async function getElementsBookmarkedByContributor(id,
+							 from,
+							 size,
+							 sort_by=utils.SortBy.TITLE,
+							 order="DESC",
+							 private_only=false,
+							 count_only=false
+				       			){
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
-
+    
     try{
-	const order_by = utils.parseSortBy(sort_by);
-	let query_params = {contrib_id: id, from: neo4j.int(from), size: neo4j.int(size)};
-
-	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r) " +
-	    "WHERE (c.id=$contrib_id OR $contrib_id IN c.openid) ";
+	let query_params = {contrib_id: id};
+	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r)-[:BOOKMARKED]-(u:Contributor) " +
+	    "WHERE (u.id=$contrib_id OR $contrib_id IN u.openid) ";
 
 	if (private_only){
 	    query_str += "AND r.visibility=$visibility ";
@@ -491,38 +506,71 @@ export async function getElementsByContributor(id,
 	    query_params['visibility'] = utils.Visibility.PUBLIC;
 	}
 
-	query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name) }} AS element " +
-	      "ORDER BY r." + order_by + " " + order + " " +
-	      "SKIP $from " +
-	      "LIMIT $size";
+	let count_query_str = query_str;
+	var ret = [];
+	if (!count_only) {
+	    // add paginated query to get elements with limit to the transaction
+	    const order_by = utils.parseSortBy(sort_by);
+	    query_params['from'] = neo4j.int(from);
+	    query_params['size'] = neo4j.int(size);
 
-	const {records, summary} = await tx.run(query_str,
+	    query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name) }} AS element " +
+		"ORDER BY r." + order_by + " " + order + " " +
+		"SKIP $from " +
+		"LIMIT $size";
+
+	    const {records, summary} = await tx.run(query_str,
+						    query_params,
+						    {routing: 'READ',
+						     database: process.env.NEO4J_DB}
+						   );
+	    for (let record of records){
+		ret.push(makeFrontendCompatible(record.get('element')));
+	    }
+	}
+
+	count_query_str += "RETURN COUNT(r) AS count";
+	const {records, summary} = await tx.run(count_query_str,
 						query_params,
 						{routing: 'READ', database: process.env.NEO4J_DB});
+
 	await tx.commit();
-	if (records.length <= 0){
-	    // No elements found by contributor
-	    return [];
-	}
-	var ret = []
-	for (let record of records){
-	    ret.push(makeFrontendCompatible(record.get('element')));
-	}
-	return ret;
-    } catch(err){console.log('getElementsByContributor() Error in query: '+ err);}
+	return {elements: ret,
+		'total-count':utils.parse64BitNumber(records[0].get('count'))};
+    } catch(err){console.log('getElementsBookmarkedByContributor() - Error in query: '+ err);}
     finally {await session.close();}
     // something went wrong
-    return [];
+    return {elements:[], 'total-count':-1};
 }
+
 /**
- * Get elements count by contributor
- * @param {string} id ID of the contributor
- * @param {string} user_id ID of logged-in user
- * @return {int} Count
+ * Get elements by contributor
+ * @param {string}  id ID of the contributor
+ * @param {string}  user_id ID of logged-in user
+ * @param {int}     from For pagintion, get elements from this number
+ * @param {int}     size For pagintion, get this number of elements
+ * @param {Enum}    sort_by Enum for sorting the results. Default is by title
+ * @param {Enum}    order Enum for order of sorting the results. Default is DESC
+ * @param {boolean} private_only Only return private elements contributed by the user
+ * @param {boolean} count_only Only return elements count contributed by the user
+ * @return {Object} List of element objects contributed by the contributor with given ID.
  */
-export async function getElementsCountByContributor(id, private_only=false){
+export async function getElementsByContributor(id,
+					       from,
+					       size,
+					       sort_by=utils.SortBy.TITLE,
+					       order="DESC",
+					       private_only=false,
+					       count_only=false
+				       	      ){
+
+    // There are two cases where this function is called
+    // (1) For showing up elements on user profile page. This should return all public and private
+    // (2) A user clicks on another user's profile. This should only return public elements
+
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
+
     try{
 	let query_params = {contrib_id: id};
 
@@ -538,22 +586,58 @@ export async function getElementsCountByContributor(id, private_only=false){
 	    query_params['visibility'] = utils.Visibility.PUBLIC;
 	}
 
-	query_str += "RETURN COUNT(r) AS count";
+	let count_query_str = query_str;
+	var ret = [];
+	if (!count_only) {
+	    // add paginated query to get elements with limit to the transaction
+	    const order_by = utils.parseSortBy(sort_by);
+	    query_params['from'] = neo4j.int(from);
+	    query_params['size'] = neo4j.int(size);
 
-	const {records, summary} =
-	      await tx.run(query_str,
-			   query_params,
-			   {routing: 'READ', database: process.env.NEO4J_DB});
-	await tx.commit();
-	if (records.length <= 0){
-	    // Error running query
-	    return -1;
+	    query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name) }} AS element " +
+		"ORDER BY r." + order_by + " " + order + " " +
+		"SKIP $from " +
+		"LIMIT $size";
+
+	    const {records, summary} = await tx.run(query_str,
+						    query_params,
+						    {routing: 'READ',
+						     database: process.env.NEO4J_DB}
+						   );
+	    for (let record of records){
+		ret.push(makeFrontendCompatible(record.get('element')));
+	    }
 	}
-	return utils.parse64BitNumber(records[0].get('count'));
-    } catch(err){console.log('getElementsCountByContributor() Error in query: '+ err);}
+
+	count_query_str += "RETURN COUNT(r) AS count";
+	const {records, summary} = await tx.run(count_query_str,
+						query_params,
+						{routing: 'READ', database: process.env.NEO4J_DB});
+
+	await tx.commit();
+	return {elements: ret,
+		'total-count':utils.parse64BitNumber(records[0].get('count'))};
+    } catch(err){console.log('getElementsByContributor() - Error in query: '+ err);}
     finally {await session.close();}
     // something went wrong
-    return -1;
+    return {elements:[], 'total-count':-1};
+}
+/**
+ * Get elements count by contributor
+ * @param {string} id ID of the contributor
+ * @param {string} user_id ID of logged-in user
+ * @return {int} Count
+ */
+export async function getElementsCountByContributor(id, private_only=false){
+    const response = await getElementsByContributor(id,
+						    undefined,
+						    undefined,
+						    undefined,
+						    undefined,
+						    private_only,
+						    true
+						   );
+    return response['total-count'];
 }
 /**
  * Get elements by tag
@@ -591,7 +675,7 @@ export async function getElementsByTag(tag, from, size, sort_by=utils.SortBy.TIT
 	    ret.push(makeFrontendCompatible(record['_fields'][0]));
 	}
 	return ret;
-    } catch(err){console.log('getElementsByTag() Error in query: '+ err);}
+    } catch(err){console.log('getElementsByTag() - Error in query: '+ err);}
     // something went wrong
     return [];
 }
@@ -617,7 +701,7 @@ export async function getElementsCountByTag(tag){
 	}
 	var ret = records[0]['_fields'][0]['low'];
 	return ret;
-    } catch(err){console.log('getElementsCountByTag() Error in query: '+ err);}
+    } catch(err){console.log('getElementsCountByTag() - Error in query: '+ err);}
     // something went wrong
     return -1;
 }
@@ -664,7 +748,7 @@ export async function getFeaturedElements(){
 	// }
 	// return ret;
 	return records[0]['_fields'][0];
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getFeaturedElements() - Error in query: '+ err);}
     // something went wrong
     return [];
 }
@@ -716,7 +800,7 @@ export async function getFeaturedElementsByType(type, limit){
 	    ret.push(makeFrontendCompatible(record.get('n')));
 	}
 	return {elements: ret};
-    } catch(err){console.log('getFeaturedElementsByType() Error in query: '+ err);}
+    } catch(err){console.log('getFeaturedElementsByType() - Error in query: '+ err);}
     // something went wrong
     return [];
 }
@@ -737,7 +821,7 @@ export async function setElementFeaturedForID(id){
 	if (summary.counters.updates()['propertiesSet'] >= 1){
 	    return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('setElementFeaturedForID() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -769,7 +853,7 @@ export async function checkDuplicatesForField(field_name, value){
 	}
 	// no duplicates found
 	return {response: false, element_id: null};
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('checkDuplicatesForField() - Error in query: '+ err);}
     // something went wrong
     return {response: false, element_id: null};
 }
@@ -825,7 +909,7 @@ export async function updateElement(id, element){
 
 	await tx.commit();
 	return ret;
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('updateElement() - Error in query: '+ err);}
     finally {await session.close();}
     // something went wrong
     return false;
@@ -871,7 +955,7 @@ export async function generateQueryStringForRelatedElements(related_elements){
     return {query_match:query_match, query_merge:query_merge, query_params:query_params}
 }
 
-export async function elementToNode(element, generate_id=true){
+async function elementToNode(element, generate_id=true){
     // separate common and specific element properties
     let{metadata:_,
 	'thumbnail-image': thumbnail,
@@ -1013,7 +1097,7 @@ export async function deleteElementByID(id){
 	if (summary.counters.updates()['nodesDeleted'] == 1){
 	    return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('deleteElementByID() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1028,7 +1112,7 @@ export async function setElementVisibilityForID(id, visibility){
     const query_str = "MATCH (n{id:$id_param}) " +
 	  "SET n.visibility=$visibility";
 
-    console.log(visibility);
+    //console.log(visibility);
 
     try {
 	const {_, summary} =
@@ -1038,7 +1122,7 @@ export async function setElementVisibilityForID(id, visibility){
 	if (summary.counters.updates()['propertiesSet'] == 1){
 	    return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('setElementVisibilityForID() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1063,10 +1147,12 @@ export async function getElementVisibilityForID(id){
 	}
 	//const visibility = parseVisibility(parse64BitNumber(records[0]['_fields'][0]));
 	return records[0].get('visibility');
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getElementVisibilityForID() - Error in query: '+ err);}
     // something went wrong
     return -1;
 }
+
+
 /****************************************************************************
  * Contributor/User Functions
  ****************************************************************************/
@@ -1102,7 +1188,7 @@ export async function registerContributor(contributor){
 	if (summary.counters.updates()['nodesCreated'] == 1){
 	    return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('registerContributor() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1137,7 +1223,7 @@ export async function updateContributor(id, contributor_attributes){
 	if (summary.counters.updates()['propertiesSet'] >= 1){
 	    return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('updateContributor() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1176,7 +1262,7 @@ export async function setContributorAvatar(id, avatar_url){
 	}
 
 	await tx.commit();
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('setContributorAvatar() - Error in query: '+ err);}
     finally {await session.close();}
 
     return {result: ret, old_avatar_url:old_url};
@@ -1206,7 +1292,7 @@ export async function getContributorByID(id){
 	contributor['role'] = utils.parse64BitNumber(contributor['role']);
 
 	return makeFrontendCompatible(contributor);
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getContributorByID() - Error in query: '+ err);}
     // something went wrong
     return {};
 }
@@ -1226,13 +1312,13 @@ export async function checkContributorByID(id){
 					{routing: 'READ', database: process.env.NEO4J_DB});
 	const resp = records[0]['_fields'][0];
 	return resp;
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('checkContributorByID() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
 
 /**
- * Set contrib ID for the element
+ * Get contrib ID for the element
  * @param {string} e_id Element ID
  * @return {Object} Contributors {id, openid}
  */
@@ -1250,7 +1336,94 @@ export async function getContributorIdForElement(e_id){
 	    return {id:null, openid:null};
 	}
 	return records[0]['_fields'][0];
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getContributorIdForElement() - Error in query: '+ err);}
+    // something went wrong
+    return false;
+}
+
+/**
+ * Toggle element bookmark by user
+ * @param {string} contributor_id Looged-in user/contributor ID
+ * @param {string} element_id Element ID
+ * @param {string} element_type If provided will make DB querying more efficient
+ * @param {boolean} bookmark
+ * @return {boolean} true if bookmark status updated, false otherwise
+ */
+export async function toggleElementBookmarkByContributor(contributor_id,
+							 element_id,
+							 element_type,
+							 bookmark){
+    try {
+	let query_str = "MATCH(c:Contributor) " +
+	    "WHERE (c.id=$contrib_id OR $contrib_id IN c.openid) ";
+	if (bookmark === 'true'){
+	    // create a new BOOKMARKED relation between contributor and element
+	    if (element_type){
+		query_str += "MATCH (e:" + element_type + "{id:$elem_id}) ";
+	    }
+	    else {
+		// inefficient query
+		query_str += "MATCH (e{id:$elem_id}) ";
+	    }
+	    query_str += "MERGE (c)-[s:BOOKMARKED]-(e)";
+	    const {_, summary} =
+		  await driver.executeQuery(query_str,
+					    {contrib_id: contributor_id, elem_id: element_id},
+					    {database: process.env.NEO4J_DB});
+	    if (summary.counters.updates()['relationshipsCreated'] == 1){
+		return true;
+	    }
+	} else {
+	    // remove relation between contributor and element
+	    if (element_type) {
+		query_str += "MATCH(c)-[s:BOOKMARKED]-(e:" + element_type +"{id:$elem_id}) ";
+	    } else {
+		// inefficient query
+		console.warn('toggleElementBookmarkByContributor() - Inefficient query');
+		query_str += "MATCH(c)-[s:BOOKMARKED]-(e{id:$elem_id}) ";
+	    }
+	    query_str += "DELETE s";
+	    const {_, summary} =
+		  await driver.executeQuery(query_str,
+					    {contrib_id: contributor_id, elem_id: element_id},
+					    {database: process.env.NEO4J_DB});
+	    if (summary.counters.updates()['relationshipsDeleted'] == 1){
+		return true;
+	    }
+	}
+    } catch(err){console.log('toggleElementBookmarkByContributor() - Error in query: '+ err);}
+    // something went wrong
+    return false;
+}
+
+/**
+ * Get if element bookmarked by contrib
+ * @param {string} contributor_id Looged-in user/contributor ID
+ * @param {string} element_id Element ID
+ * @param {string} element_type If provided will make DB querying more efficient
+ * @return {boolean} true if element bookmarked by user, false otherwise
+ */
+export async function getIfElementBookmarkedByContributor(contributor_id,
+							  element_id,
+							  element_type){
+    try {
+	let query_str = "MATCH(c:Contributor) " +
+	    "WHERE (c.id=$contrib_id OR $contrib_id IN c.openid) ";
+	if (element_type){
+	    query_str += "MATCH (e:" + element_type + "{id:$elem_id}) ";
+	}
+	else {
+	    // inefficient query
+	    console.warn('getIfElementBookmarkedByContributor() - Inefficient query');
+	    query_str += "MATCH (e{id:$elem_id}) ";
+	}
+	query_str += "RETURN EXISTS ((c)-[:BOOKMARKED]-(e)) as status";
+	const {records, _} =
+	      await driver.executeQuery(query_str,
+					{contrib_id: contributor_id, elem_id: element_id},
+					{database: process.env.NEO4J_DB});
+	return records[0].get('status');
+    } catch(err){console.log('getIfElementBookmarkedByContributor() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1278,7 +1451,7 @@ export async function registerDocumentation(documentation){
 	if (summary.counters.updates()['nodesCreated'] == 1){
 	    return {response:true, documentation_id:documentation['id']};
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('registerDocumentation() - Error in query: '+ err);}
     // something went wrong
     return {response:false, documentation_id:''};
 }
@@ -1305,7 +1478,7 @@ export async function getDocumentationByID(id) {
 	}
 	const documentation = records[0]['_fields'][0];
 	return documentation;
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getDocumentationByID() - Error in query: '+ err);}
     // something went wrong
     return {};
 }
@@ -1331,7 +1504,7 @@ export async function getAllDocumentation(from, size) {
 	    ret.push(record['_fields'][0]);
 	}
 	return ret;
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('getAllDocumentation() - Error in query: '+ err);}
     // something went wrong
     return [];
 }
@@ -1363,7 +1536,7 @@ export async function updateDocumentation(id, documentation_attributes) {
 	if (summary.counters.updates()['propertiesSet'] >= 1){
 	    return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('updateDocumentation() - Error in query: '+ err);}
     // something went wrong
     return false;
 }
@@ -1383,7 +1556,7 @@ export async function deleteDocumentationByID(id){
 	if (summary.counters.updates()['nodesDeleted'] == 1){
 	    return true;
 	}
-    } catch(err){console.log('Error in query: '+ err);}
+    } catch(err){console.log('deleteDocumentationByID() - Error in query: '+ err);}
     // something went wrong
     return false;
 }

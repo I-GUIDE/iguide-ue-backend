@@ -3,7 +3,7 @@
 exe=`exec 2>/dev/null; readlink "/proc/$$/exe"`
 case "$exe" in
 */busybox)
-    line=$(ps -a | grep 'node server_neo4j.js')
+    line=$(ps -a | grep 'node server.js')
     set -- junk $line
     shift
     PID=$1
@@ -12,7 +12,7 @@ case "$exe" in
     exit 0
 esac
 
-line=$(ps -aux | grep 'node server_neo4j.js')
+line=$(ps -aux | grep 'node server.js')
 set -- junk $line
 shift
 PID=$2
