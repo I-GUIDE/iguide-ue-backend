@@ -17,7 +17,7 @@ export async function gradeDocuments(documents, question) {
 }
 
 // Function: Grade generation against documents and question
-async function gradeGenerationVsDocumentsAndQuestion(state, showReason = false) {
+export async function gradeGenerationVsDocumentsAndQuestion(state, showReason = false) {
   console.log("---CHECK HALLUCINATIONS---");
   const { question, documents, generation, loop_step = 0 } = state;
   const maxRetries = state.max_retries || 3;
