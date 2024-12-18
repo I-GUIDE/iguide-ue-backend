@@ -1,4 +1,4 @@
-import { callLlamaModel, createQueryPayload } from './llm_modules';
+import { callLlamaModel, createQueryPayload } from './llm_modules.js';
 
 export async function gradeDocuments(documents, question) {
   const gradedDocuments = [];

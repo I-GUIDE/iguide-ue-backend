@@ -2,10 +2,10 @@ import express from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
-import { getOrCreateMemory, updateMemory, deleteMemory } from './rag_modules/memory_modules';
-import { getSemanticSearchResults } from './rag_modules/search_modules';
-import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_modules/grader_modules';
-import { callLlamaModel } from './rag_modules/llm_modules';
+import { getOrCreateMemory, updateMemory, deleteMemory } from './rag_modules/memory_modules.js';
+import { getSemanticSearchResults } from './rag_modules/search_modules.js';
+import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_modules/grader_modules.js';
+import { callLlamaModel } from './rag_modules/llm_modules.js';
 
 const router = express.Router();
 
@@ -37,7 +37,7 @@ function createQueryPayload(model, systemMessage, userMessage, stream = false) {
 
 
 // Function: Grade documents for relevance
-async function gradeDocuments(documents, question) {
+/*async function gradeDocuments(documents, question) {
   const gradedDocuments = [];
   console.log("---CHECK DOCUMENT RELEVANCE TO QUESTION---");
 
@@ -65,7 +65,7 @@ async function gradeDocuments(documents, question) {
   }
 
   return gradedDocuments;
-}
+}*/
 
 // Helper: Format documents for Llama model prompt
 function formatDocs(docs) {
