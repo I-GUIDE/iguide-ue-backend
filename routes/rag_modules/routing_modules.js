@@ -1,4 +1,4 @@
-import { callLlamaModel, createQueryPayload } from './llm_module';
+import { callLlamaModel, createQueryPayload } from './llm_module.js';
 import fs from 'fs';
 import csv from 'csv-parser';
 
