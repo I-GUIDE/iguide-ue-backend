@@ -1027,12 +1027,8 @@ router.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, async (req
  */
 router.options('/api/elements/thumbnail', jwtCorsMiddleware);
 router.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('file'), authenticateJWT, (req, res) => {
-    // if (!req.file) {
-    // 	return res.status(400).json({ message: 'No file uploaded' });
-    // }
-    // // [ToDo] Change filename to user ID
+	// // [ToDo] Change filename to user ID
     // const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${req.file.filename}`;
-
     try {
         const body = JSON.parse(JSON.stringify(req.body));
         const element_id = body.id;
@@ -1042,13 +1038,18 @@ router.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single
             return res.status(400).json({ message: 'Element ID and new thumbnail file are required' });
         }
 
-	const images =
-	      utils.generateMultipleResolutionImagesFor(new_thumbnail_file.filename,
-							thumbnail_dir);
-        res.json({
-            message: 'Thumbnail uploaded successfully',
-            'image-urls': images
+        // Call the image processing function with a callback for error handling
+        utils.generateMultipleResolutionImagesFor(new_thumbnail_file.filename, thumbnail_dir, false, (errorMessage, images) => {
+            if (errorMessage) {
+                return res.status(400).json({ message: errorMessage });
+            }
+
+            res.json({
+                message: 'Thumbnail uploaded successfully',
+                'image-urls': images
+            });
         });
+
     } catch (error) {
         console.error('Error processing image:', error);
         res.status(500).json({ message: 'Error processing image' });
