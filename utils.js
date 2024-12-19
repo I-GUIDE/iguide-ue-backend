@@ -160,8 +160,8 @@ const IMAGE_SIZES = {
  * @returns {Object} {low: {string}, medium: {string}, high: {string}, original: {string}}
  */
 export function generateMultipleResolutionImagesFor(image_file_str,
-						    upload_dir_path=null,
-						    is_avatar=false){
+						    upload_dir_path = null,
+						    is_avatar = false) {
     if (image_file_str === null || image_file_str === '') return null;
     const image_filename = path.basename(image_file_str);
     const filename_without_ext = image_filename.replace(/\.[^/.]+$/, '');
@@ -171,28 +171,39 @@ export function generateMultipleResolutionImagesFor(image_file_str,
     let url_prefix = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads`;
     let size_array = [];
     if (is_avatar) {
-	url_prefix = `${url_prefix}/avatars`;
-	size_array = IMAGE_SIZES.avatar;
+        url_prefix = `${url_prefix}/avatars`;
+        size_array = IMAGE_SIZES.avatar;
     } else {
-	url_prefix = `${url_prefix}/thumbnails`;
-	size_array = IMAGE_SIZES.thumbnail;
+        url_prefix = `${url_prefix}/thumbnails`;
+        size_array = IMAGE_SIZES.thumbnail;
     }
 
     image_urls['original'] = `${url_prefix}/${image_filename}`;
     for (const size of size_array) {
         const resized_filename = `${filename_without_ext}${size.suffix}${file_ext}`;
 
-	if (upload_dir_path) {
-	    sharp(path.join(upload_dir_path, image_filename))
-		.resize(size.width)
-		.toFile(path.join(upload_dir_path, resized_filename));
-	}
+        if (upload_dir_path) {
+            try {
+                sharp(path.join(upload_dir_path, image_filename))
+                    .resize(size.width)
+                    .toFile(path.join(upload_dir_path, resized_filename), (err, info) => {
+                        if (err) {
+                            console.error("Error processing image with sharp:", err);
+                        } else {
+                            console.log("Image resized successfully:", info);
+                        }
+                    });
+            } catch (error) {
+                console.error("Error with Sharp image processing:", error);
+                return { error: 'Unsupported image format or other error' };
+            }
+        }
 
-	image_urls[size.name] = `${url_prefix}/${resized_filename}`;
+        image_urls[size.name] = `${url_prefix}/${resized_filename}`;
     }
-    //console.log(image_urls);
     return image_urls;
 }
+
 
 /**
  * Determing if user with user_id has enough permission to edit element with element_id
