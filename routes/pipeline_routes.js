@@ -6,6 +6,7 @@ import { getOrCreateMemory, updateMemory, deleteMemory } from './rag_modules/mem
 import { getSemanticSearchResults } from './rag_modules/search_modules.js';
 import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_modules/grader_modules.js';
 import { callLlamaModel } from './rag_modules/llm_modules.js';
+import { routeUserQuery } from './rag_modules/routing_modules.js';
 
 const router = express.Router();
 
@@ -98,7 +99,7 @@ async function generateAnswer(state) {
 // Function: Handle a user query
 async function handleUserQuery(userQuery, checkGenerationQuality) {
   console.log("Fetching search results...");
-  const searchResults = await getSemanticSearchResults(userQuery);
+  const searchResults = await routeUserQuery(userQuery);
 
   let relevantDocuments = [];
   if (searchResults && searchResults.length > 0) {

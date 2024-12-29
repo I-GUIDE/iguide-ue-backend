@@ -6,7 +6,7 @@ import csv from 'csv-parser';
 async function loadSearchMethods() {
   return new Promise((resolve, reject) => {
     const methods = [];
-    fs.createReadStream('search_methods.csv')
+    fs.createReadStream('./routes/rag_modules/search_methods.csv')
       .pipe(csv())
       .on('data', (row) => {
         methods.push({
