@@ -77,7 +77,7 @@ async function getBoundingBox(location) {
 }
 
 // Function to perform search with memory in OpenSearch and optional spatial filter
-export async function getSpatialSearchResult(userQuery, memoryId, boundingBox = null) {
+export async function getSpatialSearchResults(userQuery, memoryId, boundingBox = null) {
     try {
         const searchBody = {
             query: {
@@ -113,12 +113,14 @@ export async function getSpatialSearchResult(userQuery, memoryId, boundingBox = 
 
         const searchResponse = await client.search({
             index: process.env.OPENSEARCH_INDEX,
-            search_pipeline: 'rag_pipeline_local', // Specify the optional search pipeline
             body: searchBody
         });
-        return searchResponse.body;
+
+        // Ensure results are returned as an array
+        return searchResponse.body.hits?.hits?.map(hit => hit._source) || [];
+
     } catch (error) {
-        console.error('Error performing search with memory:', error);
+        console.error('Error performing spatial search:', error);
         throw error;
     }
 }

@@ -1,4 +1,6 @@
-import { callLlamaModel, createQueryPayload } from './llm_module.js';
+import { callLlamaModel, createQueryPayload } from './llm_modules.js';
+import { getKeywordSearchResults, getSemanticSearchResults } from './search_modules.js';
+import { getSpatialSearchResults } from './spatial_search_modules.js';
 import fs from 'fs';
 import csv from 'csv-parser';
 
@@ -60,6 +62,8 @@ async function routeUserQuery(userQuery) {
     const selectedMethods = result?.message?.content?.trim();
     if (!selectedMethods) {
       throw new Error('No methods selected by LLM');
+    } else {
+      console.log('Selected methods:', selectedMethods);
     }
 
     // Split the selected methods and dynamically call the corresponding functions
@@ -68,6 +72,8 @@ async function routeUserQuery(userQuery) {
     const results = [];
     for (const methodName of methodsToCall) {
       if (functionMapping[methodName]) {
+        console.log(`Calling method: ${methodName}`);
+        console.assert(typeof functionMapping[methodName] === 'function', `Function ${methodName} is not a function!`);
         // Dynamically invoke the function based on method name
         const methodResults = await functionMapping[methodName](userQuery);
         results.push(...methodResults);
