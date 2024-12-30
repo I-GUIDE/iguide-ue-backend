@@ -117,7 +117,7 @@ export async function getSpatialSearchResults(userQuery, memoryId, boundingBox =
         });
 
         // Ensure results are returned as an array
-        return searchResponse.body.hits?.hits?.map(hit => hit._source) || [];
+        return searchResponse.body.hits.hits || [];
 
     } catch (error) {
         console.error('Error performing spatial search:', error);

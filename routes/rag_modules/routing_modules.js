@@ -76,6 +76,7 @@ async function routeUserQuery(userQuery) {
         console.assert(typeof functionMapping[methodName] === 'function', `Function ${methodName} is not a function!`);
         // Dynamically invoke the function based on method name
         const methodResults = await functionMapping[methodName](userQuery);
+        console.log(`Method ${methodName} returned ${methodResults.length} results`);
         results.push(...methodResults);
       }
     }
