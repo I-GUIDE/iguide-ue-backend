@@ -11,7 +11,7 @@ const client = new Client({
   },
 });
 
-export async function getSearchResults(userQuery) {
+export async function getKeywordSearchResults(userQuery) {
   try {
     const response = await client.search({
       index: process.env.OPENSEARCH_INDEX,

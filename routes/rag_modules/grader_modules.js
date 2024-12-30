@@ -2,17 +2,31 @@ import { callLlamaModel, createQueryPayload } from './llm_modules.js';
 
 export async function gradeDocuments(documents, question) {
   const gradedDocuments = [];
+  console.log("---CHECK DOCUMENT RELEVANCE TO QUESTION---");
+
   for (const doc of documents) {
     const graderPrompt = `
-      Here is the retrieved document: \n\n ${doc._source.contents} \n\n 
-      Here is the user question: \n\n ${question}.
+      Here is the retrieved document: \n\n ${doc._source.contents} \n\n Here is the user question: \n\n ${question}.
       Carefully assess whether the document contains relevant information.
       Return JSON with a single key, binary_score, with value 'yes' or 'no'.
     `;
-    const queryPayload = createQueryPayload("llama3.2:latest", "You are a grader assessing the relevance of retrieved documents to a user question.", graderPrompt);
+
+    const queryPayload = createQueryPayload(
+      "llama3.2:latest",
+      "You are a grader assessing the relevance of retrieved documents to a user question.",
+      graderPrompt
+    );
+
     const result = await callLlamaModel(queryPayload);
-    if (result?.message?.content?.toLowerCase().includes('"binary_score": "yes"')) gradedDocuments.push(doc);
+
+    if (result?.message?.content?.toLowerCase().includes('"binary_score": "yes"')) {
+      console.log("---GRADE: DOCUMENT RELEVANT---");
+      gradedDocuments.push(doc);
+    } else {
+      console.log("---GRADE: DOCUMENT NOT RELEVANT---");
+    }
   }
+
   return gradedDocuments;
 }
 
