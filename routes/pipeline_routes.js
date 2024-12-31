@@ -2,7 +2,7 @@ import express from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
-import { getOrCreateMemory, updateMemory, deleteMemory } from './rag_modules/memory_modules.js';
+import { formComprehensiveUserQuery, getOrCreateMemory, updateMemory, deleteMemory } from './rag_modules/memory_modules.js';
 import { getSemanticSearchResults } from './rag_modules/search_modules.js';
 import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_modules/grader_modules.js';
 import { callLlamaModel } from './rag_modules/llm_modules.js';
@@ -266,17 +266,35 @@ router.post('/llm/memory-id', cors(), async (req, res) => {
  */
 router.options('/llm/search', cors());
 router.post('/llm/search', cors(), async (req, res) => {
-  const { userQuery } = req.body;
+  const { userQuery, memoryId } = req.body;
 
   if (!userQuery) {
     return res.status(400).json({ error: "Missing userQuery in request body." });
   }
 
   try {
-    const response = await handleUserQuery(userQuery, false);
+    let finalMemoryId = memoryId;
+
+    // If no memoryId is provided, create a new memory
+    if (!finalMemoryId) {
+      console.log("No memoryId provided, creating a new memory...");
+      const conversationName = `conversation-${uuidv4()}`;
+      finalMemoryId = await createMemory(conversationName);
+    }
+
+    // Form a comprehensive user query
+    const comprehensiveUserQuery = await formComprehensiveUserQuery(finalMemoryId, userQuery);
+
+    console.log(`Searching "${comprehensiveUserQuery}" with memoryID: ${finalMemoryId}`);
+
+    // Perform the search with the comprehensive user query and memory ID
+    const response = await handleUserQuery(comprehensiveUserQuery, false);
     if (response.error) {
       return res.status(500).json({ error: response.error });
     }
+
+    // Update the chat history
+    await updateMemory(finalMemoryId, userQuery, response);
     res.status(200).json(response);
   } catch (error) {
     console.error("Error performing conversational search:", error);

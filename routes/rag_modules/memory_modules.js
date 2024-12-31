@@ -1,5 +1,6 @@
 import { Client } from '@opensearch-project/opensearch';
 import { v4 as uuidv4 } from 'uuid';
+import { callLlamaModel } from './llm_modules.js';
 
 // Initialize OpenSearch client
 const client = new Client({
@@ -131,5 +132,53 @@ export async function deleteMemory(memoryId) {
     if (error?.statusCode !== 404) {
       throw error;
     }
+  }
+}
+/**
+ * Forms a comprehensive user query given the new user query and the chat history in the memory.
+ * Optionally includes the most recent k chat histories or lets the LLM decide if left as null.
+ *
+ * @param {string} memoryId - The memory ID to retrieve the chat history.
+ * @param {string} newUserQuery - The new user query.
+ * @param {number|null} [recentK=null] - The number of most recent chat histories to include. If null, lets the LLM decide.
+ * @returns {Promise<string>} - The comprehensive user query.
+ */
+export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK = null) {
+  try {
+    // Retrieve the chat history
+    const memoryResponse = await client.get({
+      index: MEMORY_INDEX,
+      id: memoryId,
+    });
+
+    const chatHistory = memoryResponse.body._source.chat_history || [];
+
+    // Optionally include the most recent k chat histories
+    const recentChatHistory = recentK !== null ? chatHistory.slice(-recentK) : chatHistory;
+
+    // Form the prompt for the LLM
+    const prompt = `
+      Here is the chat history:
+      ${recentChatHistory.map((entry, index) => `(${index + 1}) ${entry}`).join('\n')}
+      
+      Here is the new user query:
+      ${newUserQuery}
+      
+      Form a comprehensive user query considering the chat history and the new user query.
+    `;
+
+    // Call the LLM to form the comprehensive user query
+    const llmResponse = await callLlamaModel({
+      model: "llama3:instruct",
+      messages: [
+        { role: "system", content: "You are an assistant that forms comprehensive user queries." },
+        { role: "user", content: prompt },
+      ],
+    });
+
+    return llmResponse?.message?.content || "No response from LLM.";
+  } catch (error) {
+    console.error('Error forming comprehensive user query:', error);
+    throw error;
   }
 }

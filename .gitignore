@@ -2,3 +2,5 @@
 **/.DS_Store
 **/node_modules/
 **/*.log
+backend_scripts/neo4j.env
+routes/#private_elements.js#
