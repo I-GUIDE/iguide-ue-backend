@@ -17,6 +17,28 @@ const client = new Client({
 const MEMORY_INDEX = process.env.OPENSEARCH_MEMORY_INDEX || 'chat_memory';
 
 /**
+ * Creates a new memory in OpenSearch.
+ *
+ * @param {string} conversationName - The name of the conversation.
+ * @returns {Promise<string>} - The ID of the created memory.
+ */
+export async function createMemory(conversationName) {
+  const memoryId = uuidv4();
+  const newMemory = {
+    conversationName,
+    chat_history: [],
+  };
+
+  await client.index({
+    index: MEMORY_INDEX,
+    id: memoryId,
+    body: newMemory,
+  });
+
+  return memoryId;
+}
+
+/**
  * Retrieves the chat history for a given memoryId.
  * If the document does not exist, it creates a new document.
  *
@@ -31,89 +53,60 @@ export async function getOrCreateMemory(memoryId) {
       id: memoryId,
     });
 
-    if (response?.body?.found) {
-      return response.body._source;
-    }
+    return response.body._source;
   } catch (error) {
-    if (error?.body?.found === false) {
-      console.log(`Memory ID ${memoryId} not found. Creating a new document.`);
+    if (error.meta.statusCode === 404) {
+      // Document does not exist, create a new one
+      const newMemory = {
+        conversationName: `conversation-${memoryId}`,
+        chat_history: [],
+      };
+
+      await client.index({
+        index: MEMORY_INDEX,
+        id: memoryId,
+        body: newMemory,
+      });
+
+      return newMemory;
     } else {
-      console.error("Error retrieving memory:", error);
       throw error;
     }
-  }
-
-  // Create a new memory document if not found
-  const newMemory = {
-    memoryId,
-    conversation: [],
-    createdAt: new Date().toISOString(),
-  };
-
-  try {
-    await client.index({
-      index: MEMORY_INDEX,
-      id: memoryId,
-      body: newMemory,
-    });
-    console.log(`New memory created for ID ${memoryId}`);
-    return newMemory;
-  } catch (error) {
-    console.error("Error creating new memory:", error);
-    throw error;
   }
 }
 
 /**
- * Updates the chat history for a given memoryId.
+ * Updates the memory with new chat history.
  *
  * @param {string} memoryId - The memory ID to update.
- * @param {string} userQuery - The user query.
- * @param {object} response - The response object returned by handleUserQuery.
- * @returns {Promise<void>} - Resolves when the update is complete.
+ * @param {string} userQuery - The user query to add to the chat history.
+ * @param {object} response - The response to add to the chat history.
+ * @returns {Promise<void>}
  */
 export async function updateMemory(memoryId, userQuery, response) {
   try {
-    const memory = await getOrCreateMemory(memoryId);
-
-    // Create a new chat record
-    const newChatRecord = {
-      user: userQuery,
-      response: {
-        answer: response.answer || "I'm sorry, I couldn't generate a satisfactory answer at the moment.",
-        message_id: response.message_id || uuidv4(),
-        elements: response.elements.map(doc => ({
-          _id: doc._id,
-          _score: doc._score,
-          contributor: doc.contributor,
-          contents: doc.contents,
-          "resource-type": doc["resource-type"],
-          title: doc.title,
-          authors: doc.authors || [],
-          tags: doc.tags || [],
-          "thumbnail-image": doc["thumbnail-image"],
-        })),
-        count: response.count || 0,
-      },
-    };
-
-    // Append the new chat record to the conversation
-    memory.conversation.push(newChatRecord);
-
-    // Update the document in OpenSearch
-    await client.index({
+    const memoryResponse = await client.get({
       index: MEMORY_INDEX,
       id: memoryId,
-      body: memory,
-      refresh: true,
     });
-    console.log(`Memory updated for ID ${memoryId}`);
+
+    const chatHistory = memoryResponse.body._source.chat_history || [];
+    chatHistory.push({ userQuery, response });
+
+    await client.update({
+      index: MEMORY_INDEX,
+      id: memoryId,
+      body: {
+        doc: {
+          chat_history: chatHistory,
+        },
+      },
+    });
   } catch (error) {
-    console.error("Error updating memory:", error);
+    console.error('Error updating memory:', error);
     throw error;
   }
 }
-
 /**
  * Deletes a memory document by memoryId.
  *
@@ -145,13 +138,9 @@ export async function deleteMemory(memoryId) {
  */
 export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK = null) {
   try {
-    // Retrieve the chat history
-    const memoryResponse = await client.get({
-      index: MEMORY_INDEX,
-      id: memoryId,
-    });
-
-    const chatHistory = memoryResponse.body._source.chat_history || [];
+    // Retrieve or create the chat history
+    const memory = await getOrCreateMemory(memoryId);
+    const chatHistory = memory.chat_history || [];
 
     // Optionally include the most recent k chat histories
     const recentChatHistory = recentK !== null ? chatHistory.slice(-recentK) : chatHistory;
@@ -159,7 +148,7 @@ export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK
     // Form the prompt for the LLM
     const prompt = `
       Here is the chat history:
-      ${recentChatHistory.map((entry, index) => `(${index + 1}) ${entry}`).join('\n')}
+      ${recentChatHistory.map((entry, index) => `(${index + 1}) ${entry.userQuery}: ${entry.response}`).join('\n')}
       
       Here is the new user query:
       ${newUserQuery}
