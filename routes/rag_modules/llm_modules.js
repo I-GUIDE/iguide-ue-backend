@@ -21,7 +21,11 @@ export function createQueryPayload(model, systemMessage, userMessage, stream = f
         },
         body: JSON.stringify(queryPayload),
       });
-      if (response.ok) return await response.json();
+      if (response.ok){
+        console.log(response)
+        return await response.json();
+      }
+        
       const errorText = await response.text();
       throw new Error(`Error: ${response.status}, ${errorText}`);
     } catch (error) {

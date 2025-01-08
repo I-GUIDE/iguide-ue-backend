@@ -155,12 +155,13 @@ export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK
       
       Form a comprehensive user query considering the chat history and the new user query.
     `;
+    console.log('Prompt for comprehensive chat question:', prompt);
 
     // Call the LLM to form the comprehensive user query
     const llmResponse = await callLlamaModel({
       model: "llama3:instruct",
       messages: [
-        { role: "system", content: "You are an assistant that forms comprehensive user queries." },
+        { role: "system", content: "You are an assistant that forms comprehensive user queries based on the new query and the chat history." },
         { role: "user", content: prompt },
       ],
     });

@@ -267,8 +267,8 @@ router.post('/llm/memory-id', cors(), async (req, res) => {
  */
 router.options('/llm/search', cors());
 router.post('/llm/search', cors(), async (req, res) => {
-  const { userQuery, memoryId } = req.body;
-
+  const { userQuery, memoryIdTmp } = req.body;
+  var memoryId = "fakeid12345";
   if (!userQuery) {
     return res.status(400).json({ error: "Missing userQuery in request body." });
   }
@@ -279,23 +279,23 @@ router.post('/llm/search', cors(), async (req, res) => {
     // If no memoryId is provided, create a new memory
     if (!finalMemoryId) {
       console.log("No memoryId provided, creating a new memory...");
-      const conversationName = `conversation-${uuidv4()}`;
-      finalMemoryId = createMemory(conversationName);
+      const conversationName = `conversation-${userQuery}-${uuidv4()}`;
+      finalMemoryId = await createMemory(conversationName);
     }
 
     // Form a comprehensive user query
-    const comprehensiveUserQuery = await formComprehensiveUserQuery(finalMemoryId, userQuery);
+    //const comprehensiveUserQuery = await formComprehensiveUserQuery(finalMemoryId, userQuery);
 
-    console.log(`Searching "${comprehensiveUserQuery}" with memoryID: ${finalMemoryId}`);
+    //console.log(`Searching "${comprehensiveUserQuery}" with memoryID: ${finalMemoryId}`);
 
     // Perform the search with the comprehensive user query and memory ID
-    const response = await handleUserQuery(comprehensiveUserQuery, false);
+    const response = await handleUserQuery(userQuery, false);
     if (response.error) {
       return res.status(500).json({ error: response.error });
     }
 
     // Update the chat history
-    await updateMemory(finalMemoryId, userQuery, response);
+    //await updateMemory(finalMemoryId, userQuery, response);
     res.status(200).json(response);
   } catch (error) {
     console.error("Error performing conversational search:", error);
