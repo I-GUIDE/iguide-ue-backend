@@ -1,6 +1,6 @@
 import { Client } from '@opensearch-project/opensearch';
 import { v4 as uuidv4 } from 'uuid';
-import { callLlamaModel } from './llm_modules.js';
+import { callLlamaModel, createQueryPayload } from './llm_modules.js';
 
 // Initialize OpenSearch client
 const client = new Client({
@@ -148,24 +148,21 @@ export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK
     // Form the prompt for the LLM
     const prompt = `
       Here is the chat history:
-      ${recentChatHistory.map((entry, index) => `(${index + 1}) ${entry.userQuery}: ${entry.response}`).join('\n')}
-      
+      ${recentChatHistory && recentChatHistory.length > 0 
+        ? recentChatHistory.map((entry, index) => `(${index + 1}) ${entry.userQuery}: ${entry.response}`).join('\n') 
+        : "No previous chat history available."}
+
       Here is the new user query:
-      ${newUserQuery}
-      
-      Form a comprehensive user query considering the chat history and the new user query.
-    `;
-    console.log('Prompt for comprehensive chat question:', prompt);
+      ${newUserQuery ? newUserQuery.trim() : "No new user query provided."}
+
+      Form a concise user query that includes the necessary background considering the chat history and the new user query. Just return me the query without explaination.
+      `.trim();
+    //console.log('Prompt for comprehensive chat question:', prompt);
 
     // Call the LLM to form the comprehensive user query
-    const llmResponse = await callLlamaModel({
-      model: "llama3:instruct",
-      messages: [
-        { role: "system", content: "You are an assistant that forms comprehensive user queries based on the new query and the chat history." },
-        { role: "user", content: prompt },
-      ],
-    });
-
+    var payload = createQueryPayload("llama3.2:latest", "You are an assistant that forms comprehensive user queries based on the new query and the chat history.", prompt)
+    const llmResponse = await callLlamaModel(payload);
+    //console.log("Comprehensive quesiton: ", llmResponse);
     return llmResponse?.message?.content || "No response from LLM.";
   } catch (error) {
     console.error('Error forming comprehensive user query:', error);

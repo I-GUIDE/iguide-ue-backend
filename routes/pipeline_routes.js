@@ -284,18 +284,18 @@ router.post('/llm/search', cors(), async (req, res) => {
     }
 
     // Form a comprehensive user query
-    //const comprehensiveUserQuery = await formComprehensiveUserQuery(finalMemoryId, userQuery);
+    const comprehensiveUserQuery = await formComprehensiveUserQuery(finalMemoryId, userQuery);
 
-    //console.log(`Searching "${comprehensiveUserQuery}" with memoryID: ${finalMemoryId}`);
+    console.log(`Searching "${comprehensiveUserQuery}" with memoryID: ${finalMemoryId}`);
 
     // Perform the search with the comprehensive user query and memory ID
-    const response = await handleUserQuery(userQuery, false);
+    const response = await handleUserQuery(comprehensiveUserQuery, false);
     if (response.error) {
       return res.status(500).json({ error: response.error });
     }
 
     // Update the chat history
-    //await updateMemory(finalMemoryId, userQuery, response);
+    await updateMemory(finalMemoryId, userQuery, response.answer);
     res.status(200).json(response);
   } catch (error) {
     console.error("Error performing conversational search:", error);

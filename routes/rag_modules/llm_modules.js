@@ -12,6 +12,7 @@ export function createQueryPayload(model, systemMessage, userMessage, stream = f
   export async function callLlamaModel(queryPayload) {
     const llamaApiUrl = process.env.ANVILGPT_URL;
     const anvilGptApiKey = process.env.ANVILGPT_KEY;
+    //console.log("Query Payload:", JSON.stringify(queryPayload, null, 2)); // Log payload
     try {
       const response = await fetch(llamaApiUrl, {
         method: 'POST',
@@ -22,7 +23,8 @@ export function createQueryPayload(model, systemMessage, userMessage, stream = f
         body: JSON.stringify(queryPayload),
       });
       if (response.ok){
-        console.log(response)
+        //var returnResponse = await response;
+        //console.log("Response from Llama model:", returnResponse);
         return await response.json();
       }
         
