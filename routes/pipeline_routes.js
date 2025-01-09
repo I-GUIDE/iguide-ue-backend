@@ -103,7 +103,7 @@ async function handleUserQuery(userQuery, checkGenerationQuality) {
 
   let relevantDocuments = [];
   if (searchResults && searchResults.length > 0) {
-    console.log("Grading documents...");
+    console.log("Grading " + searchResults.length + " documents...");
     relevantDocuments = await gradeDocuments(searchResults, userQuery);
   }
 

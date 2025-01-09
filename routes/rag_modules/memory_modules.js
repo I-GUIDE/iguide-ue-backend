@@ -147,20 +147,21 @@ export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK
 
     // Form the prompt for the LLM
     const prompt = `
-      Here is the chat history:
+      Here are the previous questions:
       ${recentChatHistory && recentChatHistory.length > 0 
-        ? recentChatHistory.map((entry, index) => `(${index + 1}) ${entry.userQuery}: ${entry.response}`).join('\n') 
+        //? recentChatHistory.map((entry, index) => `(${index + 1}) ${entry.userQuery}: ${entry.response}`).join('\n') 
+        ? recentChatHistory.map((entry, index) => `(${index + 1}) ${entry.userQuery}`).join('\n') 
         : "No previous chat history available."}
 
       Here is the new user query:
       ${newUserQuery ? newUserQuery.trim() : "No new user query provided."}
 
-      Form a concise user query that includes the necessary background considering the chat history and the new user query. Just return me the query without explaination.
+      Form a concise user query that includes the necessary background considering the previous questions and the new user query. Do not include any additional background not in the chat history. Only expand the query if it lacks background or is a followup question of the previous questions. Otherwise, keep the query as is. Just return the query without explaination.
       `.trim();
     //console.log('Prompt for comprehensive chat question:', prompt);
 
     // Call the LLM to form the comprehensive user query
-    var payload = createQueryPayload("llama3.2:latest", "You are an assistant that forms comprehensive user queries based on the new query and the chat history.", prompt)
+    var payload = createQueryPayload("llama3.2:latest", "You are an assistant that forms comprehensive user queries based on the new query and the previous questions. Only expand the query if it lacks background or is a followup question of the previous questions. Otherwise, keep the query as is. Avoid adding additional backgrounds. If there is no chat history just return the original query.", prompt)
     const llmResponse = await callLlamaModel(payload);
     //console.log("Comprehensive quesiton: ", llmResponse);
     return llmResponse?.message?.content || "No response from LLM.";
