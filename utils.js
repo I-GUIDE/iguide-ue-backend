@@ -160,9 +160,17 @@ const IMAGE_SIZES = {
  * @returns {Object} {low: {string}, medium: {string}, high: {string}, original: {string}}
  */
 export function generateMultipleResolutionImagesFor(image_file_str,
-						    upload_dir_path=null,
-						    is_avatar=false){
-    if (image_file_str === null || image_file_str === '') return null;
+                                                    upload_dir_path = null,
+                                                    is_avatar = false,
+                                                    callback = null) {  // Callback is optional
+    if (image_file_str === null || image_file_str === '') {
+        // If the callback is provided, call it with an error
+        if (callback) {
+            callback('Invalid image file string', null);
+        }
+        return null;
+    }
+
     const image_filename = path.basename(image_file_str);
     const filename_without_ext = image_filename.replace(/\.[^/.]+$/, '');
     const file_ext = path.extname(image_filename);
@@ -171,28 +179,60 @@ export function generateMultipleResolutionImagesFor(image_file_str,
     let url_prefix = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads`;
     let size_array = [];
     if (is_avatar) {
-	url_prefix = `${url_prefix}/avatars`;
-	size_array = IMAGE_SIZES.avatar;
+        url_prefix = `${url_prefix}/avatars`;
+        size_array = IMAGE_SIZES.avatar;
     } else {
-	url_prefix = `${url_prefix}/thumbnails`;
-	size_array = IMAGE_SIZES.thumbnail;
+        url_prefix = `${url_prefix}/thumbnails`;
+        size_array = IMAGE_SIZES.thumbnail;
     }
 
     image_urls['original'] = `${url_prefix}/${image_filename}`;
+    let pending = size_array.length;
+    let responseSent = false;  // Flag to prevent multiple responses
+
+    function checkDone() {
+        if (pending === 0 && !responseSent) {
+            if (callback) {
+                callback(null, image_urls);  // Send success callback
+            }
+            responseSent = true;  // Mark response as sent
+        }
+    }
+
     for (const size of size_array) {
         const resized_filename = `${filename_without_ext}${size.suffix}${file_ext}`;
 
-	if (upload_dir_path) {
-	    sharp(path.join(upload_dir_path, image_filename))
-		.resize(size.width)
-		.toFile(path.join(upload_dir_path, resized_filename));
-	}
-
-	image_urls[size.name] = `${url_prefix}/${resized_filename}`;
+        if (upload_dir_path) {
+            sharp(path.join(upload_dir_path, image_filename))
+                .resize(size.width)
+                .toFile(path.join(upload_dir_path, resized_filename), (err, info) => {
+                    if (err) {
+                        console.error("Error processing image with sharp:", err);
+                        image_urls['error'] = 'Unsupported image format or other error';
+                        if (!responseSent && callback) {
+                            callback('Unsupported image format', null);  // Call callback with error
+                            responseSent = true;
+                        }
+                    } else {
+                        console.log("Image resized successfully:", info);
+                        image_urls[size.name] = `${url_prefix}/${resized_filename}`;
+                    }
+                    pending -= 1;
+                    checkDone();
+                });
+        } else {
+            image_urls[size.name] = `${url_prefix}/${resized_filename}`;
+            pending -= 1;
+            checkDone();
+        }
     }
-    //console.log(image_urls);
-    return image_urls;
+
+    // If no callback is provided, just return the image URLs
+    if (!callback) {
+        return image_urls;
+    }
 }
+
 
 /**
  * Determing if user with user_id has enough permission to edit element with element_id
