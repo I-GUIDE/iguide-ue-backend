@@ -412,7 +412,7 @@ export async function getElementsByType(type,
 	    "ORDER BY n." + order_by + " " + order + ", n.id " + order + " " +
 	    "SKIP $from " +
 	    "LIMIT $size";
-	    
+
 	    const {records, summary} = await tx.run(query_str,
 						    {from: neo4j.int(from),
 						     size: neo4j.int(size),
@@ -491,7 +491,7 @@ export async function getElementsBookmarkedByContributor(id,
 				       			){
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
-    
+
     try{
 	let query_params = {contrib_id: id};
 	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r)-[:BOOKMARKED]-(u:Contributor) " +
@@ -964,7 +964,7 @@ async function elementToNode(element, generate_id=true){
 	//'visibility': visibility,
 	'external-link': external_link,                 // Dataset
 	'direct-download-link': direct_download_link,   // Dataset
-	'notebook-repo': notebook_repo,                 // Notebook
+	'notebook-repo': notebook_repo,                 // Notebook/Code
 	'notebook-file': notebook_file,                 // Notebook
 	size: size,                                     // Dataset
 	'external-link-publication': external_link_pub, // Publication
@@ -1003,6 +1003,9 @@ async function elementToNode(element, generate_id=true){
 	}
     } else if (node_type == utils.ElementType.MAP){
 	node['external_iframe_link'] = external_link_map;
+    } else if (node_type == utils.ElementType.CODE){
+	// ToDo: Update this to 'code_repo'
+	node['notebook_repo'] = notebook_repo;
     } else {
 	throw Error(`Backend Neo4j: elementToNode type ($node_type) not implemented`);
     }

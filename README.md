@@ -51,5 +51,16 @@ sh stop.sh
 | `routes/private_elements.js`| All `/api/private-elements*` endpoint implementations    |
 
 
+### Creating a new Element Type
+  - Update element definition in `utils.js`
+    - Add new element type to the `ElementType` enum
+    - Update `parseElementType()` function to handle new element type
+  - Update element registration
+    - `server.js`: Update endpoint `router.post(/api/elements, ...)` if some pre-processing is required
+    - `backend_neo4j.js`
+      - Update `elementToNode()` to convert javascript element to neo4j node
+      - Update `registerElement()` if some post-processing is reuiqred
+   - Update element retrieval
+     - `backend_neo4j.js`: Update `getElementByID()` to make sure all element information is returned
 ### Creating a new endpoint
 ToDo ...
