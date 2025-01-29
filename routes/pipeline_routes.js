@@ -76,7 +76,7 @@ function formatDocs(docs) {
 }
 
 // Function: Generate an answer using relevant documents
-async function generateAnswer(state) {
+async function generateAnswer(state, temperature = 0.7, top_p = 0.9) {
   console.log("---GENERATE---");
   const { question, documents, loop_step = 0 } = state;
 
@@ -84,7 +84,10 @@ async function generateAnswer(state) {
   const generationPrompt = `User Query: ${question}\nSearch Results:\n${docsTxt}`;
 
   const llmResponse = await callLlamaModel(
-    createQueryPayload("llama3.2:latest", "You are an assistant summarizing search results.", generationPrompt)
+    createQueryPayload("llama3.2:latest", "You are an assistant summarizing search results.", generationPrompt, {
+      temperature,
+      top_p
+    })
   );
 
   return {
@@ -94,6 +97,7 @@ async function generateAnswer(state) {
     loop_step: loop_step + 1,
   };
 }
+
 
 
 // Function: Handle a user query
