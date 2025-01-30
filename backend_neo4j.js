@@ -1296,6 +1296,36 @@ export async function getContributorByID(id){
     // something went wrong
     return {};
 }
+
+/**
+ * Get all Contributors with all information
+ * @returns {Object} Map of objects with serial Ids. If no users found returns empty
+ */
+export async function getAllContributors(){
+	const query_str = "MATCH (c:Contributor) return c{.*}";
+	try {
+		const {records, summary} =
+			await driver.executeQuery(query_str,
+				{},
+				{routing: 'READ', database: process.env.NEO4J_DB})
+		if (records?.length <= 0) {
+			return {};
+		}
+		let contributor_list = [];
+		records?.map((contributor) => {
+			if (contributor['_fields']?.length > 0) {
+				let temp_contributor = contributor['_fields'][0]
+				temp_contributor['role'] = utils.parse64BitNumber(temp_contributor['role']);
+				contributor_list.push(temp_contributor);
+			}
+		});
+		return makeFrontendCompatible(contributor_list)
+
+	} catch (err) {
+		console.log('getAllContributors() - Error in query: ' + err);
+	}
+	return {};
+}
 /**
  * Check if contributor exists
  * @param {string} id
