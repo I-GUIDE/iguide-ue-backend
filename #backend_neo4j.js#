@@ -1178,7 +1178,7 @@ export async function registerContributor(contributor){
 	return neo4j.int(utils.Role.UNTRUSTED_USER);
     })();
     // (3) get avatar URL
-    //contributor['avatar_url'] = contributor['avatar_url']['original'];
+    contributor['avatar_url'] = contributor['avatar_url']['original'];
     const query_str = "CREATE (c: Contributor $contr_param)";
     try{
 	const {_, summary} =
