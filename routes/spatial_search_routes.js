@@ -170,35 +170,6 @@ async function scrollAllDocuments(searchQuery, index, scrollDuration = '30s') {
  */
 
 router.options('/search/spatial', cors());
-import express from 'express';
-import { Client } from '@opensearch-project/opensearch';
-import cors from 'cors';
-
-// Assume you have these helpers
-import { inferShapeFromCoords, scrollAllDocuments } from './geo_helpers.js';
-
-const router = express.Router();
-const client = new Client({
-  node: process.env.OPENSEARCH_NODE_MAP,
-  auth: {
-      username: process.env.OPENSEARCH_USERNAME_MAP,
-      password: process.env.OPENSEARCH_PASSWORD_MAP,
-  },
-  ssl: {
-      rejectUnauthorized: false,
-  },
-});
-
-/**
- * GET /search/spatial
- * 
- * Query Parameters:
- *   - coords:        JSON array of coordinate pairs ([lon, lat]) - REQUIRED
- *   - keyword:       Text query to match (optional)
- *   - relation:      Spatial relation (INTERSECTS, WITHIN, etc.) Default: "INTERSECTS"
- *   - limit:         Positive integer or "unlimited" (default). "unlimited" uses scrolling
- *   - element-type:  If specified, filter documents by resource-type=element-type (exact match)
- */
 router.get('/search/spatial', cors(), async (req, res) => {
   try {
     const {
