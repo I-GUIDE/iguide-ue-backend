@@ -114,7 +114,7 @@ async function scrollAllDocuments(searchQuery, index, scrollDuration = '30s') {
  *         schema:
  *           type: string
  *         description: JSON array of [lon, lat] pairs. (1 => Point, 2 => Envelope, 3+ => Polygon)
- *         example: '[[-120,40],[-100,30]]'
+ *         example: '[[-87.634938, 24.396308], [-80.031362, 24.396308], [-80.031362, 31.000968], [-87.634938, 31.000968], [-87.634938, 24.396308]]'
  *       - in: query
  *         name: keyword
  *         required: false
@@ -212,8 +212,7 @@ router.get('/search/spatial', cors(), async (req, res) => {
                 filter: [
                     {
                         geo_shape: {
-                            // Adjust 'geometry' to the name of your geo_shape field
-                            geometry: {
+                            bounding_box: {// Use bounding box for spatial search
                                 shape,
                                 relation: relation.toUpperCase(),
                             },
@@ -232,7 +231,7 @@ router.get('/search/spatial', cors(), async (req, res) => {
         if (limit !== 'unlimited' && !isNaN(limit)) {
             const size = parseInt(limit, 10);
             const responseOS = await client.search({
-                index: process.env.OPENSEARCH_INDEX,
+                index: process.env.OPENSEARCH_INDEX_MAP,
                 body: { ...searchBody, size },
             });
             const hits = responseOS.body?.hits?.hits || [];
@@ -244,7 +243,7 @@ router.get('/search/spatial', cors(), async (req, res) => {
             // 5. Otherwise, attempt to scroll for all matching docs
             const allHits = await scrollAllDocuments(
                 searchBody,
-                process.env.OPENSEARCH_INDEX
+                process.env.OPENSEARCH_INDEX_MAP
             );
             return res.json({
                 total: allHits.length,
