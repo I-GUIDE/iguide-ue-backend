@@ -30,6 +30,7 @@ import pipeline_routes from './routes/pipeline_routes.js';
 import llm_spatial_only_routes from './routes/llm_spatial_only_routes.js';
 import anvil_proxy from './routes/anvil_proxy.js';
 import search_routes from './routes/search_routes.js';
+import spatial_routes from './routes/spatial_search_routes.js';
 import private_elements from './routes/private_elements.js';
 import users from './routes/users.js';
 import documentation from './routes/documentation.js';
@@ -48,6 +49,8 @@ app.use('/beta', llm_spatial_only_routes);
 app.use('/proxy', anvil_proxy);
 // Use the advanced search route
 app.use('/api', search_routes);
+// Use the spatial search route
+app.use('/beta', spatial_routes);
 // Use the private-elements route
 app.use('/api', private_elements);
 // Use documentation route
