@@ -50,7 +50,7 @@ app.use('/proxy', anvil_proxy);
 // Use the advanced search route
 app.use('/api', search_routes);
 // Use the spatial search route
-app.use('/beta', spatial_routes);
+app.use('/api', spatial_routes);
 // Use the private-elements route
 app.use('/api', private_elements);
 // Use documentation route
