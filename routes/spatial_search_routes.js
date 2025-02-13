@@ -231,7 +231,7 @@ router.get('/search/spatial', cors(), async (req, res) => {
                 medium: 'https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/nb5-765px.png',
                 high: 'https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/nb5-1024px.png',
             },
-            'bounding-box': hit._source['bounding-box'] || null,
+            'bounding-box': hit._source['bounding_box'] || null,
         }));
 
         return res.json({elements: formattedResults });
