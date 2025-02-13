@@ -211,7 +211,8 @@ router.get('/search/spatial', cors(), async (req, res) => {
 
         // Format response with required fields
         const formattedResults = results.map((hit) => ({
-            id: hit._id,
+            //id: hit._id,
+            id: 'c3f284fa-54c3-4939-a68d-a3f2d26efec1',
             authors: hit._source.authors || 'Unknown',
             title: hit._source.title || 'Untitled',
             'resource-type': hit._source['resource-type'] || 'map',
