@@ -71,7 +71,74 @@ async function scrollAllDocuments(searchQuery, index, scrollDuration = '30s') {
 
     return allHits;
 }
-
+/**
+ * @swagger
+ * /api/search/spatial:
+ *   get:
+ *     summary: Spatial search with optional text keyword and element-type
+ *     tags:
+ *       - Spatial Search
+ *     parameters:
+ *       - in: query
+ *         name: coords
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: JSON array of [lon, lat] pairs. 
+ *           - **1 pair** => Point  
+ *           - **2 pairs** => Envelope  
+ *           - **3+ pairs** => Polygon  
+ *         example: '[[-87.634938, 24.396308], [-80.031362, 24.396308], [-80.031362, 31.000968], [-87.634938, 31.000968], [-87.634938, 24.396308]]'
+ *       - in: query
+ *         name: keyword
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: An optional text query to match documents (e.g. "climate data").
+ *         example: 'climate data'
+ *       - in: query
+ *         name: element-type
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: If provided, filter results where resource-type matches this value exactly.
+ *         example: 'map'
+ *       - in: query
+ *         name: relation
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [INTERSECTS, WITHIN, CONTAINS, DISJOINT, OVERLAPS]
+ *           default: INTERSECTS
+ *         description: The spatial relation to apply.
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: string
+ *           description: Positive integer or "unlimited" (default). "unlimited" uses scrolling to retrieve all matches.
+ *           default: "unlimited"
+ *         example: "unlimited"
+ *     responses:
+ *       200:
+ *         description: A successful response containing spatial + optional keyword-based search results.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Number of matching documents.
+ *                 hits:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       400:
+ *         description: Invalid or missing parameters.
+ *       500:
+ *         description: Server error performing the spatial search.
+ */
 router.options('/search/spatial', cors());
 
 router.get('/search/spatial', cors(), async (req, res) => {
