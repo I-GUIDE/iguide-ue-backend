@@ -10,8 +10,6 @@
  *
  * **Need to create a temp element to play around**
  * PUT /api/users/bookmark/{elementId} == Toggle element bookmark by logged-in user
- *
- *
  * GET /api/users/bookmark/{elementId} == Get whether element is bookmarked by the user or no
  *
  * ** Delete element after creation **
@@ -25,7 +23,6 @@ import {generateAccessToken} from "../../jwtUtils.js";
 import {Role} from "../../utils.js";
 import * as url from "node:url";
 import path from "path";
-import fs from "fs";
 
 /**
  * As the APIs involve the usage of JWT Token for the purposes of the testing we will create 2 test suites with 2 different access
@@ -61,8 +58,7 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
             .set("Content-Type", "application/json")
             .send(user_body);
         expect(res.statusCode).toBe(201);
-        expect(res.statusCode).toHaveProperty("message", 'User added successfully');
-        console.log("res ID: ", res.body['id']);
+        expect(res.body).toHaveProperty("message", 'User added successfully');
     });
     it("2. Should allow the user to fetch user details", async () => {
         let user_open_id_encoded = encodeURIComponent(testData.trusted_user.openid);

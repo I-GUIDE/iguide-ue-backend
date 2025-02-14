@@ -4,19 +4,19 @@
  * GET /api/elements/homepage == Fetch elements to show on homepage (featured etc.)
  * GET /api/elements/titles == Fetch all titles of a given type of elements
  *
- * POST  /api/elements == Register an element
  * POST /api/elements/thumbnail == Upload a thumbnail image
- *
+ * POST  /api/elements == Register an element
  * GET /api/elements/{id} == Retrieve ONE public element using id.
  * PUT /api/elements/{id} == Update the element with given ID
  * PUT /api/elements/{id}/visibility == Set visibility for the element with given ID
+ * GET /api/elements == Retrieve elements by field and value
  *
  * GET /api/elements/bookmark == Get all bookmarked elements by user with userId
  * GET /api/elements/{id}/neighbors = Return neighbor elements of element with given ID
  *
  *
 
- * GET /api/elements == Retrieve elements by field and value
+ *
  * GET /api/duplicate = Check for duplicate in elements given field-name
  *
  */
@@ -25,7 +25,8 @@ import app from "../../server.js";
 import testData from "./testUserData.json";
 import {generateAccessToken} from "../../jwtUtils.js";
 import {ElementType, Role} from "../../utils.js";
-import * as test from "node:test";
+import path from "path";
+import url from "node:url";
 
 /**
  * As the APIs involve the usage of JWT Token for the purposes of the testing we will create 2 test suites with 2 different access
@@ -35,6 +36,9 @@ import * as test from "node:test";
  */
 const COOKIE_NAME = process.env.JWT_ACCESS_TOKEN_NAME || "access_token";
 const target_domain = "localhost"; // Adjust based on your setup
+
+const __filename = url.fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Helper function to create an admin cookie
 const createAuthCookie = (user) => {
@@ -123,9 +127,24 @@ describe("Elements Endpoint testing for general APIs", () => {
 
 describe("Elements Endpoint testing for Element based APIs", () => {
     let generated_element_id = "";
-    it("1. Element should be registered for a given user", async () => {
+    let uploaded_image_urls = {};
+    it("1. Should be able to upload a thumbnail image and get the image data", async () => {
+        let generated_auth_cookie = createAuthCookie({id: testData.trusted_user_id, role: Role.TRUSTED_USER});
+        const file_path = path.join(__dirname, "test-avatar-image.jpg");
+        const res = await request(app)
+            .post('/api/elements/thumbnail')
+            .set('Cookie', generated_auth_cookie)
+            .set('Content-Type', 'multipart/form-data; boundary=----WebKitFormBoundaryotgYSdiIybBwVdSB')
+            .attach('file', file_path) // Use .attach() instead of FormData
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", "Thumbnail uploaded successfully");
+        expect(res.body).toHaveProperty("image-urls");
+        uploaded_image_urls = res.body['image-urls'];
+    });
+    it("2. Element should be registered for a given user", async () => {
         let generated_auth_cookie = createAuthCookie({id: testData.trusted_user_id, role: Role.TRUSTED_USER});
         let user_body = testData.element_details_json
+        user_body["thumbnail-image"] = uploaded_image_urls;
         const res = await request(app)
             .post("/api/elements")
             .set('Cookie', generated_auth_cookie)
@@ -137,7 +156,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         expect(res.body).toHaveProperty("elementId");
         generated_element_id = res.body['elementId'];
     });
-    it("2. Should be able to retrieve a public element based on Id", async () => {
+    it("3. Should be able to retrieve a public element based on Id", async () => {
         let generated_auth_cookie = createAuthCookie({id: testData.trusted_user_id, role: Role.TRUSTED_USER});
         let encoded_uri = encodeURIComponent(generated_element_id);
         const res = await request(app)
@@ -149,7 +168,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         expect(res.body).toHaveProperty("resource-type",testData.element_details_json["resource-type"]);
         expect(res.body).toHaveProperty("contents",testData.element_details_json["contents"]);
     });
-    it("3. Should be able to update an element based on Id", async () => {
+    it("4. Should be able to update an element based on Id", async () => {
         let generated_auth_cookie = createAuthCookie({id: testData.trusted_user_id, role: Role.TRUSTED_USER});
         let user_body = testData.element_details_json;
         user_body['title'] = testData.element_update_title;
@@ -164,7 +183,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         expect(res.body).toHaveProperty("message",'Element updated successfully');
         expect(res.body).toHaveProperty("result",true);
     });
-    it("4. Should be able to set the visibility of an element based on Id", async () => {
+    it("5. Should be able to set the visibility of an element based on Id", async () => {
         let generated_auth_cookie = createAuthCookie({id: testData.trusted_user_id, role: Role.TRUSTED_USER});
         let encoded_uri = encodeURIComponent(generated_element_id)
         const res = await request(app)
@@ -173,11 +192,21 @@ describe("Elements Endpoint testing for Element based APIs", () => {
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
         expect(res.statusCode).toBe(200);
-        console.log(res.body);
-        // expect(res.body).toHaveProperty("message",'Element updated successfully');
-        // expect(res.body).toHaveProperty("result",true);
+        expect(res.body).toHaveProperty("message", "Element visibility updated successfully");
     });
-    it("5. Element registered should be deleted by the user", async () => {
+    it("6. Should be able to retrieve all the elements created by user for user profile", async () => {
+        let generated_auth_cookie = createAuthCookie({id: testData.trusted_user_id, role: Role.TRUSTED_USER});
+        let url_params = "field-name=contributor&match-value="+testData.trusted_user_id+"&sort-by=creation_time&order=desc&from=0&size=12&count-only=false";
+        const res = await request(app)
+            .get("/api/elements?" +url_params)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res.statusCode).toHaveProperty(200);
+        expect(res.body).toHaveProperty("elements");
+        expect(res.body).toHaveProperty("total_count");
+    });
+    it("7. Element registered should be deleted by the user", async () => {
         let generated_auth_cookie = createAuthCookie({id: testData.trusted_user_id, role: Role.TRUSTED_USER});
         let encoded_uri = encodeURIComponent(generated_element_id)
         const res = await request(app)
