@@ -956,7 +956,7 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
  *       500:
  *         description: Internal server error
  */
-router.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, async (req, res) => {
+router.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, authenticateJWT, async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     const visibility_str = decodeURIComponent(req.query.visibility);
 
