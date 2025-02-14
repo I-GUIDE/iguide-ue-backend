@@ -105,6 +105,7 @@ const SSLOptions = {
  */
 app.options('/api/refresh-token', jwtCorsMiddleware);
 app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
+	
 	// updated refresh token to use env variable
     const refreshToken = req.cookies[process.env.JWT_REFRESH_TOKEN_NAME];
     //console.log("Refresh token", refreshToken);
@@ -127,17 +128,29 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 	return res.sendStatus(403);
     }
 
-    jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_SECRET, (err, user) => {
-	if (err) {
-	    console.log(`Error processing refreshToken ${refreshToken}`)
-	    return res.sendStatus(403);
-	}
+    jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_SECRET, async (err, user) => {
+		if (err) {
+			console.log(`Error processing refreshToken ${refreshToken}`)
+			return res.sendStatus(403);
+		}
+		// Generate a new access token with the role in the database
+		try {
+			const response = await n4j.getContributorByID(user.id);
+			if (response.size == 0){
+				return res.status(404).json({ message: 'User not found' });
+			}
+			const newAccessToken = generateAccessToken({ id: user.id, role: response['role'] });
+			res.cookie(process.env.JWT_ACCESS_TOKEN_NAME, newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
+			res.json({ accessToken: newAccessToken });
+			} catch (error) {
+				console.error('Error fetching user:', error);
+				res.status(500).json({ message: 'Error fetching the user' });
+			}
 
-
-	const newAccessToken = generateAccessToken({ id: user.id, role: user.role });
-	 // updated to new variable name
-	res.cookie(process.env.JWT_ACCESS_TOKEN_NAME, newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
-	res.json({ accessToken: newAccessToken });
+		//const newAccessToken = generateAccessToken({ id: user.id, role: user.role });
+		// updated to new variable name
+		//res.cookie(process.env.JWT_ACCESS_TOKEN_NAME, newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
+		//res.json({ accessToken: newAccessToken });
     });
 });
 
