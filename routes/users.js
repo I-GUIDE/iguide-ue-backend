@@ -73,6 +73,31 @@ router.get('/api/users/:id', cors(), async (req, res) => {
 
 /**
  * @swagger
+ * /api/users:
+ *   get:
+ *     summary: Return all users
+ *     tags: ['users']
+ *     parameters:
+ *     responses:
+ *       200:
+ *         description: All user documents found
+ *       500:
+ *         description: Error fetching the user list
+ */
+//router.options('/users/:id', cors());
+router.get('/api/users', cors(), async (req, res) => {
+    try {
+		const response = await n4j.getAllContributors();
+		res.status(200).json(response);
+    } catch (error) {
+		console.error('Error fetching user list:', error);
+		res.status(500).json({ message: 'Error fetching the user list' });
+    }
+});
+
+
+/**
+ * @swagger
  * /api/users/{id}/role:
  *   get:
  *     summary: Return the user role given the id
