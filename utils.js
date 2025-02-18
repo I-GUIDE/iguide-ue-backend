@@ -12,7 +12,7 @@ export const ElementType = Object.freeze({
     PUBLICATION: "Publication",
     OER: "Oer", // Open Educational Content
     MAP: "Map",
-    CODE: "Code",
+    CODE: "Repository",
     //Documentation: "Documentation",
 });
 
