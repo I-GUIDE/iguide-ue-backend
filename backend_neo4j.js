@@ -964,12 +964,13 @@ async function elementToNode(element, generate_id=true){
 	//'visibility': visibility,
 	'external-link': external_link,                 // Dataset
 	'direct-download-link': direct_download_link,   // Dataset
-	'notebook-repo': notebook_repo,                 // Notebook/Code
+	'notebook-repo': notebook_repo,                 // Notebook
 	'notebook-file': notebook_file,                 // Notebook
 	size: size,                                     // Dataset
 	'external-link-publication': external_link_pub, // Publication
 	'oer-external-links': oer_external_links,       // OER
 	'map-external-iframe-link': external_link_map,  // MAP
+	'github-repo-link': github_repo_link,           // Code
 	...node
        } = element;
 
@@ -1004,8 +1005,7 @@ async function elementToNode(element, generate_id=true){
     } else if (node_type == utils.ElementType.MAP){
 	node['external_iframe_link'] = external_link_map;
     } else if (node_type == utils.ElementType.CODE){
-	// ToDo: Update this to 'code_repo'
-	node['notebook_repo'] = notebook_repo;
+	node['github_repo_link'] = github_repo_link;
     } else {
 	throw Error(`Backend Neo4j: elementToNode type ($node_type) not implemented`);
     }
