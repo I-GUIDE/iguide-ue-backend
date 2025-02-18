@@ -12,6 +12,7 @@ export const ElementType = Object.freeze({
     PUBLICATION: "Publication",
     OER: "Oer", // Open Educational Content
     MAP: "Map",
+    CODE: "Code",
     //Documentation: "Documentation",
 });
 
@@ -84,6 +85,7 @@ export function parseElementType(type){
     case ElementType.PUBLICATION: return ElementType.PUBLICATION;
     case ElementType.OER: return ElementType.OER;
     case ElementType.MAP: return ElementType.MAP;
+    case ElementType.CODE: return ElementType.CODE;
     default:
 	throw Error('Server Neo4j: Element type ('+ element_type  +') parsing not implemented');
     }

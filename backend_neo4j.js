@@ -412,7 +412,7 @@ export async function getElementsByType(type,
 	    "ORDER BY n." + order_by + " " + order + ", n.id " + order + " " +
 	    "SKIP $from " +
 	    "LIMIT $size";
-	    
+
 	    const {records, summary} = await tx.run(query_str,
 						    {from: neo4j.int(from),
 						     size: neo4j.int(size),
@@ -491,7 +491,7 @@ export async function getElementsBookmarkedByContributor(id,
 				       			){
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
-    
+
     try{
 	let query_params = {contrib_id: id};
 	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r)-[:BOOKMARKED]-(u:Contributor) " +
@@ -970,6 +970,7 @@ async function elementToNode(element, generate_id=true){
 	'external-link-publication': external_link_pub, // Publication
 	'oer-external-links': oer_external_links,       // OER
 	'map-external-iframe-link': external_link_map,  // MAP
+	'github-repo-link': github_repo_link,           // Code
 	...node
        } = element;
 
@@ -1003,6 +1004,8 @@ async function elementToNode(element, generate_id=true){
 	}
     } else if (node_type == utils.ElementType.MAP){
 	node['external_iframe_link'] = external_link_map;
+    } else if (node_type == utils.ElementType.CODE){
+	node['github_repo_link'] = github_repo_link;
     } else {
 	throw Error(`Backend Neo4j: elementToNode type ($node_type) not implemented`);
     }
