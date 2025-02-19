@@ -971,6 +971,7 @@ async function elementToNode(element, generate_id=true){
 	'oer-external-links': oer_external_links,       // OER
 	'map-external-iframe-link': external_link_map,  // MAP
 	'github-repo-link': github_repo_link,           // Code
+	'github-repo-readme': github_repo_readme,       // Code
 	...node
        } = element;
 
@@ -1006,6 +1007,7 @@ async function elementToNode(element, generate_id=true){
 	node['external_iframe_link'] = external_link_map;
     } else if (node_type == utils.ElementType.CODE){
 	node['github_repo_link'] = github_repo_link;
+	node['github_repo_readme'] = github_repo_readme;
     } else {
 	throw Error(`Backend Neo4j: elementToNode type ($node_type) not implemented`);
     }
