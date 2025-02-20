@@ -281,7 +281,7 @@ router.get('/api/elements/titles', cors(), async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *           enum: [dataset, notebook, publication, oer, map]
+ *           enum: [dataset, notebook, publication, oer, map, code]
  *         description: Type of featured elements to get
   *       - in: query
  *         name: limit
