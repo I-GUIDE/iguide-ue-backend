@@ -485,40 +485,59 @@ router.get('/api/users/bookmark/:elementId',
     }
 });
 
-// /**
-//  * @swagger
-//  * /api/users/{id}:
-//  *   delete:
-//  *     summary: Delete the user document
-//  *     tags: ['users']
-//  *     parameters:
-//  *       - in: path
-//  *         name: id
-//  *         required: true
-//  *         schema:
-//  *           type: string
-//  *         description: The OpenID of the user
-//  *     responses:
-//  *       200:
-//  *         description: User deleted successfully
-//  *       500:
-//  *         description: Internal server error
-//  */
-// router.delete('/users/:id', async (req, res) => {
-//   const openid = decodeURIComponent(req.params.id);
+/**
+ * @swagger
+ * /api/users/{id}:
+ *   delete:
+ *     summary: Delete the user document
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The OpenID of the user
+ *     responses:
+ *       200:
+ *         description: User deleted successfully
+ *       500:
+ *         description: Internal server error
+ * @swagger ignore
+ */
+router.delete('/api/users/:id',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	authorizeRole(utils.Role.SUPER_ADMIN),
+	async (req, res) => {
+		const id = decodeURIComponent(req.params.id);
 
-//   try {
-//   throw Error('Neo4j: Delete user is not implemented');
-//   // const response = await os.client.delete({
-//   //     index: 'users',
-//   //     id: openid
-//   // });
-
-//   // res.json({ message: 'User deleted successfully', result: response.body.result });
-//   } catch (error) {
-//   console.error('Error deleting user:', error);
-//   res.status(500).json({ message: 'Internal server error' });
-//   }
-// });
+		try {
+			/**
+			 * Get the all the public elements created by user
+			 */
+			let public_elements_cnt_resp = await n4j.getElementsCountByContributor(id);
+			/**
+			 * Get the all the public elements created by user
+			 */
+			let private_elements_cnt_resp = await n4j.getElementsCountByContributor(id, true);
+			if (public_elements_cnt_resp + private_elements_cnt_resp > 0) {
+				res.status(403).json({message: 'Cannot delete user as it has elements associated'});
+				return;
+			}
+			/**
+			 * Delete the user from neo4J
+			 */
+			const del_resp = await n4j.deleteUserById(id)
+			if (del_resp) {
+				res.status(200).json({message: 'User deleted successfully', result: del_resp});
+			} else {
+				res.status(200).json({message: 'Error in deleting user', result: del_resp});
+			}
+		} catch (error) {
+			console.error('Error deleting user:', error);
+			res.status(500).json({message: 'Internal server error'});
+		}
+	});
 
 export default router;

@@ -13,7 +13,7 @@
     "version": "1"
   },
   "trusted_user_updated_first_name": "TestUpdatedName",
-  "trusted_user_id": "0d8c653c-1fda-4820-ac60-bc967bb59aba",
+  "trusted_user_id": "",
   "trusted_user_updated_bio": "This is the new bio for Test Dev",
   "untrusted_user": {
     "email": "test.dev@example.com",

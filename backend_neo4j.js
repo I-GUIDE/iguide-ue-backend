@@ -1102,6 +1102,22 @@ export async function deleteElementByID(id){
     return false;
 }
 
+export async function deleteUserById(id){
+    const query_str = "MATCH (c:Contributor{id:$id_param}) " +
+	  "DETACH DELETE c";
+    try {
+	const {_, summary} =
+	      await driver.executeQuery(query_str,
+					{id_param: id},
+					{database: process.env.NEO4J_DB});
+	if (summary.counters.updates()['nodesDeleted'] == 1){
+	    return true;
+	}
+    } catch(err){console.log('deleteUserByOpenId() - Error in query: '+ err);}
+    // something went wrong
+    return false;
+}
+
 /**
  * Set visibility for an element/resource given ID
  * @param {string} id

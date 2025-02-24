@@ -30,8 +30,8 @@ const createAuthCookie = (user) => {
  */
 describe('Documentation Endpoint API Testing from Admin', () => {
     let created_doc_id = ""
-    it("Should allow ADMIN to add a new documentation", async () => {
-        const authCookie = createAuthCookie({ id: 1, role: Role.ADMIN });
+    const authCookie = createAuthCookie({ id: 1, role: Role.ADMIN });
+    it("1. Should allow ADMIN to add a new documentation", async () => {
         const res = await request(app)
             .post('/api/documentation')
             .set('Cookie',authCookie)
@@ -44,8 +44,7 @@ describe('Documentation Endpoint API Testing from Admin', () => {
             created_doc_id = res.body["id"]
         }
     });
-    it("Should allow ADMIN to view the created documentation", async() => {
-       const authCookie = createAuthCookie({id: 1, role: Role.ADMIN});
+    it("2. Should allow ADMIN to view the created documentation", async() => {
        const res = await request(app)
            .get('/api/documentation/' + created_doc_id)
            .set('Cookie', authCookie)
@@ -55,8 +54,7 @@ describe('Documentation Endpoint API Testing from Admin', () => {
        expect(res.body).toHaveProperty("id",created_doc_id)
        expect(res.body).toHaveProperty("content",testData.docContent);
     });
-    it("Should allow ADMIN to view all created documentation in range", async() => {
-       const authCookie = createAuthCookie({id: 1, role: Role.ADMIN});
+    it("3. Should allow ADMIN to view all created documentation in range", async() => {
        const res = await request(app)
            .get('/api/documentation'+"?from=0&size=10")
            .set('Cookie', authCookie)
@@ -64,8 +62,7 @@ describe('Documentation Endpoint API Testing from Admin', () => {
            .set("Content-Type", "application/json")
        expect(res.statusCode).toBe(200);
     });
-    it("Should allow ADMIN to view update any created documentation", async() => {
-       const authCookie = createAuthCookie({id: 1, role: Role.ADMIN});
+    it("4. Should allow ADMIN to view update any created documentation", async() => {
        const res = await request(app)
            .put('/api/documentation/' + created_doc_id)
            .set('Cookie', authCookie)
@@ -76,8 +73,7 @@ describe('Documentation Endpoint API Testing from Admin', () => {
        expect(res.body).toHaveProperty("message", 'Documentation updated successfully')
        expect(res.body).toHaveProperty("result",true);
     });
-    it("should return the updated document with the new content", async() => {
-       const authCookie = createAuthCookie({id: 1, role: Role.ADMIN});
+    it("5. Should return the updated document with the new content", async() => {
        const res = await request(app)
            .get('/api/documentation/' + created_doc_id)
            .set('Cookie', authCookie)
@@ -87,8 +83,7 @@ describe('Documentation Endpoint API Testing from Admin', () => {
        expect(res.body).toHaveProperty("id",created_doc_id)
        expect(res.body).toHaveProperty("content",testData.docNewContent);
     });
-    it("Should allow ADMIN to delete the created documentation", async() => {
-        const authCookie = createAuthCookie({id: 1, role: Role.ADMIN});
+    it("6. Should allow ADMIN to delete the created documentation", async() => {
         const res = await request(app)
             .delete('/api/documentation/' + created_doc_id)
             .set('Cookie', authCookie)
@@ -101,14 +96,15 @@ describe('Documentation Endpoint API Testing from Admin', () => {
 
 describe('Documentation Endpoint API Testing from Trusted User', () => {
     let created_doc_id = ""
+    const authAdminCookie = createAuthCookie({ id: 1, role: Role.ADMIN });
+    const authCookie = createAuthCookie({ id: 1, role: Role.TRUSTED_USER });
     /**
      * Create a document as Admin and delete after using
      */
-    it("Should create a temp documentation for testing as ADMIN", async () => {
-       const authCookie = createAuthCookie({ id: 1, role: Role.ADMIN });
+    it("(External) Should create a temp documentation for testing as ADMIN", async () => {
        const res = await request(app)
            .post('/api/documentation')
-           .set('Cookie',authCookie)
+           .set('Cookie',authAdminCookie)
            .set("Accept", "*/*")
            .set("Content-Type", "application/json")
            .send({"name": testData.docName, "content": testData.docContent});
@@ -116,8 +112,7 @@ describe('Documentation Endpoint API Testing from Trusted User', () => {
             created_doc_id = res.body["id"]
         }
     });
-    it("Should not allow TRUSTED_USER to add a new documentation", async () => {
-        const authCookie = createAuthCookie({ id: 1, role: Role.TRUSTED_USER });
+    it("1. Should not allow TRUSTED_USER to add a new documentation", async () => {
         const res = await request(app)
             .post('/api/documentation')
             .set('Cookie',authCookie)
@@ -126,8 +121,7 @@ describe('Documentation Endpoint API Testing from Trusted User', () => {
             .send({"name": testData.docName, "content": testData.docContent});
         expect(res.statusCode).toBe(403);
     });
-    it("Should allow TRUSTED_USER to view the created documentation", async() => {
-       const authCookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+    it("2. Should allow TRUSTED_USER to view the created documentation", async() => {
        const res = await request(app)
            .get('/api/documentation/' + created_doc_id)
            .set('Cookie', authCookie)
@@ -137,8 +131,7 @@ describe('Documentation Endpoint API Testing from Trusted User', () => {
        expect(res.body).toHaveProperty("id",created_doc_id)
        expect(res.body).toHaveProperty("content",testData.docContent);
     });
-    it("Should allow TRUSTED_USER to view all created documentation in range", async() => {
-       const authCookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+    it("3. Should allow TRUSTED_USER to view all created documentation in range", async() => {
        const res = await request(app)
            .get('/api/documentation'+"?from=0&size=10")
            .set('Cookie', authCookie)
@@ -146,8 +139,7 @@ describe('Documentation Endpoint API Testing from Trusted User', () => {
            .set("Content-Type", "application/json")
        expect(res.statusCode).toBe(200);
     });
-    it("Should now allow TRUSTED_USER update any created documentation", async() => {
-       const authCookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+    it("4. Should now allow TRUSTED_USER update any created documentation", async() => {
        const res = await request(app)
            .put('/api/documentation/' + created_doc_id)
            .set('Cookie', authCookie)
@@ -158,11 +150,10 @@ describe('Documentation Endpoint API Testing from Trusted User', () => {
        // expect(res.body).toHaveProperty("message", 'Documentation updated successfully')
        // expect(res.body).toHaveProperty("result",true);
     });
-    it("Should delete the temp created documentation as ADMIN", async() => {
-        const authCookie = createAuthCookie({id: 1, role: Role.ADMIN});
+    it("(External) Should delete the temp created documentation as ADMIN", async() => {
         const res = await request(app)
             .delete('/api/documentation/' + created_doc_id)
-            .set('Cookie', authCookie)
+            .set('Cookie', authAdminCookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
         expect(res.statusCode).toBe(200);

@@ -13,7 +13,6 @@
  * GET /api/users/bookmark/{elementId} == Get whether element is bookmarked by the user or no
  *
  * ** Delete element after creation **
- * ** API to delete user after all processes **
  */
 
 import request from "supertest";
@@ -47,8 +46,9 @@ const createAuthCookie = (user) => {
 describe("Users Endpoint API Testing from a Trusted User", () => {
 
     let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
-    let generated_open_id = testData.trusted_user_id
-
+    let generated_auth_super_admin_cookie = createAuthCookie({id: 1, role: Role.SUPER_ADMIN});
+    let generated_user_id = testData.trusted_user_id
+    let generated_element_id = ""
     it("1. Should allow to create a new user", async () => {
         let user_body = testData.trusted_user
         const res = await request(app)
@@ -72,7 +72,7 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         expect(res.body).toHaveProperty("first-name", testData.trusted_user.first_name);
         expect(res.body).toHaveProperty("last-name", testData.trusted_user.last_name);
         expect(res.body).toHaveProperty("email", testData.trusted_user.email);
-        generated_open_id = res.body['id'];
+        generated_user_id = res.body['id'];
     });
     it("3. Should allow the user to fetch their validity", async () => {
         let user_open_id_encoded = encodeURIComponent(testData.trusted_user.openid);
@@ -130,8 +130,65 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
             .set('Cookie', generated_auth_cookie)
             .set('Content-Type', 'multipart/form-data; boundary=----WebKitFormBoundaryotgYSdiIybBwVdSB')
             .attach('file', file_path) // Use .attach() instead of FormData
-            .field("id", generated_open_id); // Use .field() to send additional form data
-        console.log(res.statusCode);
-        console.log(res.body);
+            .field("id", generated_user_id); // Use .field() to send additional form data
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", "Avatar uploaded successfully");
+    });
+    it("(External) Should allow to create an element to be bookmarked", async () => {
+        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let user_body = testData.element_details_json
+        user_body['metadata']['created_by'] = generated_user_id;
+        const res = await request(app)
+            .post("/api/elements")
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(user_body);
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", 'Resource registered successfully');
+        expect(res.body).toHaveProperty("elementId");
+        generated_element_id = res.body['elementId'];
+    });
+    it("8. Should allow user to bookmark their created element", async () => {
+        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let element_type = testData.element_details_json['resource-type']
+        const res = await request(app)
+            .put("/api/users/bookmark/" + generated_element_id + "?bookmark=true&elementType=" + element_type)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", 'Toggle element bookmark success');
+    });
+    it("9. Should allow user to fetch if their created element is bookmarked", async () => {
+        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let element_type = testData.element_details_json['resource-type']
+        const res = await request(app)
+            .get("/api/users/bookmark/" + generated_element_id + "?elementType=" + element_type)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toBe(true);
+    });
+    it("(External) Element registered should be deleted by the user", async () => {
+        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let encoded_uri = encodeURIComponent(generated_element_id)
+        const res = await request(app)
+            .delete("/api/elements/" + encoded_uri)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", 'Resource deleted successfully');
+    });
+    it("10. Should allow only SUPER_ADMIN to delete user", async () => {
+        const res = await request(app)
+            .delete("/api/users/" + generated_user_id)
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set('Content-Type', "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", 'User deleted successfully')
     });
 });
