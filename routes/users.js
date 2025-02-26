@@ -12,6 +12,7 @@ import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
+import {Role} from "../utils.js";
 
 const router = express.Router();
 
@@ -95,6 +96,38 @@ router.get('/api/users', cors(), async (req, res) => {
     }
 });
 
+router.put('/api/users/:id/role', cors(), async (req, res) => {
+	try {
+ 		const id = decodeURIComponent(req.params.id);
+    	const updated_role_body = req.body;
+
+		if (updated_role_body['role'] !== undefined) {
+			console.log('Updating user role for userId: ' + id);
+			//Check if the new role is a valid role
+			let valid_role = false
+			Object.values(Role).map((role_id, _) => {
+				if (role_id === updated_role_body['role']) {
+					valid_role = true;
+				}
+			});
+			if (valid_role) {
+				const response = await n4j.updateRoleById(id, updated_role_body['role']);
+				if (response) {
+					res.status(200).json({message: 'User role updated successfully'});
+				} else {
+					res.status(500).json({message: 'Error in updating user role'});
+				}
+			} else {
+				res.status(404).json({message: 'Provided role id does not exist'});
+			}
+		} else {
+			res.status(404).json({message: 'User body not containing required attribute'});
+		}
+	} catch (error) {
+		console.error('Error in updating user role: ', error);
+		res.status(500).json({message: 'Error in updating user role'});
+	}
+});
 
 /**
  * @swagger

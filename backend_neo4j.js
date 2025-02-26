@@ -1331,6 +1331,27 @@ export async function getAllContributors(){
 	}
 	return {};
 }
+
+export async function updateRoleById(id, updated_role) {
+	let query_str = "MATCH (c:Contributor{id: $id}) SET c.role = $role";
+	let query_params = {id: id, role: neo4j.int(updated_role)};
+	try {
+		const {records, summary} =
+			await driver.executeQuery(query_str,
+					query_params,
+				{routing: 'WRITE', database: process.env.NEO4J_DB});
+		if (summary.counters.updates()['propertiesSet'] === 1){
+	    	return true;
+		} else {
+			console.error('UpdateRoleById() - Updated multiple records');
+			return false;
+		}
+	} catch (error) {
+		console.log('updateRoleById() - Error in query: ' + error);
+		return false;
+	}
+
+}
 /**
  * Check if contributor exists
  * @param {string} id
