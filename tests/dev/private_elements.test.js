@@ -26,7 +26,7 @@ describe("Private Elements fetch APIs endpoint testing", () => {
     let generated_user_id = ""
     it("(External) Create a trusted User to perform operations", async () => {
         let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
-        let user_body = testData.trusted_user
+        let user_body = testData.private_trusted_user
         const res = await request(app)
             .post('/api/users')
             .set('Cookie', generated_auth_cookie)
@@ -38,17 +38,17 @@ describe("Private Elements fetch APIs endpoint testing", () => {
     });
     it("(External) Should allow to fetch user details", async () => {
         let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
-        let user_open_id_encoded = encodeURIComponent(testData.trusted_user.openid);
+        let user_open_id_encoded = encodeURIComponent(testData.private_trusted_user.openid);
         const res = await request(app)
             .get('/api/users/' + user_open_id_encoded)
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
         expect(res.statusCode).toBe(200);
-        expect(res.body).toHaveProperty("openid", testData.trusted_user.openid);
-        expect(res.body).toHaveProperty("first-name", testData.trusted_user.first_name);
-        expect(res.body).toHaveProperty("last-name", testData.trusted_user.last_name);
-        expect(res.body).toHaveProperty("email", testData.trusted_user.email);
+        expect(res.body).toHaveProperty("openid", testData.private_trusted_user.openid);
+        expect(res.body).toHaveProperty("first-name", testData.private_trusted_user.first_name);
+        expect(res.body).toHaveProperty("last-name", testData.private_trusted_user.last_name);
+        expect(res.body).toHaveProperty("email", testData.private_trusted_user.email);
         generated_user_id = res.body['id'];
     });
     it("(External) Should allow existing user to create an private element", async () => {

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test:dev": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathPattern=tests/dev --verbose --runInBand",
+    "test:dev": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathPattern=tests/dev --verbose",
     "test:prod": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathPattern=tests/prod"
   },
   "type": "module",

@@ -4,11 +4,29 @@
   "docNewName": "Test New Document",
   "docNewContent": "This is a new updated documentation",
   "trusted_user": {
-    "email": "test.dev@iguide.edu",
+    "email": "test.dev.doc@iguide.edu",
     "first_name": "TestFirst",
     "last_name": "DevLast",
     "bio": "Test bio",
-    "openid": "http://cilogon.org/serverTest/users/294212",
+    "openid": "http://cilogon.org/serverTest/users/293121",
+    "affiliation": "University of Illinois, Urbana-Champaign",
+    "version": "1"
+  },
+  "elements_trusted_user": {
+    "email": "test.dev.ele@iguide.edu",
+    "first_name": "TestFirst",
+    "last_name": "DevLast",
+    "bio": "Test bio",
+    "openid": "http://cilogon.org/serverTest/users/12312",
+    "affiliation": "University of Illinois, Urbana-Champaign",
+    "version": "1"
+  },
+  "private_trusted_user": {
+    "email": "test.dev.priv@iguide.edu",
+    "first_name": "TestFirst",
+    "last_name": "DevLast",
+    "bio": "Test bio",
+    "openid": "http://cilogon.org/serverTest/users/241213",
     "affiliation": "University of Illinois, Urbana-Champaign",
     "version": "1"
   },
