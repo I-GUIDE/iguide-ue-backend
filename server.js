@@ -30,6 +30,7 @@ import pipeline_routes from './routes/pipeline_routes.js';
 import llm_spatial_only_routes from './routes/llm_spatial_only_routes.js';
 import anvil_proxy from './routes/anvil_proxy.js';
 import search_routes from './routes/search_routes.js';
+import spatial_routes from './routes/spatial_search_routes.js';
 import private_elements from './routes/private_elements.js';
 import users from './routes/users.js';
 import documentation from './routes/documentation.js';
@@ -48,6 +49,8 @@ app.use('/beta', llm_spatial_only_routes);
 app.use('/proxy', anvil_proxy);
 // Use the advanced search route
 app.use('/api', search_routes);
+// Use the spatial search route
+app.use('/api', spatial_routes);
 // Use the private-elements route
 app.use('/api', private_elements);
 // Use documentation route
@@ -102,6 +105,7 @@ const SSLOptions = {
  */
 app.options('/api/refresh-token', jwtCorsMiddleware);
 app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
+	
 	// updated refresh token to use env variable
     const refreshToken = req.cookies[process.env.JWT_REFRESH_TOKEN_NAME];
     //console.log("Refresh token", refreshToken);
@@ -124,23 +128,39 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 	return res.sendStatus(403);
     }
 
-    jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_SECRET, (err, user) => {
-	if (err) {
-	    console.log(`Error processing refreshToken ${refreshToken}`)
-	    return res.sendStatus(403);
-	}
+    jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_SECRET, async (err, user) => {
+		if (err) {
+			console.log(`Error processing refreshToken ${refreshToken}`)
+			return res.sendStatus(403);
+		}
+		// Generate a new access token with the role in the database
+		try {
+			const response = await n4j.getContributorByID(user.id);
+			if (response.size == 0){
+				return res.status(404).json({ message: 'User not found' });
+			}
+			const newAccessToken = generateAccessToken({ id: user.id, role: response['role'] });
+			res.cookie(process.env.JWT_ACCESS_TOKEN_NAME, newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
+			res.json({ accessToken: newAccessToken });
+			} catch (error) {
+				console.error('Error fetching user:', error);
+				res.status(500).json({ message: 'Error fetching the user' });
+			}
 
-
-	const newAccessToken = generateAccessToken({ id: user.id, role: user.role });
-	 // updated to new variable name
-	res.cookie(process.env.JWT_ACCESS_TOKEN_NAME, newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
-	res.json({ accessToken: newAccessToken });
+		//const newAccessToken = generateAccessToken({ id: user.id, role: user.role });
+		// updated to new variable name
+		//res.cookie(process.env.JWT_ACCESS_TOKEN_NAME, newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
+		//res.json({ accessToken: newAccessToken });
     });
 });
 
 
 app.options('/api/check-tokens', jwtCorsMiddleware);
-app.get('/api/check-tokens', jwtCorsMiddleware, authenticateJWT, async (req, res) => {res.json(req.user.role);});
+app.get('/api/check-tokens', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+	res.json({
+		id: req.user.id,
+		role: req.user.role
+  });});
 
 /****************************************************************************
  * General Helper Functions
