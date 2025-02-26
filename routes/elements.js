@@ -684,17 +684,16 @@ router.post('/api/elements',
             // Set contributor name
             let contributor = await n4j.getContributorByID(contributor_id);
             let contributor_name = '';
-            if ('first-name' in contributor || 'last-name' in contributor) {
-                contributor_name = `${contributor['first-name']} ${contributor['last-name']}`;
+            if ('first_name' in contributor || 'last_name' in contributor) {
+                contributor_name = `${contributor['first_name']} ${contributor['last_name']}`;
             }
             os_element['contributor'] = contributor_name;
             try {
 		  // Get embedding from Flask endpoint
 		  const flaskUrl = process.env.FLASK_EMBEDDING_URL; // URL of the Flask endpoint from .env
-		  const embeddingResponse = await axios.post(
-			  `${flaskUrl}/get_embedding`,
-			  {text: resource['contents']},
-			  		{timeout: 3000});
+		  const embeddingResponse = await axios.post(`${flaskUrl}/get_embedding`, {
+			  text: resource['contents']
+		  });
 
 		  if (embeddingResponse && embeddingResponse.data && embeddingResponse.data.embedding) {
 		    os_element['contents-embedding'] = embeddingResponse.data.embedding;
@@ -842,7 +841,7 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 				// Fetch the new embedding from the Flask API
 				const embeddingResponse = await axios.post(`${flaskUrl}/get_embedding`, {
 				  text: updates['contents']  // Use the updated content to generate a new embedding
-				},{timeout: 3000});
+				});
 			  
 				if (embeddingResponse && embeddingResponse.data && embeddingResponse.data.embedding) {
 				  newEmbedding = embeddingResponse.data.embedding;
