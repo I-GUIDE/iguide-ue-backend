@@ -1332,6 +1332,12 @@ export async function getAllContributors(){
 	return {};
 }
 
+/**
+ * Update the given user id's role with the updated_role
+ * @param id
+ * @param updated_role
+ * @returns {Promise<boolean>}
+ */
 export async function updateRoleById(id, updated_role) {
 	let query_str = "MATCH (c:Contributor{id: $id}) SET c.role = $role";
 	let query_params = {id: id, role: neo4j.int(updated_role)};

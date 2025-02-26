@@ -85,8 +85,11 @@ router.get('/api/users/:id', cors(), async (req, res) => {
  *       500:
  *         description: Error fetching the user list
  */
-//router.options('/users/:id', cors());
-router.get('/api/users', cors(), async (req, res) => {
+router.get('/api/users',
+		jwtCorsMiddleware,
+		authenticateJWT,
+		authorizeRole(Role.ADMIN),
+		async (req, res) => {
     try {
 		const response = await n4j.getAllContributors();
 		res.status(200).json(response);
@@ -96,7 +99,40 @@ router.get('/api/users', cors(), async (req, res) => {
     }
 });
 
-router.put('/api/users/:id/role', cors(), async (req, res) => {
+/**
+ * @swagger
+ * /api/users/{id}/role:
+ *   put:
+ *     summary: Update the user's role
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *            properties:
+ *               role:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: User role updated successfully
+ *       404:
+ *         description: Provided role id or user id does not exist
+ *       500:
+ *         description: Error in updating user role
+ */
+router.put('/api/users/:id/role',
+		jwtCorsMiddleware,
+		authenticateJWT,
+		authorizeRole(Role.ADMIN),
+		async (req, res) => {
 	try {
  		const id = decodeURIComponent(req.params.id);
     	const updated_role_body = req.body;
