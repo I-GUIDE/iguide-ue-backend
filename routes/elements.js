@@ -689,20 +689,24 @@ router.post('/api/elements',
             }
             os_element['contributor'] = contributor_name;
             try {
-		  // Get embedding from Flask endpoint
-		  const flaskUrl = process.env.FLASK_EMBEDDING_URL; // URL of the Flask endpoint from .env
-		  const embeddingResponse = await axios.post(`${flaskUrl}/get_embedding`, {
-			  text: resource['contents']
-		  });
+			  	// Get embedding from Flask endpoint
+				if (process.env.JEST_WORKER_ID !== undefined) {
+					console.log("Skipping Flask Embedding during testing");
+				} else {
+					const flaskUrl = process.env.FLASK_EMBEDDING_URL; // URL of the Flask endpoint from .env
+					const embeddingResponse = await axios.post(`${flaskUrl}/get_embedding`, {
+					  text: resource['contents']
+					});
 
-		  if (embeddingResponse && embeddingResponse.data && embeddingResponse.data.embedding) {
-		    os_element['contents-embedding'] = embeddingResponse.data.embedding;
-		  } else {
-		    console.log('No embedding returned for the content');
-		  }
-		} catch (embeddingError) {
-		  console.error('Error fetching embedding:', embeddingError.message);
-		}
+					if (embeddingResponse && embeddingResponse.data && embeddingResponse.data.embedding) {
+						os_element['contents-embedding'] = embeddingResponse.data.embedding;
+					} else {
+						console.log('No embedding returned for the content');
+					}
+				}
+			} catch (embeddingError) {
+			  console.error('Error fetching embedding:', embeddingError.message);
+			}
 
             console.log('Indexing element: ' + os_element);
             const response = await os.client.index({
@@ -837,16 +841,20 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 				// Get embedding from Flask endpoint
 				const flaskUrl = process.env.FLASK_EMBEDDING_URL; // URL of the Flask endpoint from .env
 				let newEmbedding;
-			  
-				// Fetch the new embedding from the Flask API
-				const embeddingResponse = await axios.post(`${flaskUrl}/get_embedding`, {
-				  text: updates['contents']  // Use the updated content to generate a new embedding
-				});
-			  
-				if (embeddingResponse && embeddingResponse.data && embeddingResponse.data.embedding) {
-				  newEmbedding = embeddingResponse.data.embedding;
+			  	if (process.env.JEST_WORKER_ID !== undefined) {
+					console.log("Skipping Flask Embedding during testing");
+					newEmbedding = false;
 				} else {
-				  console.log('No embedding returned for the content');
+					// Fetch the new embedding from the Flask API
+					const embeddingResponse = await axios.post(`${flaskUrl}/get_embedding`, {
+					  text: updates['contents']  // Use the updated content to generate a new embedding
+					});
+
+					if (embeddingResponse && embeddingResponse.data && embeddingResponse.data.embedding) {
+					  newEmbedding = embeddingResponse.data.embedding;
+					} else {
+					  console.log('No embedding returned for the content');
+					}
 				}
 				
 				// Proceed with the OpenSearch update only if newEmbedding is available
