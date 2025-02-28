@@ -88,7 +88,7 @@ router.get('/api/users/:id', cors(), async (req, res) => {
 router.get('/api/users',
 		jwtCorsMiddleware,
 		authenticateJWT,
-		authorizeRole(Role.ADMIN),
+		authorizeRole(Role.SUPER_ADMIN),
 		async (req, res) => {
     try {
 		const response = await n4j.getAllContributors();
@@ -131,7 +131,7 @@ router.get('/api/users',
 router.put('/api/users/:id/role',
 		jwtCorsMiddleware,
 		authenticateJWT,
-		authorizeRole(Role.ADMIN),
+		authorizeRole(Role.SUPER_ADMIN),
 		async (req, res) => {
 	try {
  		const id = decodeURIComponent(req.params.id);
@@ -139,14 +139,18 @@ router.put('/api/users/:id/role',
 
 		if (updated_role_body['role'] !== undefined) {
 			console.log('Updating user role for userId: ' + id);
-			//Check if the new role is a valid role
+			//Check if the new role is a valid role and if the role is till the TRUSTED USER
 			let valid_role = false
+			let allowed_role = true
 			Object.values(Role).map((role_id, _) => {
 				if (role_id === updated_role_body['role']) {
 					valid_role = true;
 				}
 			});
-			if (valid_role) {
+			if (updated_role_body['role'] <= Role.ADMIN) {
+				allowed_role = false
+			}
+			if (valid_role && allowed_role) {
 				const response = await n4j.updateRoleById(id, updated_role_body['role']);
 				if (response) {
 					res.status(200).json({message: 'User role updated successfully'});
@@ -154,7 +158,11 @@ router.put('/api/users/:id/role',
 					res.status(500).json({message: 'Error in updating user role'});
 				}
 			} else {
-				res.status(404).json({message: 'Provided role id does not exist'});
+				if (allowed_role === false) {
+					res.status(404).json({message: 'Cannot update user role above TRUSTED USER'});
+				} else {
+					res.status(404).json({message: 'Provided role id does not exist'});
+				}
 			}
 		} else {
 			res.status(404).json({message: 'User body not containing required attribute'});
