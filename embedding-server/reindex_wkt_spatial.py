@@ -22,17 +22,42 @@ client = OpenSearch(
     use_ssl=False,
 )
 
+def parse_envelope_to_geojson(envelope_str):
+    """Convert ENVELOPE(minLon, maxLon, maxLat, minLat) to GeoJSON Polygon"""
+    try:
+        # Clean and parse the envelope string
+        clean_str = envelope_str.replace("ENVELOPE(", "").replace(")", "")
+        min_lon, max_lon, max_lat, min_lat = map(float, clean_str.split(","))
+        
+        return {
+            "type": "polygon",
+            "coordinates": [[
+                [min_lon, min_lat],  # Bottom-left
+                [max_lon, min_lat],  # Bottom-right
+                [max_lon, max_lat],  # Top-right
+                [min_lon, max_lat],  # Top-left
+                [min_lon, min_lat]   # Close the polygon
+            ]]
+        }
+    except Exception as e:
+        print(f"⚠️ Failed to parse ENVELOPE: {envelope_str} | Error: {e}")
+        return None
+
 def convert_wkt_to_geojson(wkt_string):
-    """Converts WKT to GeoJSON"""
+    """Converts standard WKT to GeoJSON"""
     if not wkt_string:
         return None
     try:
-        geometry = wkt_loads(wkt_string)  # Convert WKT to Shapely geometry
+        geometry = wkt_loads(wkt_string)
         return json.loads(json.dumps({
-            "type": geometry.geom_type,
-            "coordinates": list(geometry.coords) if geometry.geom_type == "Point"
-            else [list(c) for c in geometry.exterior.coords] if geometry.geom_type == "Polygon"
-            else []
+            "type": geometry.geom_type.lower(),
+            "coordinates": (
+                list(geometry.coords) 
+                if geometry.geom_type == "Point"
+                else [list(c) for c in geometry.exterior.coords] 
+                if geometry.geom_type == "Polygon"
+                else []
+            )
         }))
     except Exception as e:
         print(f"⚠️ Failed to convert WKT: {wkt_string} | Error: {e}")
@@ -45,16 +70,24 @@ def fetch_documents():
     return results
 
 def transform_document(doc):
-    """Transform a document: Convert WKT fields into GeoJSON"""
+    """Transform a document: Convert spatial fields to GeoJSON"""
     doc_id = doc["_id"]
     source = doc["_source"]
 
-    # Convert WKT spatial fields if they exist
+    # Handle spatial-bounding-box (ENVELOPE format)
+    if "spatial-bounding-box" in source:
+        if source["spatial-bounding-box"].upper().startswith("ENVELOPE"):
+            source["spatial-bounding-box"] = parse_envelope_to_geojson(
+                source["spatial-bounding-box"]
+            )
+        else:
+            source["spatial-bounding-box"] = convert_wkt_to_geojson(
+                source["spatial-bounding-box"]
+            )
+
+    # Handle other WKT fields
     if "spatial-geometry" in source:
         source["spatial-geometry"] = convert_wkt_to_geojson(source["spatial-geometry"])
-
-    if "spatial-bounding-box" in source:
-        source["spatial-bounding-box"] = convert_wkt_to_geojson(source["spatial-bounding-box"])
 
     if "spatial-centroid" in source:
         source["spatial-centroid"] = convert_wkt_to_geojson(source["spatial-centroid"])
