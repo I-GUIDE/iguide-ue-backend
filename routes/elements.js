@@ -670,14 +670,14 @@ router.post('/api/elements',
                 tags: resource['tags'],
                 'resource-type': resource['resource-type'],
                 'thumbnail-image': resource['thumbnail-image']['original'],
-		// spatial-temporal
-		'spatial-coverage': resource['spatial-coverage'],
-		'spatial-geometry': resource['spatial-geometry'],
-		'spatial-bounding-box': resource['spatial-bounding-box'],
-		'spatial-centroid': resource['spatial-centroid'],
-		'spatial-georeferenced': resource['spatial-georeferenced'],
-		'spatial-temporal-coverage': resource['spatial-temporal-coverage'],
-		'spatial-index-year': resource['spatial-index-year']
+				// spatial-temporal
+				'spatial-coverage': resource['spatial-coverage'],
+				'spatial-geometry': resource['spatial-geometry'],
+				'spatial-bounding-box': resource['spatial-bounding-box'],
+				'spatial-centroid': resource['spatial-centroid'],
+				'spatial-georeferenced': resource['spatial-georeferenced'],
+				'spatial-temporal-coverage': resource['spatial-temporal-coverage'],
+				'spatial-index-year': resource['spatial-index-year']
             };
 
             console.log('Getting contributor name');
@@ -912,7 +912,13 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 			  }
 			  
 	    } else {
-		// [ToDo] remove element from OpenSearch
+			//remove element from OpenSearch
+			const response = await os.client.delete({
+				index: os.os_index,
+				id: id
+			});
+			console.log("Result from opensearch: ", response['body']['result']);
+			await os.client.indices.refresh({ index: os.os_index });
 	    }
 
 	    //console.log(response['body']['result']);
