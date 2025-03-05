@@ -140,28 +140,30 @@ router.put('/api/users/:id/role',
 		if (updated_role_body['role'] !== undefined) {
 			console.log('Updating user role for userId: ' + id);
 			//Check if the new role is a valid role and if the role is till the TRUSTED USER
-			let valid_role = false
+			let valid_role = true
 			let allowed_role = true
-			Object.values(Role).map((role_id, _) => {
-				if (role_id === updated_role_body['role']) {
-					valid_role = true;
-				}
-			});
-			if (updated_role_body['role'] <= Role.ADMIN) {
+			let parsed_role = 0
+			try {
+				parsed_role = utils.parseRole(updated_role_body['role']);
+			} catch (err) {
+				console.log('Unrecognized Role found: ', err);
+				valid_role = false;
+			}
+			if (parsed_role <= Role.ADMIN) {
 				allowed_role = false
 			}
 			if (valid_role && allowed_role) {
-				const response = await n4j.updateRoleById(id, updated_role_body['role']);
+				const response = await n4j.updateRoleById(id, parsed_role);
 				if (response) {
 					res.status(200).json({message: 'User role updated successfully'});
 				} else {
 					res.status(500).json({message: 'Error in updating user role'});
 				}
 			} else {
-				if (allowed_role === false) {
-					res.status(404).json({message: 'Cannot update user role above TRUSTED USER'});
-				} else {
+				if (valid_role === false) {
 					res.status(404).json({message: 'Provided role id does not exist'});
+				} else {
+					res.status(404).json({message: 'Cannot update user role above TRUSTED USER'});
 				}
 			}
 		} else {

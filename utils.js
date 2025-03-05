@@ -91,6 +91,30 @@ export function parseElementType(type){
     }
 }
 
+/**
+ * Parse the role type for a given string or int value with respect to the Server defined roles
+ * @param role
+ * @returns {number}
+ */
+export function parseRole(role) {
+    switch(role) {
+        case '10':
+        case 10: return Role.UNTRUSTED_USER;
+        case '8':
+        case 8: return Role.TRUSTED_USER;
+        case '4':
+        case 4: return Role.UNRESTRICTED_CONTRIBUTOR;
+        case '3':
+        case 3: return Role.CONTENT_MODERATOR;
+        case '2':
+        case 2: return Role.ADMIN;
+        case '1':
+        case 1: return Role.SUPER_ADMIN;
+        default:
+            throw Error('Server Neo4j: Role type (' + role + ') parsing not implemented');
+    }
+}
+
 export function parseSortBy(sort_by){
     switch (sort_by){
     case SortBy.CLICK_COUNT:
