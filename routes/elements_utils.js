@@ -10,7 +10,8 @@ export async function getFlaskEmbeddingResponse(content) {
         // Fetch the new embedding from the Flask API
         const embeddingResponse = await axios.post(`${flaskUrl}/get_embedding`, {
             text: content  // Use the updated content to generate a new embedding
-        },{timeout: 3000});
+        });
+        // Use when only testing => {timeout: 3000};
 
         if (embeddingResponse && embeddingResponse?.data && embeddingResponse?.data?.embedding) {
             newEmbedding = embeddingResponse?.data?.embedding;
