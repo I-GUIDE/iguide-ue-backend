@@ -291,3 +291,33 @@ export async function userCanViewElement(element_id, user_id, user_role) {
     }
     return false;
 }
+
+/**
+ * Get the Update action to be performed for OpenSearch based on the visibility parameter
+ * @param old_visibility
+ * @param new_visibility
+ * @returns {string}
+ */
+export function updateOSBasedtOnVisibility(old_visibility, new_visibility) {
+    /**
+     * If the element's visibility has not changed
+     *      and is an PUBLIC element then we need to update OS with new entries => TRUE (Update)
+     *      or is an PRIVATE element no insertion/update required as no entry would be present in OS => FALSE
+     * If the element's visibility has changed
+     *      and the new visibility is PUBLIC then we need to insert into OS with a new entry of the element => TRUE (Insert)
+     *      or the new visibility is PRIVATE then we need to delete the current OS entry for the element => FALSE (special case)
+     */
+    if (old_visibility === new_visibility) {
+        if (old_visibility === Visibility.PUBLIC) {
+            return "UPDATE";
+        } else {
+            return "NONE";
+        }
+    } else {
+        if (new_visibility === Visibility.PUBLIC) {
+            return "INSERT";
+        } else {
+            return "DELETE";
+        }
+    }
+}
