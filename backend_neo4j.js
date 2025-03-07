@@ -10,6 +10,7 @@ import * as utils from './utils.js';
 
 // For deployment on JetStream VM
 import dotenv from 'dotenv';
+import {checkUniversityDomain} from "./routes/domain_utils.js";
 dotenv.config();
 console.log(process.env.NEO4J_CONNECTION_STRING);
 
@@ -1174,13 +1175,14 @@ export async function registerContributor(contributor){
 
     // (2) assign roles for new contributor
     contributor['role'] = (() => {
-	if ((contributor['email'] && contributor['email'].toLowerCase().includes('.edu')) ||
-	    (contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university'))
-	   ) {
-	    return neo4j.int(utils.Role.TRUSTED_USER);
-	}
-	// default role
-	return neo4j.int(utils.Role.UNTRUSTED_USER);
+		let contributor_domain = contributor['email'] && contributor['email'].substring(contributor['email'].lastIndexOf("@"));
+		if ((contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
+	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university'))
+	   	) {
+	    	return neo4j.int(utils.Role.TRUSTED_USER);
+		}
+		// default role
+		return neo4j.int(utils.Role.UNTRUSTED_USER);
     })();
     // (3) get avatar URL
     //contributor['avatar_url'] = contributor['avatar_url']['original'];

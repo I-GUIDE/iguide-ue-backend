@@ -35,6 +35,11 @@ import private_elements from './routes/private_elements.js';
 import users from './routes/users.js';
 import documentation from './routes/documentation.js';
 import elements from './routes/elements.js';
+import {
+	checkUniversityDomain,
+	generateOptimizedDomainList,
+	provideDomainUniversityInfo
+} from "./routes/domain_utils.js";
 
 const app = express();
 
@@ -61,10 +66,10 @@ app.use(users);
 app.use(elements);
 
 const target_domain = process.env.JWT_TARGET_DOMAIN;
-const SSLOptions = {
-    key: fs.readFileSync(process.env.SSL_KEY),
-    cert: fs.readFileSync(process.env.SSL_CERT)
-};
+// const SSLOptions = {
+//     key: fs.readFileSync(process.env.SSL_KEY),
+//     cert: fs.readFileSync(process.env.SSL_CERT)
+// };
 /****************************************************************************
  * JWT Specific Functions
  ****************************************************************************/
@@ -209,6 +214,12 @@ app.use((err, req, res, next) => {
     // Forward to next middleware if no errors
     next();
 });
+/****************************************************************************
+ * Importing Domain List
+ ****************************************************************************/
+console.log("Importing domain list from JSON into Object...");
+generateOptimizedDomainList();
+console.log("Domain list import complete!");
 
 /****************************************************************************
  * Misc. Endpoints
@@ -294,10 +305,10 @@ const HTTP_PORT = parseInt(process.env.PORT, 10)+1; //3501;
 app.listen(HTTP_PORT, () => {
     console.log(`HTTP server is running on port ${HTTP_PORT}`);
 });
-
-https.createServer(SSLOptions, app).listen(process.env.PORT, () => {
-    console.log(`HTTPS server is running on port ${process.env.PORT}`);
-});
+//
+// https.createServer(SSLOptions, app).listen(process.env.PORT, () => {
+//     console.log(`HTTPS server is running on port ${process.env.PORT}`);
+// });
 
 // Serve Swagger docs
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
