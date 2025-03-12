@@ -20,6 +20,7 @@
     "compromise": "^14.14.2",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
+    "csv-parser": "^3.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "file-type": "^19.0.0",
@@ -30,10 +31,12 @@
     "neo4j-driver": "^5.23.0",
     "node-fetch": "^3.3.2",
     "sharp": "^0.33.5",
+    "spacy": "^0.0.4",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-dist": "^5.18.2",
     "swagger-ui-express": "^5.0.1",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "wkt-parser": "^1.4.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"

@@ -16,6 +16,7 @@ import swaggerUi from'swagger-ui-express';
 import { specs } from './swagger.js';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
+
 // local imports
 import * as utils from './utils.js';
 import * as n4j from './backend_neo4j.js';
@@ -24,10 +25,12 @@ import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from './iguide_cors
 import { authenticateJWT, authorizeRole, generateAccessToken } from './jwtUtils.js';
 // local imports for endpoints
 //import llm_routes from './routes/llm_with_filter_routes.js';
-import llm_routes from './routes/llm_routes.js';
+//import llm_routes from './routes/llm_routes.js';
+import pipeline_routes from './routes/pipeline_routes.js';
 import llm_spatial_only_routes from './routes/llm_spatial_only_routes.js';
 import anvil_proxy from './routes/anvil_proxy.js';
 import search_routes from './routes/search_routes.js';
+import spatial_routes from './routes/spatial_search_routes.js';
 import private_elements from './routes/private_elements.js';
 import users from './routes/users.js';
 import documentation from './routes/documentation.js';
@@ -40,11 +43,14 @@ app.use(cookieParser());
 dotenv.config();
 
 // Use the LLM-based conversational search route
-app.use('/beta', llm_routes);
+//app.use('/beta', llm_routes);
+app.use('/beta', pipeline_routes);
 app.use('/beta', llm_spatial_only_routes);
 app.use('/proxy', anvil_proxy);
 // Use the advanced search route
 app.use('/api', search_routes);
+// Use the spatial search route
+app.use('/api', spatial_routes);
 // Use the private-elements route
 app.use('/api', private_elements);
 // Use documentation route

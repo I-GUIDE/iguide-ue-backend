@@ -12,6 +12,7 @@ import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
+import {Role} from "../utils.js";
 
 const router = express.Router();
 
@@ -69,6 +70,109 @@ router.get('/api/users/:id', cors(), async (req, res) => {
 	console.error('Error fetching user:', error);
 	res.status(500).json({ message: 'Error fetching the user' });
     }
+});
+
+/**
+ * @swagger
+ * /api/users:
+ *   get:
+ *     summary: Return all users
+ *     tags: ['users']
+ *     parameters:
+ *     responses:
+ *       200:
+ *         description: All user documents found
+ *       500:
+ *         description: Error fetching the user list
+ */
+router.get('/api/users',
+		jwtCorsMiddleware,
+		authenticateJWT,
+		authorizeRole(Role.SUPER_ADMIN),
+		async (req, res) => {
+    try {
+		const response = await n4j.getAllContributors();
+		res.status(200).json(response);
+    } catch (error) {
+		console.error('Error fetching user list:', error);
+		res.status(500).json({ message: 'Error fetching the user list' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/users/{id}/role:
+ *   put:
+ *     summary: Update the user's role
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *            properties:
+ *               role:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: User role updated successfully
+ *       404:
+ *         description: Provided role id or user id does not exist
+ *       500:
+ *         description: Error in updating user role
+ */
+router.put('/api/users/:id/role',
+		jwtCorsMiddleware,
+		authenticateJWT,
+		authorizeRole(Role.SUPER_ADMIN),
+		async (req, res) => {
+	try {
+ 		const id = decodeURIComponent(req.params.id);
+    	const updated_role_body = req.body;
+
+		if (updated_role_body['role'] !== undefined) {
+			console.log('Updating user role for userId: ' + id);
+			//Check if the new role is a valid role and if the role is till the TRUSTED USER
+			let valid_role = true
+			let allowed_role = true
+			let parsed_role = 0
+			try {
+				parsed_role = utils.parseRole(updated_role_body['role']);
+			} catch (err) {
+				console.log('Unrecognized Role found: ', err);
+				valid_role = false;
+			}
+			if (parsed_role <= Role.ADMIN) {
+				allowed_role = false
+			}
+			if (valid_role && allowed_role) {
+				const response = await n4j.updateRoleById(id, parsed_role);
+				if (response) {
+					res.status(200).json({message: 'User role updated successfully'});
+				} else {
+					res.status(500).json({message: 'Error in updating user role'});
+				}
+			} else {
+				if (valid_role === false) {
+					res.status(404).json({message: 'Provided role id does not exist'});
+				} else {
+					res.status(404).json({message: 'Cannot update user role above TRUSTED USER'});
+				}
+			}
+		} else {
+			res.status(404).json({message: 'User body not containing required attribute'});
+		}
+	} catch (error) {
+		console.error('Error in updating user role: ', error);
+		res.status(500).json({message: 'Error in updating user role'});
+	}
 });
 
 /**

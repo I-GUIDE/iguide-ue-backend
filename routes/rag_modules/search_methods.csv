@@ -1,0 +1,4 @@
+function_name,description
+getKeywordSearchResults,Keyword search is suitable for keyword queries.
+getSemanticSearchResults,Suitable for sentence queries leveraging semantic understanding.
+getSpatialSearchResults,Spatial search should be called if there is a term or description of a specific spatial range in the user query.

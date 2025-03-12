@@ -8,12 +8,19 @@ import fs from 'fs';
 import { exec } from 'child_process';
 import fetch from 'node-fetch';
 import path from 'path';
+import axios from 'axios';
 // local imports
 import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
+import {parseVisibility, updateOSBasedtOnVisibility, Visibility} from "../utils.js";
+import {
+	getFlaskEmbeddingResponse,
+	performElementOpenSearchDelete,
+	performElementOpenSearchInsert, performElementOpenSearchUpdate
+} from "./elements_utils.js";
 
 const router = express.Router();
 
@@ -280,7 +287,7 @@ router.get('/api/elements/titles', cors(), async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *           enum: [dataset, notebook, publication, oer, map]
+ *           enum: [dataset, notebook, publication, oer, map, code]
  *         description: Type of featured elements to get
   *       - in: query
  *         name: limit
@@ -661,54 +668,58 @@ router.post('/api/elements',
         const {response, element_id} = await n4j.registerElement(contributor_id, resource);
 
         if (response) {
-            // Insert/index searchable part to OpenSearch
-            let os_element = {
-                title: resource['title'],
-                contents: resource['contents'],
-                authors: resource['authors'],
-                tags: resource['tags'],
-                'resource-type': resource['resource-type'],
-                'thumbnail-image': resource['thumbnail-image']['original'],
-		// spatial-temporal
-		'spatial-coverage': resource['spatial-coverage'],
-		'spatial-geometry': resource['spatial-geometry'],
-		'spatial-bounding-box': resource['spatial-bounding-box'],
-		'spatial-centroid': resource['spatial-centroid'],
-		'spatial-georeferenced': resource['spatial-georeferenced'],
-		'spatial-temporal-coverage': resource['spatial-temporal-coverage'],
-		'spatial-index-year': resource['spatial-index-year']
-            };
+			let resource_visibility = parseVisibility(resource['visibility']);
+			//Indexing the Element only if the visibility is Public
+			if (resource_visibility === Visibility.PUBLIC) {
+				//Create indexable part for the resource
+				let os_element = {
+					title: resource['title'],
+					contents: resource['contents'],
+					authors: resource['authors'],
+					tags: resource['tags'],
+					'resource-type': resource['resource-type'],
+					'thumbnail-image': resource['thumbnail-image']['original'],
+					// spatial-temporal
+					'spatial-coverage': resource['spatial-coverage'],
+					'spatial-geometry': resource['spatial-geometry'],
+					'spatial-bounding-box': resource['spatial-bounding-box'],
+					'spatial-centroid': resource['spatial-centroid'],
+					'spatial-georeferenced': resource['spatial-georeferenced'],
+					'spatial-temporal-coverage': resource['spatial-temporal-coverage'],
+					'spatial-index-year': resource['spatial-index-year']
+				};
+				console.log('Getting contributor name');
+				// Set contributor name
+				let contributor = await n4j.getContributorByID(contributor_id);
+				let contributor_name = '';
+				if ('first-name' in contributor || 'last-name' in contributor) {
+					contributor_name = `${contributor['first-name']} ${contributor['last-name']}`;
+				}
+				os_element['contributor'] = contributor_name;
 
-            console.log('Getting contributor name');
-            // Set contributor name
-            let contributor = await n4j.getContributorByID(contributor_id);
-            let contributor_name = '';
-            if ('first_name' in contributor || 'last_name' in contributor) {
-                contributor_name = `${contributor['first_name']} ${contributor['last_name']}`;
-            }
-            os_element['contributor'] = contributor_name;
-
-            console.log('Indexing element: ' + os_element);
-            const response = await os.client.index({
-                id: element_id,
-                index: os.os_index,
-                body: os_element,
-                refresh: true,
-            });
-
-            console.log(response['body']['result']);
+				let content_embedding = await getFlaskEmbeddingResponse(resource['contents']);
+				if (content_embedding) {
+					os_element['contents-embedding'] = content_embedding;
+				}
+				console.log('Indexing element: ' + os_element);
+				let os_response = await performElementOpenSearchInsert(os_element, element_id);
+				console.log('OpenSearch Indexing result: ', os_response);
+			}
             res.status(200).json({ message: 'Resource registered successfully', elementId: element_id });
         } else {
-	    if (element_id) {
-		// registration failed because of duplicate element
-		console.log('Duplicate found while registering resource ...');
-		res.status(402).json({ message: 'Duplicate found while registering resource',
-				       error: 'Duplicate found while registering resource',
-				       elementId: element_id});
-	    } else {
-		console.log('Error registering resource ...');
-		res.status(500).json({ error: 'Error registering resource' });
-	    }
+			if (element_id) {
+			// registration failed because of duplicate element
+			console.log('Duplicate found while registering resource ...');
+			res.status(402).json(
+				{
+					message: 'Duplicate found while registering resource',
+					error: 'Duplicate found while registering resource',
+					elementId: element_id
+				});
+	    	} else {
+				console.log('Error registering resource ...');
+				res.status(500).json({ error: 'Error registering resource' });
+	    	}
         }
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -741,14 +752,9 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
     try {
 	const response = await n4j.deleteElementByID(resourceId);
 	if (response) {
-	    // Delete from OpenSearch
-	    const response = await os.client.delete({
-		index: os.os_index,
-		id: resourceId
-	    });
-	    console.log(response['body']['result']);
-	    await os.client.indices.refresh({ index: os.os_index });
-
+	    // Deletes from OpenSearch regardless if it's present or not
+		let os_response = await performElementOpenSearchDelete(resourceId);
+		console.log("OpenSearch Response: " , os_response);
 	    res.status(200).json({ message: 'Resource deleted successfully' });
 	} else {
 	    res.status(500).json({ error: 'Resource still exists after deletion' });
@@ -809,42 +815,56 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
                     `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
             }
         }
-
+	const element_old_visibility = await n4j.getElementVisibilityForID(id);
 	const response = await n4j.updateElement(id, updates);
 	if (response) {
 	    // 'visibility' field is NOT searchable so should NOT be added to OS
 	    // elements should ONLY be in OpenSearch if they are public
 	    const visibility = utils.parseVisibility(updates['visibility']);
-	    if (visibility === utils.Visibility.PUBLIC) {
-		// Update in OpenSearch
-		const response = await os.client.update({
-		    id: id,
-		    index: os.os_index,
-		    body: {
-			doc: {
-			    'title': updates['title'],
-			    'contents': updates['contents'],
-			    'authors': updates['authors'],
-			    'tags': updates['tags'],
-			    'thumbnail-image': updates['thumbnail-image']['original'],
-			    // spatial-temporal properties
-			    'spatial-coverage': updates['spatial-coverage'],
-			    'spatial-geometry': updates['spatial-geometry'],
-			    'spatial-bounding-box': updates['spatial-bounding-box'],
-			    'spatial-centroid': updates['spatial-centroid'],
-			    'spatial-georeferenced': updates['spatial-georeferenced'],
-			    'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
-			    'spatial-index-year': updates['spatial-index-year']
-			    // type and contributor should never be updated
-			}
-		    },
-		    refresh: true,
-		});
-	    } else {
-		// [ToDo] remove element from OpenSearch
-	    }
-
-	    //console.log(response['body']['result']);
+		const visibility_action = updateOSBasedtOnVisibility(element_old_visibility, visibility);
+		let os_doc_body = {
+			'title': updates['title'],
+			'contents': updates['contents'],
+			// Update the embedding field
+			// 'contents-embedding': newEmbedding,
+			'authors': updates['authors'],
+			'tags': updates['tags'],
+			'thumbnail-image': updates['thumbnail-image']['original'],
+			// Spatial-temporal properties
+			'spatial-coverage': updates['spatial-coverage'],
+			'spatial-geometry': updates['spatial-geometry'],
+			'spatial-bounding-box': updates['spatial-bounding-box'],
+			'spatial-centroid': updates['spatial-centroid'],
+			'spatial-georeferenced': updates['spatial-georeferenced'],
+			'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
+			'spatial-index-year': updates['spatial-index-year']
+			// Type and contributor should never be updated
+		}
+		switch (visibility_action) {
+			case 'INSERT':
+				let contentEmbeddingInsert = await getFlaskEmbeddingResponse(updates['contents']);
+				if (contentEmbeddingInsert) {
+					os_doc_body['contents-embedding'] = contentEmbeddingInsert;
+				}
+				let os_insert_response = await performElementOpenSearchInsert(os_doc_body, id);
+				console.log("OpenSearch Response: ",os_insert_response);
+				break;
+			case 'UPDATE':
+				let contentEmbeddingUpdate = await getFlaskEmbeddingResponse(updates['contents']);
+				if (contentEmbeddingUpdate) {
+					os_doc_body['contents-embedding'] = contentEmbeddingUpdate;
+				}
+				let os_update_response = await performElementOpenSearchUpdate(os_doc_body, id);
+				console.log("OpenSearch Response: ",os_update_response);
+				break;
+			case 'DELETE':
+				let os_delete_response = await performElementOpenSearchDelete(id);
+				console.log("OpenSearch Response: ", os_delete_response);
+				break;
+			case 'NONE':
+			default:
+				break;
+		}
 	    res.status(200).json({ message: 'Element updated successfully', result: response });
 	} else {
 	    console.log('Error updating element');
@@ -956,12 +976,8 @@ router.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, async (req
  */
 router.options('/api/elements/thumbnail', jwtCorsMiddleware);
 router.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('file'), authenticateJWT, (req, res) => {
-    // if (!req.file) {
-    // 	return res.status(400).json({ message: 'No file uploaded' });
-    // }
-    // // [ToDo] Change filename to user ID
+	// // [ToDo] Change filename to user ID
     // const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${req.file.filename}`;
-
     try {
         const body = JSON.parse(JSON.stringify(req.body));
         const element_id = body.id;
@@ -971,13 +987,18 @@ router.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single
             return res.status(400).json({ message: 'Element ID and new thumbnail file are required' });
         }
 
-	const images =
-	      utils.generateMultipleResolutionImagesFor(new_thumbnail_file.filename,
-							thumbnail_dir);
-        res.json({
-            message: 'Thumbnail uploaded successfully',
-            'image-urls': images
+        // Call the image processing function with a callback for error handling
+        utils.generateMultipleResolutionImagesFor(new_thumbnail_file.filename, thumbnail_dir, false, (errorMessage, images) => {
+            if (errorMessage) {
+                return res.status(400).json({ message: errorMessage });
+            }
+
+            res.json({
+                message: 'Thumbnail uploaded successfully',
+                'image-urls': images
+            });
         });
+
     } catch (error) {
         console.error('Error processing image:', error);
         res.status(500).json({ message: 'Error processing image' });

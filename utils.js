@@ -12,6 +12,7 @@ export const ElementType = Object.freeze({
     PUBLICATION: "Publication",
     OER: "Oer", // Open Educational Content
     MAP: "Map",
+    CODE: "Code",
     //Documentation: "Documentation",
 });
 
@@ -84,8 +85,33 @@ export function parseElementType(type){
     case ElementType.PUBLICATION: return ElementType.PUBLICATION;
     case ElementType.OER: return ElementType.OER;
     case ElementType.MAP: return ElementType.MAP;
+    case ElementType.CODE: return ElementType.CODE;
     default:
 	throw Error('Server Neo4j: Element type ('+ element_type  +') parsing not implemented');
+    }
+}
+
+/**
+ * Parse the role type for a given string or int value with respect to the Server defined roles
+ * @param role
+ * @returns {number}
+ */
+export function parseRole(role) {
+    switch(role) {
+        case '10':
+        case 10: return Role.UNTRUSTED_USER;
+        case '8':
+        case 8: return Role.TRUSTED_USER;
+        case '4':
+        case 4: return Role.UNRESTRICTED_CONTRIBUTOR;
+        case '3':
+        case 3: return Role.CONTENT_MODERATOR;
+        case '2':
+        case 2: return Role.ADMIN;
+        case '1':
+        case 1: return Role.SUPER_ADMIN;
+        default:
+            throw Error('Server Neo4j: Role type (' + role + ') parsing not implemented');
     }
 }
 
@@ -160,9 +186,17 @@ const IMAGE_SIZES = {
  * @returns {Object} {low: {string}, medium: {string}, high: {string}, original: {string}}
  */
 export function generateMultipleResolutionImagesFor(image_file_str,
-						    upload_dir_path=null,
-						    is_avatar=false){
-    if (image_file_str === null || image_file_str === '') return null;
+                                                    upload_dir_path = null,
+                                                    is_avatar = false,
+                                                    callback = null) {  // Callback is optional
+    if (image_file_str === null || image_file_str === '') {
+        // If the callback is provided, call it with an error
+        if (callback) {
+            callback('Invalid image file string', null);
+        }
+        return null;
+    }
+
     const image_filename = path.basename(image_file_str);
     const filename_without_ext = image_filename.replace(/\.[^/.]+$/, '');
     const file_ext = path.extname(image_filename);
@@ -171,28 +205,60 @@ export function generateMultipleResolutionImagesFor(image_file_str,
     let url_prefix = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads`;
     let size_array = [];
     if (is_avatar) {
-	url_prefix = `${url_prefix}/avatars`;
-	size_array = IMAGE_SIZES.avatar;
+        url_prefix = `${url_prefix}/avatars`;
+        size_array = IMAGE_SIZES.avatar;
     } else {
-	url_prefix = `${url_prefix}/thumbnails`;
-	size_array = IMAGE_SIZES.thumbnail;
+        url_prefix = `${url_prefix}/thumbnails`;
+        size_array = IMAGE_SIZES.thumbnail;
     }
 
     image_urls['original'] = `${url_prefix}/${image_filename}`;
+    let pending = size_array.length;
+    let responseSent = false;  // Flag to prevent multiple responses
+
+    function checkDone() {
+        if (pending === 0 && !responseSent) {
+            if (callback) {
+                callback(null, image_urls);  // Send success callback
+            }
+            responseSent = true;  // Mark response as sent
+        }
+    }
+
     for (const size of size_array) {
         const resized_filename = `${filename_without_ext}${size.suffix}${file_ext}`;
 
-	if (upload_dir_path) {
-	    sharp(path.join(upload_dir_path, image_filename))
-		.resize(size.width)
-		.toFile(path.join(upload_dir_path, resized_filename));
-	}
-
-	image_urls[size.name] = `${url_prefix}/${resized_filename}`;
+        if (upload_dir_path) {
+            sharp(path.join(upload_dir_path, image_filename))
+                .resize(size.width)
+                .toFile(path.join(upload_dir_path, resized_filename), (err, info) => {
+                    if (err) {
+                        console.error("Error processing image with sharp:", err);
+                        image_urls['error'] = 'Unsupported image format or other error';
+                        if (!responseSent && callback) {
+                            callback('Unsupported image format', null);  // Call callback with error
+                            responseSent = true;
+                        }
+                    } else {
+                        console.log("Image resized successfully:", info);
+                        image_urls[size.name] = `${url_prefix}/${resized_filename}`;
+                    }
+                    pending -= 1;
+                    checkDone();
+                });
+        } else {
+            image_urls[size.name] = `${url_prefix}/${resized_filename}`;
+            pending -= 1;
+            checkDone();
+        }
     }
-    //console.log(image_urls);
-    return image_urls;
+
+    // If no callback is provided, just return the image URLs
+    if (!callback) {
+        return image_urls;
+    }
 }
+
 
 /**
  * Determing if user with user_id has enough permission to edit element with element_id
@@ -248,4 +314,34 @@ export async function userCanViewElement(element_id, user_id, user_role) {
 	return true;
     }
     return false;
+}
+
+/**
+ * Get the Update action to be performed for OpenSearch based on the visibility parameter
+ * @param old_visibility
+ * @param new_visibility
+ * @returns {string}
+ */
+export function updateOSBasedtOnVisibility(old_visibility, new_visibility) {
+    /**
+     * If the element's visibility has not changed
+     *      and is an PUBLIC element then we need to update OS with new entries => TRUE (Update)
+     *      or is an PRIVATE element no insertion/update required as no entry would be present in OS => FALSE
+     * If the element's visibility has changed
+     *      and the new visibility is PUBLIC then we need to insert into OS with a new entry of the element => TRUE (Insert)
+     *      or the new visibility is PRIVATE then we need to delete the current OS entry for the element => FALSE (special case)
+     */
+    if (old_visibility === new_visibility) {
+        if (old_visibility === Visibility.PUBLIC) {
+            return "UPDATE";
+        } else {
+            return "NONE";
+        }
+    } else {
+        if (new_visibility === Visibility.PUBLIC) {
+            return "INSERT";
+        } else {
+            return "DELETE";
+        }
+    }
 }

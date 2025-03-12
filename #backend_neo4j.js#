@@ -412,7 +412,7 @@ export async function getElementsByType(type,
 	    "ORDER BY n." + order_by + " " + order + ", n.id " + order + " " +
 	    "SKIP $from " +
 	    "LIMIT $size";
-
+	    
 	    const {records, summary} = await tx.run(query_str,
 						    {from: neo4j.int(from),
 						     size: neo4j.int(size),
@@ -491,7 +491,7 @@ export async function getElementsBookmarkedByContributor(id,
 				       			){
     const session = driver.session({database: process.env.NEO4J_DB});
     const tx = await session.beginTransaction();
-
+    
     try{
 	let query_params = {contrib_id: id};
 	let query_str = "MATCH (c:Contributor)-[:CONTRIBUTED]-(r)-[:BOOKMARKED]-(u:Contributor) " +
@@ -821,7 +821,6 @@ export async function setElementFeaturedForID(id){
 	if (summary.counters.updates()['propertiesSet'] >= 1){
 	    return true;
 	}
-
     } catch(err){console.log('setElementFeaturedForID() - Error in query: '+ err);}
     // something went wrong
     return false;
@@ -971,8 +970,6 @@ async function elementToNode(element, generate_id=true){
 	'external-link-publication': external_link_pub, // Publication
 	'oer-external-links': oer_external_links,       // OER
 	'map-external-iframe-link': external_link_map,  // MAP
-	'github-repo-link': github_repo_link,           // Code
-	'github-repo-readme': github_repo_readme,       // Code
 	...node
        } = element;
 
@@ -1006,9 +1003,6 @@ async function elementToNode(element, generate_id=true){
 	}
     } else if (node_type == utils.ElementType.MAP){
 	node['external_iframe_link'] = external_link_map;
-    } else if (node_type == utils.ElementType.CODE){
-	node['github_repo_link'] = github_repo_link;
-	node['github_repo_readme'] = github_repo_readme;
     } else {
 	throw Error(`Backend Neo4j: elementToNode type ($node_type) not implemented`);
     }
@@ -1175,7 +1169,7 @@ export async function registerContributor(contributor){
 
     // (2) assign roles for new contributor
     contributor['role'] = (() => {
-	if ((contributor['email'] && contributor['email'].toLowerCase().includes('.edu')) ||
+	if ((contributor['email'] && contributor['email'].endsWith('edu')) ||
 	    (contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university'))
 	   ) {
 	    return neo4j.int(utils.Role.TRUSTED_USER);
@@ -1184,7 +1178,7 @@ export async function registerContributor(contributor){
 	return neo4j.int(utils.Role.UNTRUSTED_USER);
     })();
     // (3) get avatar URL
-    //contributor['avatar_url'] = contributor['avatar_url']['original'];
+    contributor['avatar_url'] = contributor['avatar_url']['original'];
     const query_str = "CREATE (c: Contributor $contr_param)";
     try{
 	const {_, summary} =
@@ -1301,63 +1295,6 @@ export async function getContributorByID(id){
     } catch(err){console.log('getContributorByID() - Error in query: '+ err);}
     // something went wrong
     return {};
-}
-
-/**
- * Get all Contributors with all information
- * @returns {Object} Map of objects with serial Ids. If no users found returns empty
- */
-export async function getAllContributors(){
-	const query_str = "MATCH (c:Contributor) return c{.*}";
-	try {
-		const {records, summary} =
-			await driver.executeQuery(query_str,
-				{},
-				{routing: 'READ', database: process.env.NEO4J_DB})
-		if (records?.length <= 0) {
-			return {};
-		}
-		let contributor_list = [];
-		records?.map((contributor) => {
-			if (contributor['_fields']?.length > 0) {
-				let temp_contributor = contributor['_fields'][0]
-				temp_contributor['role'] = utils.parse64BitNumber(temp_contributor['role']);
-				contributor_list.push(temp_contributor);
-			}
-		});
-		return makeFrontendCompatible(contributor_list)
-
-	} catch (err) {
-		console.log('getAllContributors() - Error in query: ' + err);
-	}
-	return {};
-}
-
-/**
- * Update the given user id's role with the updated_role
- * @param id
- * @param updated_role
- * @returns {Promise<boolean>}
- */
-export async function updateRoleById(id, updated_role) {
-	let query_str = "MATCH (c:Contributor{id: $id}) SET c.role = $role";
-	let query_params = {id: id, role: neo4j.int(updated_role)};
-	try {
-		const {records, summary} =
-			await driver.executeQuery(query_str,
-					query_params,
-				{routing: 'WRITE', database: process.env.NEO4J_DB});
-		if (summary.counters.updates()['propertiesSet'] === 1){
-	    	return true;
-		} else {
-			console.error('UpdateRoleById() - Updated multiple records');
-			return false;
-		}
-	} catch (error) {
-		console.log('updateRoleById() - Error in query: ' + error);
-		return false;
-	}
-
 }
 /**
  * Check if contributor exists

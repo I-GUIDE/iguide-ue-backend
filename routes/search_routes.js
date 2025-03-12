@@ -99,7 +99,7 @@ router.get('/search/count', cors(), async (req, res) => {
 
     // Build a list of must conditions for bool query
     const mustConditions = [
-        { multi_match: { query: keyword, fields: ['title^3', 'authors^3', 'tags^2', 'contents'] } }
+        { multi_match: { query: keyword, fields: ['title^3', 'authors^3', 'tags^2', 'contents', 'contributor^3'] } }
     ];
 
     if (element_type && element_type !== 'any') {
@@ -122,13 +122,16 @@ router.get('/search/count', cors(), async (req, res) => {
         };
     }
 
-    // Replace title and authors with their keyword sub-fields for sorting
+    // Replace title=, authors, and contributors with their keyword sub-fields for sorting
     let sortBy = sort_by;
     if (sortBy === 'title') {
         sortBy = 'title.keyword';
     } else if (sortBy === 'authors') {
         sortBy = 'authors.keyword';
+    } else if (sortBy === 'contributor') {
+        sortBy = 'contributor.keyword';
     }
+
 
     try {
         const searchParams = {
@@ -237,7 +240,7 @@ router.get('/search', cors(), async (req, res) => {
 
     // Build must conditions for both main query and aggregation
     const mustConditions = [
-        { multi_match: { query: keyword, fields: ['title^3', 'authors^3', 'tags^2', 'contents'] } }
+        { multi_match: { query: keyword, fields: ['title^3', 'authors^3', 'tags^2', 'contents', 'contributor^3'] } }
     ];
 
     // Add additional fields as match conditions
@@ -293,7 +296,7 @@ router.get('/search', cors(), async (req, res) => {
         if (sort_by !== 'prioritize_title_author') {
             searchParams.body.sort = [
                 {
-                    [sort_by === 'title' ? 'title.keyword' : sort_by === 'authors' ? 'authors.keyword' : sort_by]: {
+                    [sort_by === 'title' ? 'title.keyword' : sort_by === 'authors' ? 'authors.keyword' : sort_by === 'contributor' ? 'contributor.keyword' : sort_by]: {
                         order: order,
                     },
                 },
