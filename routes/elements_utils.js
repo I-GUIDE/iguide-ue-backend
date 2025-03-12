@@ -19,7 +19,7 @@ export async function getFlaskEmbeddingResponse(content) {
             console.log('No embedding returned for the content');
         }
     } catch (error) {
-        console.log("getFlaskEmbeddingResponse - skipping as no ENV defined");
+        // console.log("getFlaskEmbeddingResponse - skipping as no ENV defined");
         // console.error("getFlaskEmbeddingResponse - Error: ", error);
     }
     return newEmbedding;
