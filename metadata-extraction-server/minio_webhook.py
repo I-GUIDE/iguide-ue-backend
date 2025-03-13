@@ -11,7 +11,7 @@ def webhook():
     # Trigger metadata extraction script
     bucket = event['Records'][0]['s3']['bucket']['name']
     key = event['Records'][0]['s3']['object']['key']
-    subprocess.run(["python3", "extract_metadata.py", bucket, key])
+    subprocess.run(["python3", "extract_metadata_code_notebooks.py", bucket, key])
     
     return jsonify({"message": "Event received"}), 200
 

@@ -51,8 +51,8 @@ def extract_metadata(bucket, key):
         s3 = boto3.client(
             's3',
             endpoint_url="http://i-guide-storage-dev.cis220065.projects.jetstream-cloud.org:9010",
-            aws_access_key_id="access_id",
-            aws_secret_access_key="access_key",
+            aws_access_key_id=,
+            aws_secret_access_key=,
             config=boto3.session.Config(signature_version='s3v4')
         )
 

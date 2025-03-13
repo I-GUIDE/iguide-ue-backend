@@ -3,9 +3,13 @@ import boto3
 import ast
 import json
 import nbformat
+import zipfile
 import tempfile
+import fiona
 import logging
 import os
+import rasterio
+
 import re
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
 from typing import Dict, List
@@ -49,7 +53,6 @@ def extract_java_metadata(code: str) -> List[Dict]:
     """Extract methods and classes from Java code using regex."""
     metadata = []
     try:
-        # Simple regex-based parser for demonstration
         class_pattern = r'class\s+(\w+)\s*{([^}]*)}'
         method_pattern = r'(public|private|protected|static|\s) +[\w\<\>\[\]]+\s+(\w+)\s*\(([^)]*)\)'
         
@@ -98,24 +101,67 @@ def extract_notebook_metadata(notebook_path: str) -> List[Dict]:
         logging.warning(f"Notebook parsing error: {e}")
     return metadata
 
-def process_file(file_path: str, bucket: str) -> Dict:
-    """Process files based on bucket and file type."""
+def process_zip(zip_path: str, bucket: str) -> Dict:
+    """Process ZIP files and their contents based on bucket type."""
     metadata = {}
-    try:
-        if bucket == "code":
-            with open(file_path, 'r') as f:
-                content = f.read()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(tmpdir)
                 
-            if file_path.endswith('.py'):
-                metadata["code_analysis"] = extract_python_metadata(content)
-            elif file_path.endswith('.java'):
-                metadata["code_analysis"] = extract_java_metadata(content)
-                
-        elif bucket == "notebooks" and file_path.endswith('.ipynb'):
-            metadata["notebook_analysis"] = extract_notebook_metadata(file_path)
-            
-    except Exception as e:
-        logging.error(f"Processing failed for {file_path}: {e}")
+                for root, _, files in os.walk(tmpdir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        rel_path = os.path.relpath(file_path, tmpdir)
+                        
+                        try:
+                            if bucket == "datasets":
+                                if file.lower().endswith(('.tif', '.tiff')):
+                                    with rasterio.open(file_path) as src:
+                                        crs = src.crs.to_string() if src.crs else "undefined"
+                                        metadata[file] = {
+                                            "type": "raster",
+                                            "crs": crs,
+                                            "bounds": list(src.bounds),
+                                            "resolution": [float(res) for res in src.res]
+                                        }
+                                elif file.lower().endswith(('.shp', '.geojson')):
+                                    with fiona.open(file_path) as src:
+                                        crs = dict(src.crs) if src.crs else {}
+                                        metadata[file] = {
+                                            "type": "vector",
+                                            "crs": crs,
+                                            "schema": src.schema,
+                                            "bounds": list(src.bounds)
+                                        }
+                            
+                            elif bucket == "code":
+                                if file.endswith('.py'):
+                                        with open(file_path, 'r') as f:
+                                            content = f.read()
+                                        metadata[rel_path] = {
+                                            "type": "python",
+                                            "analysis": extract_python_metadata(content)
+                                        }
+                                elif file.endswith('.java'):
+                                    with open(file_path, 'r') as f:
+                                        content = f.read()
+                                    metadata[rel_path] = {
+                                        "type": "java", 
+                                        "analysis": extract_java_metadata(content)
+                                    }
+                        
+                            elif bucket == "notebooks":
+                                if file.endswith('.ipynb'):
+                                        metadata[rel_path] = {
+                                            "type": "notebook",
+                                            "analysis": extract_notebook_metadata(file_path)
+                                        }
+                                
+                        except Exception as e:
+                            logging.warning(f"Failed to process {file}: {e}")
+        except Exception as e:
+            logging.error(f"ZIP processing failed: {e}")
     
     return metadata
 
@@ -125,8 +171,8 @@ def extract_metadata(bucket: str, key: str):
         s3 = boto3.client(
             's3',
             endpoint_url="http://i-guide-storage-dev.cis220065.projects.jetstream-cloud.org:9010",
-            aws_access_key_id="access_id",
-            aws_secret_access_key="access_key",
+            aws_access_key_id=,
+            aws_secret_access_key=,
             config=boto3.session.Config(signature_version='s3v4')
         )
 
@@ -136,9 +182,15 @@ def extract_metadata(bucket: str, key: str):
         s3.download_file(bucket, key, tmp_path)
         logging.info(f"Download complete: {tmp_path}")
 
-        # Process based on bucket type
-        metadata = process_file(tmp_path, bucket)
-        
+        # Process ZIP files
+        metadata = {}
+        if key.lower().endswith('.zip'):
+            logging.info("Processing ZIP archive")
+            metadata = process_zip(tmp_path, bucket)
+        else:
+            logging.warning("Non-ZIP file in code/notebooks bucket")
+            return
+
         if not metadata:
             logging.warning("No metadata extracted")
             return
@@ -147,30 +199,34 @@ def extract_metadata(bucket: str, key: str):
 
         # Sanitize and format for tagging
         sanitized_metadata = {}
-        if "code_analysis" in metadata:
-            for i, item in enumerate(metadata["code_analysis"]):
-                prefix = f"code_{i}_"
-                sanitized_metadata[prefix+"type"] = sanitize_tag_value(item["type"])
-                sanitized_metadata[prefix+"name"] = sanitize_tag_value(item["name"])
-                
-        if "notebook_analysis" in metadata:
-            for i, cell in enumerate(metadata["notebook_analysis"]):
-                prefix = f"nb_cell_{i}_"
-                sanitized_metadata[prefix+"type"] = "code_cell"
-                sanitized_metadata[prefix+"func_count"] = str(len(cell["functions"]))
+        for file_path, analysis in metadata.items():
+            safe_prefix = sanitize_tag_value(os.path.splitext(file_path)[0]) + "_"
+            
+            if bucket == "code":
+                for i, item in enumerate(analysis):
+                    sanitized_metadata[f"{safe_prefix}{i}_type"] = sanitize_tag_value(item["type"])
+                    sanitized_metadata[f"{safe_prefix}{i}_name"] = sanitize_tag_value(item["name"])
+                    
+            elif bucket == "notebooks":
+                for i, cell in enumerate(analysis):
+                    sanitized_metadata[f"{safe_prefix}cell_{i}_type"] = "code_cell"
+                    sanitized_metadata[f"{safe_prefix}cell_{i}_funcs"] = str(len(cell["functions"]))
 
         # Attach metadata to Minio object
-        s3.put_object_tagging(
+        """s3.put_object_tagging(
             Bucket=bucket,
             Key=key,
             Tagging={'TagSet': [{'Key': k, 'Value': v} for k, v in sanitized_metadata.items()]}
-        )
-        logging.info("Metadata attached successfully")
+        )"""
+        logging.info("Metadata extracted successfully")
 
     except NoCredentialsError:
         logging.error("Missing Minio credentials.")
     except Exception as e:
         logging.error(f"Error: {e}")
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
