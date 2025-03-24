@@ -1331,7 +1331,7 @@ export async function getAllContributors(from=0, size=100){
 		return makeFrontendCompatible(contributor_list)
 
 	} catch (err) {
-		console.log('getAllContributorsPagination() - Error in query: ' + err);
+		console.log('getAllContributors() - Error in query: ' + err);
 	}
 	return {};
 }
