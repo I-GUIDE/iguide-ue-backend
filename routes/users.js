@@ -13,7 +13,7 @@ import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
 import {Role} from "../utils.js";
-import {getAllContributorsPagination} from "../backend_neo4j.js";
+import {getAllContributors} from "../backend_neo4j.js";
 
 const router = express.Router();
 
@@ -109,7 +109,7 @@ router.get('/api/users',
 	    	'size': size
 		} = req.query;
 
-		const response = await n4j.getAllContributorsPagination(from, size);
+		const response = await n4j.getAllContributors(from, size);
 		res.status(200).json(response);
     } catch (error) {
 		console.error('Error fetching user list:', error);
