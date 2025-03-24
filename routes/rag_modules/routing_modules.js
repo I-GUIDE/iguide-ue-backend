@@ -42,7 +42,7 @@ async function generateRoutingPrompt(userQuery, searchMethods) {
 const functionMapping = {
   getKeywordSearchResults,
   getSemanticSearchResults,
-  getSpatialSearchResults,
+  //getSpatialSearchResults,
 };
 
 // Route the user query dynamically based on LLM's selection

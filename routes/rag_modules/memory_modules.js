@@ -147,23 +147,36 @@ export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK
 
     // Form the prompt for the LLM
     const prompt = `
-      Here are the previous questions:
-      ${recentChatHistory && recentChatHistory.length > 0 
-        //? recentChatHistory.map((entry, index) => `(${index + 1}) ${entry.userQuery}: ${entry.response}`).join('\n') 
-        ? recentChatHistory.map((entry, index) => `(${index + 1}) ${entry.userQuery}`).join('\n') 
-        : "No previous chat history available."}
+    Task: Expand the new query ONLY if it directly refers to the previous conversation. Return the original query if it's unrelated.
 
-      Here is the new user query:
-      ${newUserQuery ? newUserQuery.trim() : "No new user query provided."}
+    Previous Questions (most recent first):
+    ${recentChatHistory.length > 0 
+      ? recentChatHistory.slice().reverse().map((entry) => `- ${entry.userQuery}`).join('\n')
+      : "No previous questions"}
 
-      Form a concise user query that includes the necessary background considering the previous questions and the new user query. Do not include any additional background not in the chat history. Only expand the query if it lacks background or is a followup question of the previous questions. Otherwise, keep the query as is. Just return the query without explaination.
-      `.trim();
+    New Query: "${newUserQuery}"
+
+    Rules:
+    1. Augment ONLY if the new query explicitly references previous questions (e.g., uses "these", "those", "any", or implies continuation)
+    2. Never combine with older context if the query introduces a new topic
+    3. Keep augmented queries concise (under 12 words)
+    4. Respond ONLY with the final query - no explanations
+
+    Examples:
+    Previous: Chicago datasets
+    New: Any about social media?
+    Output: Chicago datasets related to social media
+
+    Previous: Chicago datasets
+    New: Show climate data
+    Output: Climate data
+    `.trim();
     //console.log('Prompt for comprehensive chat question:', prompt);
 
     // Call the LLM to form the comprehensive user query
     var payload = createQueryPayload("llama3.2:latest", "You are an assistant that forms comprehensive user queries based on the new query and the previous questions. Only expand the query if it lacks background or is a followup question of the previous questions. Otherwise, keep the query as is. Avoid adding additional backgrounds. If there is no chat history just return the original query.", prompt)
     const llmResponse = await callLlamaModel(payload);
-    //console.log("Comprehensive quesiton: ", llmResponse);
+    console.log("Comprehensive quesiton: ", llmResponse);
     return llmResponse?.message?.content || "No response from LLM.";
   } catch (error) {
     console.error('Error forming comprehensive user query:', error);
