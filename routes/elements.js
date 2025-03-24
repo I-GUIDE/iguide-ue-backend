@@ -1055,7 +1055,7 @@ router.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *           enum: [doi]
+ *           enum: [doi, dataset-link, github-repo-link]
  *         description: The field to check duplicate for
  *       - in: query
  *         name: value
@@ -1070,7 +1070,9 @@ router.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
  *         description: Internal server error
  */
 router.options('/api/duplicate', cors());
-router.get('/api/duplicate', cors(), async (req, res) => {
+router.get('/api/duplicate',
+	cors(),
+	async (req, res) => {
 //router.get('/api/elements/duplicate', async (req, res) => {
 
     let field_name = req.query['field-name'];
