@@ -85,10 +85,6 @@ async function generateAnswer(state, temperature = 0.7, top_p = 0.9) {
 
   const llmResponse = await callLlamaModel(
     createQueryPayload("llama3.1:70b", "You are an assistant facilitating the LLM Search. You are expected to answer the user query based on the search results.", generationPrompt, 
-      //{
-      //temperature,
-      //top_p
-    //}
   )
   );
 

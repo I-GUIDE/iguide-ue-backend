@@ -176,7 +176,7 @@ export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK
     // Call the LLM to form the comprehensive user query
     var payload = createQueryPayload("llama3.2:latest", "You are an assistant that forms comprehensive user queries based on the new query and the previous questions. Only expand the query if it lacks background or is a followup question of the previous questions. Otherwise, keep the query as is. Avoid adding additional backgrounds. If there is no chat history just return the original query.", prompt)
     const llmResponse = await callLlamaModel(payload);
-    console.log("Comprehensive quesiton: ", llmResponse);
+    //console.log("Comprehensive quesiton: ", llmResponse);
     return llmResponse?.message?.content || "No response from LLM.";
   } catch (error) {
     console.error('Error forming comprehensive user query:', error);
