@@ -1071,7 +1071,7 @@ router.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
  */
 router.options('/api/duplicate', cors());
 router.get('/api/duplicate',
-	// cors(),
+	cors(),
 	async (req, res) => {
 //router.get('/api/elements/duplicate', async (req, res) => {
 
