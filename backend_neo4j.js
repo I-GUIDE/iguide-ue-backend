@@ -836,10 +836,16 @@ export async function checkDuplicatesForField(field_name, value){
     var query_str = "";
     var query_params = {};
     if (field_name === 'doi') {
-	query_str = "MATCH(p:Publication{external_link:$doi}) RETURN p.id";
-	query_params['doi'] = value;
-    } else {
-	throw Error('Server Neo4j: Field `$field_name` not implemented for duplucate checking');
+		query_str = "MATCH(p:Publication{external_link:$doi}) RETURN p.id";
+		query_params['doi'] = value;
+    } else if (field_name === 'dataset-link') {
+		query_str = "MATCH(d:Dataset{external_link:$dataset_link}) RETURN d.id";
+		query_params['dataset_link'] = value;
+	} else if (field_name === 'github-repo-link') {
+		query_str = "MATCH(c:Code{github_repo_link:$github_repo_link}) RETURN c.id";
+		query_params['github_repo_link'] = value;
+	} else {
+		throw Error('Server Neo4j: Field `$field_name` not implemented for duplicate checking');
     }
 
     try {
