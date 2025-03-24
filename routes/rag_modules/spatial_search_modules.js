@@ -3,13 +3,13 @@ import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
-import spacy from 'spacy'; // Example for SpaCy-based location extraction (in Python)
+import compromise from 'compromise'; // JavaScript NLP alternative
 
 const router = express.Router();
 
-// Initialize OpenSearch client
+// Initialize OpenSearch client (same as before)
 const client = new Client({
-    node: process.env.OPENSEARCH_NODE,
+    node: 'https://149.165.169.165:9200' || process.env.OPENSEARCH_NODE,
     auth: {
         username: process.env.OPENSEARCH_USERNAME,
         password: process.env.OPENSEARCH_PASSWORD,
@@ -19,104 +19,110 @@ const client = new Client({
     },
 });
 
-// Function to create memory in OpenSearch
-async function createMemory(conversationName) {
-    try {
-        const response = await client.transport.request({
-            method: 'POST',
-            path: '/_plugins/_ml/memory/',
-            body: {
-                name: conversationName
-            }
-        });
-        return response.body.memory_id;
-    } catch (error) {
-        console.error('Error creating memory:', error);
-        throw error;
-    }
-}
-
-// Function to extract location from user query using NLP
+// Updated location extraction with compromise
 function extractLocationFromQuery(userQuery) {
-    // Example with SpaCy
-    const nlp = spacy.load('en_core_web_sm');
-    const doc = nlp(userQuery);
-    const locations = [];
-
-    // Extract location-based entities
-    doc.ents.forEach(entity => {
-        if (entity.label_ === 'GPE') { // GPE = Geopolitical Entity (SpaCy's label for locations)
-            locations.push(entity.text);
-        }
-    });
-    return locations;
+    const doc = compromise(userQuery);
+    const places = doc.places().out('array');
+    return places;
 }
 
-// Function to get bounding box for location using Geocoding API
+// Improved bounding box handling
 async function getBoundingBox(location) {
     try {
         const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-        const response = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${location}&key=${apiKey}`);
-        const locationData = response.data.results[0].geometry.bounds;
+        const response = await axios.get(
+            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${apiKey}`
+        );
 
-        // Return the bounding box in the format needed by OpenSearch
+        if (!response.data.results.length) return null;
+        
+        const geometry = response.data.results[0].geometry;
+        let bounds = geometry.bounds || geometry.viewport;
+
+        if (!bounds) {
+            const buffer = 0.1;
+            const lat = geometry.location.lat;
+            const lng = geometry.location.lng;
+            bounds = {
+                southwest: { lat: lat - buffer, lng: lng - buffer },
+                northeast: { lat: lat + buffer, lng: lng + buffer }
+            };
+        }
+
+        // Return as Polygon coordinates matching your document structure
         return {
             "type": "polygon",
-            "coordinates": [[
-                [locationData.southwest.lng, locationData.southwest.lat],
-                [locationData.northeast.lng, locationData.southwest.lat],
-                [locationData.northeast.lng, locationData.northeast.lat],
-                [locationData.southwest.lng, locationData.northeast.lat],
-                [locationData.southwest.lng, locationData.southwest.lat]
-            ]]
+            "coordinates": [
+                [
+                    [bounds.southwest.lng, bounds.southwest.lat],
+                    [bounds.northeast.lng, bounds.southwest.lat],
+                    [bounds.northeast.lng, bounds.northeast.lat],
+                    [bounds.southwest.lng, bounds.northeast.lat],
+                    [bounds.southwest.lng, bounds.southwest.lat]  // Close the polygon
+                ]
+            ]
         };
+
     } catch (error) {
         console.error('Error fetching bounding box:', error);
-        throw error;
+        return null;
     }
 }
 
-// Function to perform search with memory in OpenSearch and optional spatial filter
-export async function getSpatialSearchResults(userQuery, memoryId, boundingBox = null) {
+// Updated search function
+export async function getSpatialSearchResults(userQuery, memoryId) {
     try {
+        const locations = extractLocationFromQuery(userQuery);
+        let boundingBox = null;
+
+        if (locations.length > 0) {
+            boundingBox = await getBoundingBox(locations[0]);
+        }
+
+        // Build the base query
         const searchBody = {
             query: {
                 bool: {
-                    must: {
-                        multi_match: {
-                            query: userQuery,
-                            fields: ["authors^2", "contents", "title^3", "contributors^2"],
-                            type: "best_fields"
-                        }
-                    }
-                }
-            },
-            ext: {
-                generative_qa_parameters: {
-                    llm_model: "llama3:latest",
-                    llm_question: userQuery,
-                    memory_id: memoryId
+                    should: [],  // Use should instead of must for OR logic
+                    filter: []
                 }
             }
         };
 
-        // Add spatial filtering if a bounding box is provided
+        // Add text search (using correct field name "contents")
+        /*if (userQuery) {
+            searchBody.query.bool.should.push({
+                match: {
+                    contents: userQuery  // Changed from "content" to "contents"
+                }
+            });
+        }*/
+
+        // Add spatial filter
         if (boundingBox) {
-            searchBody.query.bool.filter = {
+            //console.log('Generated Bounding Box:', JSON.stringify(boundingBox, null, 2));
+            searchBody.query.bool.filter.push({
                 geo_shape: {
-                    bounding_box: {
-                        shape: boundingBox
+                    "spatial-bounding-box-geojson": {
+                        shape: boundingBox,
+                        relation: 'intersects'
                     }
                 }
-            };
+            });
         }
 
+        // Add a match_all if no specific queries
+        if (searchBody.query.bool.should.length === 0) {
+            searchBody.query.bool.should.push({ match_all: {} });
+        }
+
+        //console.log('Final Query:', JSON.stringify(searchBody, null, 2));
+
         const searchResponse = await client.search({
-            index: process.env.OPENSEARCH_INDEX,
+            index: 'neo4j-elements-vspatial-v2',  // Hardcoded for safety
             body: searchBody
         });
 
-        // Ensure results are returned as an array
         return searchResponse.body.hits.hits || [];
 
     } catch (error) {
@@ -124,4 +130,3 @@ export async function getSpatialSearchResults(userQuery, memoryId, boundingBox =
         throw error;
     }
 }
-
