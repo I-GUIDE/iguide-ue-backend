@@ -1,7 +1,7 @@
 import { Client } from '@opensearch-project/opensearch';
 
 const client = new Client({
-  node: process.env.OPENSEARCH_NODE,
+  node: 'https://10.0.147.253:9200' || process.env.OPENSEARCH_NODE,
   auth: {
     username: process.env.OPENSEARCH_USERNAME,
     password: process.env.OPENSEARCH_PASSWORD,
@@ -14,7 +14,7 @@ const client = new Client({
 export async function getKeywordSearchResults(userQuery) {
   try {
     const response = await client.search({
-      index: process.env.OPENSEARCH_INDEX,
+      index: 'neo4j-elements-knn' || process.env.OPENSEARCH_INDEX,
       body: {
         query: { match: { contents: userQuery } },
       },
@@ -47,7 +47,7 @@ export async function getSemanticSearchResults(userQuery) {
   if (!embedding) return [];
   try {
     const response = await client.search({
-      index: process.env.OPENSEARCH_INDEX,
+      index: 'neo4j-elements-knn' || process.env.OPENSEARCH_INDEX,
       body: {
         size: 15,
         query: {
