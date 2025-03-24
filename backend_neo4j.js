@@ -1303,15 +1303,19 @@ export async function getContributorByID(id){
 }
 
 /**
- * Get all Contributors with all information
+ * Get all Contributors with all information based on a pagination criteria
+ * from and size are optional parameters by default set to return 1st 100 records
  * @returns {Object} Map of objects with serial Ids. If no users found returns empty
  */
-export async function getAllContributors(){
-	const query_str = "MATCH (c:Contributor) return c{.*}";
+export async function getAllContributors(from=0, size=100){
+	const query_str = "MATCH (c:Contributor) return c{.*} SKIP $from LIMIT $size";
+	let query_params = {};
+	query_params['from'] = neo4j.int(from);
+	query_params['size'] = neo4j.int(size);
 	try {
 		const {records, summary} =
 			await driver.executeQuery(query_str,
-				{},
+				query_params,
 				{routing: 'READ', database: process.env.NEO4J_DB})
 		if (records?.length <= 0) {
 			return {};
