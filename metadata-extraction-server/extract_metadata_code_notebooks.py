@@ -171,8 +171,8 @@ def extract_metadata(bucket: str, key: str):
         s3 = boto3.client(
             's3',
             endpoint_url="http://i-guide-storage-dev.cis220065.projects.jetstream-cloud.org:9010",
-            aws_access_key_id=,
-            aws_secret_access_key=,
+            aws_access_key_id="94fU8RquhN8Gf4y5FdLq",
+            aws_secret_access_key="Pkotz3RgE7DlXLahNHoRyrWZfspMItCNHcm4CeHB",
             config=boto3.session.Config(signature_version='s3v4')
         )
 
@@ -209,8 +209,8 @@ def extract_metadata(bucket: str, key: str):
                     
             elif bucket == "notebooks":
                 for i, cell in enumerate(analysis):
-                    sanitized_metadata[f"{safe_prefix}cell_{i}_type"] = "code_cell"
-                    sanitized_metadata[f"{safe_prefix}cell_{i}_funcs"] = str(len(cell["functions"]))
+                    sanitized_metadata[f"{safe_prefix}cell_{i}_type"] = "code"
+                    #sanitized_metadata[f"{safe_prefix}cell_{i}_funcs"] = str(len(cell["functions"]))
 
         # Attach metadata to Minio object
         """s3.put_object_tagging(

@@ -1,30 +1,21 @@
 #!/usr/bin/env node
-
+//Need to specify the geoshape mapping
 import { Client } from '@opensearch-project/opensearch';
-// reindex_wkt_spatial.js
 import wktParser from 'wkt-parser';
+import dotenv from 'dotenv';
+import fs from 'fs';
 
-// wktParser is a function, not an object, so call it directly
-const wktString = 'POINT(30 10)';
-console.log(`Parsing WKT: ${wktString}`);
+dotenv.config();
 
-try {
-    const geoJson = wktParser(wktString);
-    console.log('Parsed GeoJSON:', JSON.stringify(geoJson, null, 2));
-} catch (err) {
-    console.error(`Failed to parse WKT: "${wktString}"`);
-    console.error(`Error: ${err.message}`);
-}
+// === CONFIGURATION ===
+const OLD_INDEX = 'neo4j-elements';
+const NEW_INDEX = 'neo4j-elements-vspatial';
+const BATCH_SIZE = 1000;
+const WKT_GEOSHAPE_FIELDS = ['spatial-geometry', 'spatial-bounding-box'];
+const WKT_GEOPOINT_FIELDS = ['spatial-centroid'];
 
-
-
-// === CONFIG ===
-const OLD_INDEX = 'neo4j-elements-dev-v3';
-const NEW_INDEX = 'neo4j-elements-dev-vspatial';
-
-// Adjust your connection info as needed
 const client = new Client({
-  node: process.env.OPENSEARCH_NODE || 'http://localhost:9200',
+  node: 'https://149.165.169.165:9200' || 'http://localhost:9200',
   auth: {
     username: process.env.OPENSEARCH_USERNAME || 'admin',
     password: process.env.OPENSEARCH_PASSWORD || 'admin',
@@ -34,152 +25,247 @@ const client = new Client({
   },
 });
 
-// Maximum docs to process in one bulk request
-const BATCH_SIZE = 1000;
-
-// Which fields do we parse from WKT => GeoJSON or WKT => (lon, lat) array?
-const WKT_GEOSHAPE_FIELDS = ['spatial-geometry', 'spatial-bounding-box']; // these become type=geo_shape
-const WKT_GEOPOINT_FIELDS = ['spatial-centroid']; // these become type=geo_point
-
-/**
- * Converts a WKT string (e.g., 'POLYGON ((...))' or 'POINT (...)') to a GeoJSON object.
- */
-function convertWktToGeoJson(wktString) {
-    console.log(`Parsing WKT: "${wktString}"`); // Ensures WKT is printed before parsing
-  
-    try {
-      return WKTParser.parse(wktString);
-    } catch (err) {
-      console.error(`\n❌ Failed to parse WKT: "${wktString}"`);
-      console.error(`Error: ${err.message}\n`);
-  
-      // Write bad WKT to a log file for debugging
-      fs.appendFileSync('bad_wkt_log.txt', `${wktString}\n`);
-  
-      return null;
-    }
-  }
-  
-/**
- * Converts a WKT representation of a POINT to a standard [lon, lat] array for geo_point.
- * If the WKT is 'POINT (lon lat)', parse it to [lon, lat].
- * If you have WKT that's actually a LINESTRING or POLYGON, handle accordingly, or skip.
- */
-function convertWktToGeoPoint(wktString) {
-  const geometry = parseWKT(wktString);
-  // Expect geometry.type === 'Point'
-  // The coordinates array is [lon, lat]
-  return geometry.coordinates; 
+// === IMPROVED WKT SANITIZATION ===
+function sanitizeWkt(wktString) {
+  return wktString
+    .replace(/(\b[A-Z]+)\s*(\()/gi, '$1$2')  // Remove space between type and (
+    .replace(/\s*([(),])\s*/g, '$1')         // Remove spaces around brackets/commas
+    .replace(/(\d)-/g, '$1 -')               // Fix negative numbers
+    .replace(/\s+/g, ' ')                    // Collapse multiple spaces
+    .trim();
 }
 
-/**
- * Process a single document's _source, converting WKT strings as needed
- */
+
+function parseEnvelope(envelopeStr) {
+  const sanitized = sanitizeWkt(envelopeStr);
+  
+  // Extract coordinates using regex
+  const match = sanitized.match(/ENVELOPE\(([^)]+)\)/i);
+  if (!match) throw new Error(`Invalid ENVELOPE format: ${sanitized}`);
+  
+  const parts = match[1].split(',').map(p => {
+    const num = parseFloat(p.trim());
+    if (isNaN(num)) throw new Error(`Invalid number: ${p}`);
+    return num;
+  });
+
+  if (parts.length !== 4) throw new Error(`Need 4 coordinates, got ${parts.length}`);
+  
+  // ENVELOPE order: minLon, maxLon, maxLat, minLat
+  const [minLon, maxLon, maxLat, minLat] = parts;
+  
+  return {
+    type: 'Polygon',
+    coordinates: [[
+      [minLon, minLat],
+      [maxLon, minLat],
+      [maxLon, maxLat],
+      [minLon, maxLat],
+      [minLon, minLat]
+    ]]
+  };
+}
+
+function parsePoint(pointStr) {
+  const sanitized = pointStr
+    .replace(/^POINT\s*/i, '')
+    .replace(/[()]/g, '')
+    .trim();
+  
+  const coords = sanitized.split(/\s+/).map(parseFloat);
+  
+  if (coords.length !== 2 || coords.some(isNaN)) {
+    throw new Error(`Invalid POINT coordinates: ${pointStr}`);
+  }
+  
+  return {
+    type: 'Point',
+    coordinates: coords
+  };
+}
+
+function parsePolygon(polygonStr) {
+  const sanitized = polygonStr
+    .replace(/^POLYGON\s*/i, '')
+    .replace(/(\()|(\)$)/g, '')
+    .trim();
+
+  const coordPairs = sanitized.split(/,\s*/).map(pair => {
+    const coords = pair.trim().split(/\s+/).map(parseFloat);
+    if (coords.length !== 2 || coords.some(isNaN)) {
+      throw new Error(`Invalid polygon coordinate pair: ${pair}`);
+    }
+    return coords;
+  });
+
+  // Close the polygon if not already closed
+  if (coordPairs.length > 0 && JSON.stringify(coordPairs[0]) !== JSON.stringify(coordPairs[coordPairs.length - 1])) {
+    coordPairs.push([...coordPairs[0]]);
+  }
+
+  return {
+    type: 'Polygon',
+    coordinates: [coordPairs]
+  };
+}
+
+function parseMultiPolygon(multiPolygonStr) {
+  // Sanitize input
+  const sanitized = multiPolygonStr
+    .replace(/^MULTIPOLYGON\s*/i, '')
+    .replace(/\)\s*,\s*\(/g, '|||') // Temporary separator
+    .replace(/[()]/g, '')
+    .trim();
+
+  // Split into individual polygons
+  const polygons = sanitized.split('|||').filter(p => p);
+  const coordinates = [];
+
+  for (const polyStr of polygons) {
+    // Split into rings (outer and potential holes)
+    const rings = polyStr.split(/\),\s*\(/).map(ring => {
+      const coordPairs = ring.split(/,\s*/).map(pair => {
+        const [lon, lat] = pair.trim().split(/\s+/);
+        const lonNum = parseFloat(lon);
+        const latNum = parseFloat(lat);
+        
+        if (isNaN(lonNum) || isNaN(latNum)) {
+          throw new Error(`Invalid coordinate pair: ${pair}`);
+        }
+        return [lonNum, latNum];
+      });
+
+      // Close the ring if not closed
+      if (coordPairs.length > 0 && 
+          !(coordPairs[0][0] === coordPairs[coordPairs.length-1][0] &&
+            coordPairs[0][1] === coordPairs[coordPairs.length-1][1])) {
+        coordPairs.push([...coordPairs[0]]);
+      }
+      
+      return coordPairs;
+    });
+
+    coordinates.push(rings);
+  }
+
+  return {
+    type: 'MultiPolygon',
+    coordinates: coordinates
+  };
+}
+
+function convertWktToGeoJson(wktString) {
+  try {
+    const upperWkt = wktString.toUpperCase().trim();
+    
+    if (upperWkt.startsWith('ENVELOPE')) {
+      return parseEnvelope(wktString);
+    }
+    if (upperWkt.startsWith('POINT')) {
+      return parsePoint(wktString);
+    }
+    if (upperWkt.startsWith('POLYGON')) {
+      return parsePolygon(wktString);
+    }
+    if (upperWkt.startsWith('MULTIPOLYGON')) {
+      return parseMultiPolygon(wktString);
+    }
+    
+    throw new Error(`Unsupported geometry type: ${wktString}`);
+    
+  } catch (err) {
+    fs.appendFileSync('wkt_errors.log', `
+      ORIGINAL: ${wktString}
+      ERROR: ${err.message}
+    `);
+    return null;
+  }
+}
+
 function transformSource(docSource) {
-  // For each geo_shape field
-  for (const field of WKT_GEOSHAPE_FIELDS) {
-    if (docSource[field]) {
-      try {
-        docSource[field] = convertWktToGeoJson(docSource[field]);
-      } catch (err) {
-        console.warn(`Skipping invalid WKT in field [${field}]:`, docSource[field]);
-        // Optionally remove the field or leave it as-is
-        delete docSource[field];
+  const newDoc = { ...docSource };
+
+  // Process all spatial fields
+  const spatialFields = [...WKT_GEOSHAPE_FIELDS, ...WKT_GEOPOINT_FIELDS];
+  
+  for (const field of spatialFields) {
+    const value = newDoc[field];
+    if (!value) continue;
+
+    try {
+      let geoJson;
+      if (field === 'spatial-bounding-box') {
+        geoJson = parseEnvelope(value);
+      } else {
+        geoJson = convertWktToGeoJson(value);
       }
+
+      if (geoJson) {
+        newDoc[`${field}-geojson`] = geoJson;
+      }
+    } catch (err) {
+      console.error(`Field ${field} error: ${err.message}`);
+      console.error(`Problem value: ${value}`);
     }
   }
 
-  // For each geo_point field
-  for (const field of WKT_GEOPOINT_FIELDS) {
-    if (docSource[field]) {
-      try {
-        docSource[field] = convertWktToGeoPoint(docSource[field]);
-      } catch (err) {
-        console.warn(`Skipping invalid WKT for geo_point in field [${field}]:`, docSource[field]);
-        delete docSource[field];
-      }
-    }
-  }
-
-  return docSource;
+  return newDoc;
 }
 
 async function runReindex() {
   let totalDocs = 0;
-  let keepScrolling = true;
   let scrollId = null;
 
   try {
-    // 1. Initial search with scroll
-    const firstResponse = await client.search({
+    const { body: searchBody } = await client.search({
       index: OLD_INDEX,
-      scroll: '2m', // keep the scroll context alive for 2 minutes
+      scroll: '5m',
       size: BATCH_SIZE,
-      body: {
-        query: { match_all: {} },
-      },
+      body: { query: { match_all: {} } }
     });
 
-    scrollId = firstResponse.body._scroll_id;
-    let hits = firstResponse.body.hits.hits || [];
+    scrollId = searchBody._scroll_id;
+    let hits = searchBody.hits.hits;
 
-    while (keepScrolling && hits.length > 0) {
-      // 2. Prepare a bulk request for these hits
+    while (hits && hits.length > 0) {
       const bulkOps = [];
-
       for (const hit of hits) {
-        const source = hit._source;
-        const id = hit._id;
-
-        // Transform the source to parse WKT => GeoJSON / geo_point
-        const transformed = transformSource({ ...source });
-
-        // Add to the bulk array
-        bulkOps.push({ index: { _index: NEW_INDEX, _id: id } });
+        const transformed = transformSource(hit._source);
+        bulkOps.push({ index: { _index: NEW_INDEX, _id: hit._id } });
         bulkOps.push(transformed);
       }
 
-      if (bulkOps.length > 0) {
-        // 3. Execute the bulk insert
-        const bulkResponse = await client.bulk({ body: bulkOps });
-        if (bulkResponse.body.errors) {
-          console.error('Bulk indexing encountered errors:', JSON.stringify(bulkResponse.body, null, 2));
-        }
-        totalDocs += hits.length;
-        console.log(`Indexed batch of ${hits.length} docs. Total so far: ${totalDocs}`);
+      const { body: bulkResponse } = await client.bulk({ body: bulkOps });
+      if (bulkResponse.errors) {
+        bulkResponse.items.forEach(item => {
+          if (item.index.error) {
+            console.error('Bulk index error:', item.index.error);
+          }
+        });
       }
 
-      // 4. Fetch next batch via scroll
-      const scrollResponse = await client.scroll({
-        scrollId,
-        scroll: '2m',
+      totalDocs += hits.length;
+      console.log(`Processed ${hits.length} documents (Total: ${totalDocs})`);
+
+      const { body: scrollBody } = await client.scroll({
+        scroll_id: scrollId,
+        scroll: '5m'
       });
-
-      scrollId = scrollResponse.body._scroll_id;
-      hits = scrollResponse.body.hits.hits;
-
-      if (!hits || hits.length === 0) {
-        keepScrolling = false;
-      }
+      hits = scrollBody.hits.hits;
+      scrollId = scrollBody._scroll_id;
     }
-  } catch (error) {
-    console.error('Error during reindex process:', error);
   } finally {
-    // 5. Clear scroll
     if (scrollId) {
-      try {
-        await client.clearScroll({ scrollId });
-      } catch (err) {
-        console.warn('Error clearing scroll:', err);
-      }
+      await client.clearScroll({ scroll_id: scrollId });
     }
   }
 
-  console.log(`Reindex complete. Processed ${totalDocs} documents from [${OLD_INDEX}] to [${NEW_INDEX}].`);
+  console.log(`Reindexing completed. Total documents processed: ${totalDocs}`);
 }
 
-// Run the script
-runReindex().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+runReindex()
+  .then(() => process.exit(0))
+  .catch(err => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  });

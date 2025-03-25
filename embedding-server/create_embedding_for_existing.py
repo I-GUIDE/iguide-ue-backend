@@ -5,18 +5,19 @@ import json
 from dotenv import load_dotenv
 
 # Configuration
-opensearch_host = os.getenv('OPENSEARCH_NODE')   # Replace with your OpenSearch host
-index_name = os.getenv('OPENSEARCH_INDEX') 
+# opensearch_host = os.getenv('OPENSEARCH_NODE')   # Replace with your OpenSearch host
+# index_name = os.getenv('OPENSEARCH_INDEX') 
+opensearch_host = 'https://149.165.169.165:9200'
 flask_url = 'http://127.0.0.1:5000/get_embedding'  # Flask endpoint URL for embeddings
-
+index_name = 'neo4j-elements'
 # Use environment variables for credentials if available
 username = os.getenv('OPENSEARCH_USERNAME') 
 password = os.getenv('OPENSEARCH_PASSWORD') 
 
 # OpenSearch client with authentication
 opensearch_client = OpenSearch(
-    [opensearch_host],
-    http_auth=(username, password),
+    ['https://149.165.169.165:9200'],
+    http_auth=('admin', '87Ff5&kq4qDoB^D5fZLS#C'),
     use_ssl=False,
     verify_certs=False
 )

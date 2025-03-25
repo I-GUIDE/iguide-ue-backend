@@ -42,6 +42,7 @@ def fetch_documents():
     """Fetch all documents from the old index"""
     query = {"query": {"match_all": {}}}
     results = helpers.scan(client, index=index_old, query=query, size=1000)
+    print(results)
     return results
 
 def transform_document(doc):
@@ -58,16 +59,15 @@ def transform_document(doc):
 
     if "spatial-centroid" in source:
         source["spatial-centroid"] = convert_wkt_to_geojson(source["spatial-centroid"])
-
     return {"_op_type": "index", "_index": index_new, "_id": doc_id, "_source": source}
 
 def reindex_documents():
     """Fetch, transform, and reindex documents"""
     print(f"🔄 Fetching documents from {index_old}...")
     docs = fetch_documents()
-    
+    #print(docs)
     transformed_docs = (transform_document(doc) for doc in docs)
-
+    #print(transformed_docs)
     print(f"🚀 Reindexing documents into {index_new}...")
     success, failed = helpers.bulk(client, transformed_docs, chunk_size=500)
 
