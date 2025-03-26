@@ -1319,12 +1319,12 @@ export async function getAllContributors(from=0, size=100){
 	query_params['from'] = neo4j.int(from);
 	query_params['size'] = neo4j.int(size);
 	try {
-		const {records, summary} =
-			await driver.executeQuery(query_str,
-				query_params,
-				{routing: 'READ', database: process.env.NEO4J_DB})
+		let records, summary;
+		({records, summary} = await driver.executeQuery(query_str,
+			query_params,
+			{routing: 'READ', database: process.env.NEO4J_DB}));
 		if (records?.length <= 0) {
-			return {};
+			return {"total-users":-1, "users": []};
 		}
 		let contributor_list = [];
 		records?.map((contributor) => {
@@ -1334,12 +1334,19 @@ export async function getAllContributors(from=0, size=100){
 				contributor_list.push(temp_contributor);
 			}
 		});
-		return makeFrontendCompatible(contributor_list)
+		let count_query_str = "MATCH (c:Contributor) return COUNT(c) AS count";
+		({records, summary} = await driver.executeQuery(
+				count_query_str,
+				{},
+				{routing: 'READ', database: process.env.NEO4J_DB}));
+		let total_count = utils.parse64BitNumber(records[0].get('count'));
+		let contributor_final_list = Object.values(makeFrontendCompatible(contributor_list));
+		return {"total-users": total_count, "users": contributor_final_list}
 
 	} catch (err) {
 		console.log('getAllContributors() - Error in query: ' + err);
 	}
-	return {};
+	return {"total-users": -1, "users": []};
 }
 
 /**
