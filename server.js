@@ -61,10 +61,10 @@ app.use(users);
 app.use(elements);
 
 const target_domain = process.env.JWT_TARGET_DOMAIN;
-const SSLOptions = {
-    key: fs.readFileSync(process.env.SSL_KEY),
-    cert: fs.readFileSync(process.env.SSL_CERT)
-};
+// const SSLOptions = {
+//     key: fs.readFileSync(process.env.SSL_KEY),
+//     cert: fs.readFileSync(process.env.SSL_CERT)
+// };
 /****************************************************************************
  * JWT Specific Functions
  ****************************************************************************/
@@ -295,9 +295,9 @@ app.listen(HTTP_PORT, () => {
     console.log(`HTTP server is running on port ${HTTP_PORT}`);
 });
 
-https.createServer(SSLOptions, app).listen(process.env.PORT, () => {
-    console.log(`HTTPS server is running on port ${process.env.PORT}`);
-});
+// https.createServer(SSLOptions, app).listen(process.env.PORT, () => {
+//     console.log(`HTTPS server is running on port ${process.env.PORT}`);
+// });
 
 // Serve Swagger docs
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
