@@ -84,7 +84,7 @@ async function generateAnswer(state, temperature = 0.7, top_p = 0.9) {
   const generationPrompt = `User Query: ${question}\nSearch Results:\n${docsTxt}`;
 
   const llmResponse = await callLlamaModel(
-    createQueryPayload("llama3.1:70b", "You are an assistant facilitating the LLM Search. You are expected to answer the user query based on the search results.", generationPrompt, 
+    createQueryPayload("llama3.1:70b", "You are the generation module of the LLM Search. You are expected to answer the user query based on the search results. The provided search results are from the search pipeline instead of the user so you can assume that you found the search results. Focus more on the question and avoid using terms like 'It appears that you have provided' or 'the search results shows that'", generationPrompt, 
   )
   );
 
