@@ -20,8 +20,7 @@ const client = new Client({
 export const authenticateJWT = (req, res, next) => {
   // updated to new variable name 
   const token = req.cookies[process.env.JWT_ACCESS_TOKEN_NAME]
-  // Special case to handle SUPER_ADMIN APIs
-  // if dev and req.url in whitelist_apis
+  // Special case to handle JWT APIs
   if (checkJWTTokenBypass(req)) {
     next();
   }
@@ -45,6 +44,7 @@ export const authenticateJWT = (req, res, next) => {
 
 // Middleware to check if the user has the required role
 export const authorizeRole = (requiredRole) => (req, res, next) => {
+  // Special case to handle JWT APIs
   if (checkJWTTokenBypass(req)) {
     next();
   }
@@ -70,15 +70,20 @@ export const storeRefreshToken = async (token, user_id) => {
   });
 };
 
+/**
+ * This function bypasses JWT Token check for Dev environment testing
+ * @param req
+ * @returns {boolean}
+ */
 export const checkJWTTokenBypass = (req) => {
   if (process.env.NODE_ENV !== "development") {
     return false;
   }
-  const api_key = process.env.JWT_API_KEY_VALUE ? process.env.JWT_API_KEY_VALUE : ""
+  const api_key = process.env.JWT_API_KEY_VALUE ? process.env.JWT_API_KEY_VALUE : "";
   if (api_key === "") {
     return false;
   }
-  const header_key = req.header(process.env.JWT_API_KEY);
+  const header_key = process.env.JWT_API_KEY ? req.header(process.env.JWT_API_KEY) : "";
   if (api_key === header_key) {
     return true;
   } else {
