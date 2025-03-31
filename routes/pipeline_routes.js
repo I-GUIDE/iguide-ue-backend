@@ -159,6 +159,72 @@ async function handleUserQuery(userQuery, comprehensiveUserQuery, checkGeneratio
     count: relevantDocuments.length,
   };
 }
+
+async function handleUserQueryWithProgress(
+  userQuery,
+  comprehensiveUserQuery,
+  checkGenerationQuality,
+  progressCallback = () => {} // Add progress callback parameter
+) {
+  progressCallback("Fetching search results...");
+  console.log("Fetching search results...");
+  const searchResults = await routeUserQuery(comprehensiveUserQuery);
+
+  let relevantDocuments = [];
+  if (searchResults && searchResults.length > 0) {
+    progressCallback(`Grading ${searchResults.length} documents...`);
+    console.log("Grading " + searchResults.length + " documents...");
+    relevantDocuments = await gradeDocuments(searchResults, userQuery);
+  }
+
+  if (relevantDocuments.length === 0) {
+    progressCallback("No relevant documents found");
+    console.log("No relevant documents found.");
+    return {
+      answer: "Sorry, I couldn't find any relevant documents for your query.",
+      message_id: uuidv4(),
+      elements: [],
+      count: 0,
+    };
+  }
+
+  let state = { question: userQuery, documents: relevantDocuments };
+  
+  progressCallback("Generating answer...");
+  let generationState = await generateAnswer(state);
+  console.log("\nGenerated Answer:", generationState.generation);
+
+  if (checkGenerationQuality) {
+    progressCallback("Validating answer quality...");
+    let verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
+    let retryCount = 0;
+    
+    while (verdict !== "useful") {
+      if (verdict === "not useful") {
+        retryCount++;
+        progressCallback(`Regenerating answer (attempt ${retryCount})...`);
+        generationState = await generateAnswer(generationState);
+        verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
+      } else if (verdict === "max retries") {
+        progressCallback("Maximum retries reached - using best available answer");
+        console.log("Unable to get a satisfactory answer.");
+        return {
+          answer: "I'm sorry, I couldn't generate a satisfactory answer at the moment. Please try rephrasing your question.",
+          message_id: uuidv4(),
+          elements: [],
+          count: 0,
+        };
+      }
+    }
+  }
+
+  return {
+    answer: generationState.generation,
+    message_id: uuidv4(),
+    elements: relevantDocuments,
+    count: relevantDocuments.length,
+  };
+}
 /**
  * @swagger
  * /beta/llm/memory-id:
@@ -302,6 +368,43 @@ router.post('/llm/search', cors(), async (req, res) => {
   } catch (error) {
     console.error("Error performing conversational search:", error);
     res.status(500).json({ error: "Error performing conversational search." });
+  }
+});
+router.options('/llm/search-with-progress', cors());
+router.post('/llm/search-with-progress', cors(), async (req, res) => {
+  const { userQuery, memoryIdTmp } = req.body;
+
+  // Configure SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    let finalMemoryId = "fakeid12345"; // Replace with your logic
+
+    // Example: Send progress when augmenting the question
+    sendEvent('status', { status: 'Augmenting question...' });
+    const comprehensiveQuery = await formComprehensiveUserQuery(finalMemoryId, userQuery);
+
+    // Example: Send progress when performing semantic search
+    sendEvent('status', { status: 'Performing semantic search...' });
+    
+    // Modify handleUserQuery to accept a progress callback
+    const response = await handleUserQueryWithProgress(userQuery, comprehensiveUserQuery, false, (progress) => {
+      sendEvent('status', { status: progress }); // e.g., "Generating answer..."
+    });
+
+    // Final result
+    sendEvent('result', response);
+    res.end();
+  } catch (error) {
+    sendEvent('error', { error: error.message });
+    res.end();
   }
 });
 
