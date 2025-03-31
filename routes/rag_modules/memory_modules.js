@@ -161,6 +161,7 @@ export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK
     2. Never combine with older context if the query introduces a new topic
     3. Keep augmented queries concise (under 12 words)
     4. Respond ONLY with the final query - no explanations
+    5. Do not include the terms that are not related to the context
 
     Examples:
     Previous: Chicago datasets

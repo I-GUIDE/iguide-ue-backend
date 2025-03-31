@@ -99,9 +99,9 @@ async function generateAnswer(state, temperature = 0.7, top_p = 0.9) {
 
 
 // Function: Handle a user query
-async function handleUserQuery(userQuery, checkGenerationQuality) {
+async function handleUserQuery(userQuery, comprehensiveUserQuery, checkGenerationQuality) {
   console.log("Fetching search results...");
-  const searchResults = await routeUserQuery(userQuery);
+  const searchResults = await routeUserQuery(comprehensiveUserQuery);
 
   let relevantDocuments = [];
   if (searchResults && searchResults.length > 0) {
@@ -291,7 +291,7 @@ router.post('/llm/search', cors(), async (req, res) => {
     console.log(`Searching "${comprehensiveUserQuery}" with memoryID: ${finalMemoryId}`);
 
     // Perform the search with the comprehensive user query and memory ID
-    const response = await handleUserQuery(comprehensiveUserQuery, false);
+    const response = await handleUserQuery(userQuery, comprehensiveUserQuery, false);
     if (response.error) {
       return res.status(500).json({ error: response.error });
     }

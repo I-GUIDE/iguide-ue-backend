@@ -33,7 +33,7 @@ async function generateRoutingPrompt(userQuery, searchMethods) {
     prompt += `- ${method.functionName}: ${method.description}\n`;
   });
 
-  prompt += `\nBased on the query, suggest which retrieval methods should be used (select one or more). Respond with the method names only, separated by commas.`;
+  prompt += `\nBased on the query, suggest which retrieval methods should be used (select one or more). Order them according to their relevance to the query. Respond with the method names only, separated by commas.`;
 
   return prompt;
 }
