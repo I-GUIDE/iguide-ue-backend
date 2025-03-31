@@ -1181,6 +1181,7 @@ export async function registerContributor(contributor){
     // (2) assign roles for new contributor
     contributor['role'] = (() => {
 	if ((contributor['email'] && contributor['email'].toLowerCase().includes('.edu')) ||
+		(contributor['email'] && contributor['email'].toLowerCase().includes('.org')) ||
 	    (contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university'))
 	   ) {
 	    return neo4j.int(utils.Role.TRUSTED_USER);
