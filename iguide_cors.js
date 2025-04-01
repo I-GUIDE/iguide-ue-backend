@@ -7,7 +7,8 @@ const allowedOrigins = process.env.ALLOWED_DOMAIN_LIST ? JSON.parse(process.env.
 export const jwtCorsOptions = {
     origin: `${process.env.FRONTEND_DOMAIN}`,
     methods: 'GET, POST, PUT, DELETE, OPTIONS',
-    allowedHeaders: 'Origin, X-Requested-With, Content-Type, Accept, Authorization, JWT-API-KEY'
+    allowedHeaders: 'Origin, X-Requested-With, Content-Type, Accept, Authorization, JWT-API-KEY',
+    allowedHeadersWithoutAuth: 'Origin, X-Requested-With, Content-Type, Accept, JWT-API-KEY'
 };
 
 export const jwtCorsMiddleware = (req, res, next) => {

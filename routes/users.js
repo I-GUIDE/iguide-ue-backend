@@ -435,12 +435,12 @@ router.options('/api/users/:id', (req, res) => {
     if (method === 'PUT') {
         res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
         res.header('Access-Control-Allow-Methods', 'PUT');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
         res.header('Access-Control-Allow-Credentials', 'true');
     } else if (method === 'GET') {
         res.header('Access-Control-Allow-Origin', '*');
         res.header('Access-Control-Allow-Methods', 'GET');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
     }
     res.sendStatus(204); // No content
 });
