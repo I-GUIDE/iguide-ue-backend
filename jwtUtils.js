@@ -20,8 +20,11 @@ const client = new Client({
 export const authenticateJWT = (req, res, next) => {
   // updated to new variable name 
   const token = req.cookies[process.env.JWT_ACCESS_TOKEN_NAME]
-
-  if (token) {
+  // Special case to handle JWT APIs
+  if (checkJWTTokenBypass(req)) {
+    next();
+  }
+  else if (token) {
     jwt.verify(token, process.env.JWT_ACCESS_TOKEN_SECRET, (err, user) => {
       if (err) {
         if (err.name === 'TokenExpiredError') {
@@ -41,7 +44,11 @@ export const authenticateJWT = (req, res, next) => {
 
 // Middleware to check if the user has the required role
 export const authorizeRole = (requiredRole) => (req, res, next) => {
-  if (req.user && req.user.role <= requiredRole) {
+  // Special case to handle JWT APIs
+  if (checkJWTTokenBypass(req)) {
+    next();
+  }
+  else if (req.user && req.user.role <= requiredRole) {
     // User's role is less than or equal to the required role
     next();
   } else {
@@ -63,6 +70,26 @@ export const storeRefreshToken = async (token, user_id) => {
   });
 };
 
+/**
+ * This function bypasses JWT Token check for Dev environment testing
+ * @param req
+ * @returns {boolean}
+ */
+export const checkJWTTokenBypass = (req) => {
+  if (process.env.NODE_ENV !== "development") {
+    return false;
+  }
+  const api_key = process.env.JWT_API_KEY_VALUE ? process.env.JWT_API_KEY_VALUE : "";
+  if (api_key === "") {
+    return false;
+  }
+  const header_key = process.env.JWT_API_KEY ? req.header(process.env.JWT_API_KEY) : "";
+  if (api_key === header_key) {
+    return true;
+  } else {
+    return false;
+  }
+}
 // Generate an access token
 export const generateAccessToken = (user) => {
   return jwt.sign(user, process.env.JWT_ACCESS_TOKEN_SECRET, { expiresIn: '1h' });

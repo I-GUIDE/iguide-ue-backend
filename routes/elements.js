@@ -433,21 +433,21 @@ router.options('/api/elements/:id', (req, res) => {
     if (method === 'PUT') {
         res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
         res.header('Access-Control-Allow-Methods', 'PUT');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
         res.header('Access-Control-Allow-Credentials', 'true');
     } else if (method === 'POST') {
         res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
         res.header('Access-Control-Allow-Methods', 'POST');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
         res.header('Access-Control-Allow-Credentials', 'true');
     } else if (method === 'GET') {
         res.header('Access-Control-Allow-Origin', '*');
         res.header('Access-Control-Allow-Methods', 'GET');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
     }else if (method === 'DELETE') {
         res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
         res.header('Access-Control-Allow-Methods', 'DELETE');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
         res.header('Access-Control-Allow-Credentials', 'true');
     }
     res.sendStatus(204); // No content
@@ -458,21 +458,21 @@ router.options('/api/elements', (req, res) => {
     if (method === 'PUT') {
         res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
         res.header('Access-Control-Allow-Methods', 'PUT');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
         res.header('Access-Control-Allow-Credentials', 'true');
     } else if (method === 'POST') {
         res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
         res.header('Access-Control-Allow-Methods', 'POST');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
         res.header('Access-Control-Allow-Credentials', 'true');
     } else if (method === 'GET') {
         res.header('Access-Control-Allow-Origin', '*');
         res.header('Access-Control-Allow-Methods', 'GET');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
     }else if (method === 'DELETE') {
         res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
         res.header('Access-Control-Allow-Methods', 'DELETE');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
         res.header('Access-Control-Allow-Credentials', 'true');
     }
     res.sendStatus(204); // No content
@@ -1055,7 +1055,7 @@ router.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *           enum: [doi]
+ *           enum: [doi, dataset-link, github-repo-link]
  *         description: The field to check duplicate for
  *       - in: query
  *         name: value
@@ -1070,7 +1070,9 @@ router.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
  *         description: Internal server error
  */
 router.options('/api/duplicate', cors());
-router.get('/api/duplicate', cors(), async (req, res) => {
+router.get('/api/duplicate',
+	cors(),
+	async (req, res) => {
 //router.get('/api/elements/duplicate', async (req, res) => {
 
     let field_name = req.query['field-name'];

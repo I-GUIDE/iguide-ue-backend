@@ -837,10 +837,16 @@ export async function checkDuplicatesForField(field_name, value){
     var query_str = "";
     var query_params = {};
     if (field_name === 'doi') {
-	query_str = "MATCH(p:Publication{external_link:$doi}) RETURN p.id";
-	query_params['doi'] = value;
-    } else {
-	throw Error('Server Neo4j: Field `$field_name` not implemented for duplucate checking');
+		query_str = "MATCH(p:Publication{external_link:$doi}) RETURN p.id";
+		query_params['doi'] = value;
+    } else if (field_name === 'dataset-link') {
+		query_str = "MATCH(d:Dataset{external_link:$dataset_link}) RETURN d.id";
+		query_params['dataset_link'] = value;
+	} else if (field_name === 'github-repo-link') {
+		query_str = "MATCH(c:Code{github_repo_link:$github_repo_link}) RETURN c.id";
+		query_params['github_repo_link'] = value;
+	} else {
+		throw Error('Server Neo4j: Field `$field_name` not implemented for duplicate checking');
     }
 
     try {
@@ -1305,18 +1311,22 @@ export async function getContributorByID(id){
 }
 
 /**
- * Get all Contributors with all information
+ * Get all Contributors with all information based on a pagination criteria
+ * from and size are optional parameters by default set to return 1st 100 records
  * @returns {Object} Map of objects with serial Ids. If no users found returns empty
  */
-export async function getAllContributors(){
-	const query_str = "MATCH (c:Contributor) return c{.*}";
+export async function getAllContributors(from=0, size=100){
+	const query_str = "MATCH (c:Contributor) return c{.*} SKIP $from LIMIT $size";
+	let query_params = {};
+	query_params['from'] = neo4j.int(from);
+	query_params['size'] = neo4j.int(size);
 	try {
-		const {records, summary} =
-			await driver.executeQuery(query_str,
-				{},
-				{routing: 'READ', database: process.env.NEO4J_DB})
+		let records, summary;
+		({records, summary} = await driver.executeQuery(query_str,
+			query_params,
+			{routing: 'READ', database: process.env.NEO4J_DB}));
 		if (records?.length <= 0) {
-			return {};
+			return {"total-users":-1, "users": []};
 		}
 		let contributor_list = [];
 		records?.map((contributor) => {
@@ -1326,12 +1336,19 @@ export async function getAllContributors(){
 				contributor_list.push(temp_contributor);
 			}
 		});
-		return makeFrontendCompatible(contributor_list)
+		let count_query_str = "MATCH (c:Contributor) return COUNT(c) AS count";
+		({records, summary} = await driver.executeQuery(
+				count_query_str,
+				{},
+				{routing: 'READ', database: process.env.NEO4J_DB}));
+		let total_count = utils.parse64BitNumber(records[0].get('count'));
+		let contributor_final_list = Object.values(makeFrontendCompatible(contributor_list));
+		return {"total-users": total_count, "users": contributor_final_list}
 
 	} catch (err) {
 		console.log('getAllContributors() - Error in query: ' + err);
 	}
-	return {};
+	return {"total-users": -1, "users": []};
 }
 
 /**

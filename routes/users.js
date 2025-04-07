@@ -13,6 +13,7 @@ import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
 import {Role} from "../utils.js";
+import {getAllContributors} from "../backend_neo4j.js";
 
 const router = express.Router();
 
@@ -79,6 +80,18 @@ router.get('/api/users/:id', cors(), async (req, res) => {
  *     summary: Return all users
  *     tags: ['users']
  *     parameters:
+ *       - in: query
+ *         name: from
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The offset value for pagination
+ *       - in: query
+ *         name: size
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The limit value for pagination
  *     responses:
  *       200:
  *         description: All user documents found
@@ -91,7 +104,12 @@ router.get('/api/users',
 		authorizeRole(Role.SUPER_ADMIN),
 		async (req, res) => {
     try {
-		const response = await n4j.getAllContributors();
+		const {
+	    	'from': from,
+	    	'size': size
+		} = req.query;
+
+		const response = await n4j.getAllContributors(from, size);
 		res.status(200).json(response);
     } catch (error) {
 		console.error('Error fetching user list:', error);
@@ -417,12 +435,12 @@ router.options('/api/users/:id', (req, res) => {
     if (method === 'PUT') {
         res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
         res.header('Access-Control-Allow-Methods', 'PUT');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
         res.header('Access-Control-Allow-Credentials', 'true');
     } else if (method === 'GET') {
         res.header('Access-Control-Allow-Origin', '*');
         res.header('Access-Control-Allow-Methods', 'GET');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
     }
     res.sendStatus(204); // No content
 });
