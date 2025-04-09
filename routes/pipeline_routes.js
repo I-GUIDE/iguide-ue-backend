@@ -372,7 +372,7 @@ router.post('/llm/search', cors(), async (req, res) => {
 });
 /**
  * @swagger
- * /llm/search-with-progress:
+ * /llm/search-with-status-update:
  *   post:
  *     summary: Perform LLM-based search with real-time progress updates via Server-Sent Events (SSE)
  *     description: |
@@ -418,8 +418,8 @@ router.post('/llm/search', cors(), async (req, res) => {
  *                 event: error
  *                 data: {"error":"Internal server error"}
  */
-router.options('/llm/search-with-progress', cors());
-router.post('/llm/search-with-progress', cors(), async (req, res) => {
+router.options('/llm/search-with-status-update', cors());
+router.post('/llm/search-with-status-update', cors(), async (req, res) => {
   const { userQuery, memoryId} = req.body;
 
   // Configure SSE headers
