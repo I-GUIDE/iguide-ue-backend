@@ -21,15 +21,6 @@ const client = new Client({
     rejectUnauthorized: false,
   },
 });
-function apiKeyAuth(req, res, next) {
-  const apiKey = req.headers['x-api-key'] || req.query.api_key;
-
-  if (apiKey && apiKey === process.env.LLM_API_KEY) {
-    return next();
-  } else {
-    return res.status(403).json({ error: 'Forbidden: Invalid API key' });
-  }
-}
 
 // Helper: Create query payload for Llama model
 function createQueryPayload(model, systemMessage, userMessage, stream = false) {
@@ -234,7 +225,6 @@ async function handleUserQueryWithProgress(
     count: relevantDocuments.length,
   };
 }
-router.use('/llm', cors(), apiKeyAuth);
 /**
  * @swagger
  * /beta/llm/memory-id:
@@ -261,7 +251,7 @@ router.use('/llm', cors(), apiKeyAuth);
  *         description: Error creating memory
  */
 router.options('/llm/memory-id', cors());
-router.post('/llm/memory-id', async (req, res) => {
+router.post('/llm/memory-id', cors(), async (req, res) => {
     const conversationName = `conversation-${uuidv4()}`; // Generate random conversation name
 
     try {
@@ -344,7 +334,7 @@ router.post('/llm/memory-id', async (req, res) => {
  *         description: Error performing conversational search
  */
 router.options('/llm/search', cors());
-router.post('/llm/search', async (req, res) => {
+router.post('/llm/search', cors(), async (req, res) => {
   const { userQuery, memoryIdTmp } = req.body;
   var memoryId = "fakeid12345";
   if (!userQuery) {
@@ -381,7 +371,7 @@ router.post('/llm/search', async (req, res) => {
   }
 });
 router.options('/llm/search-with-progress', cors());
-router.post('/llm/search-with-progress', async (req, res) => {
+router.post('/llm/search-with-progress', cors(), async (req, res) => {
   const { userQuery, memoryIdTmp } = req.body;
 
   // Configure SSE headers
