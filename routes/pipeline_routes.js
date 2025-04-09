@@ -370,6 +370,54 @@ router.post('/llm/search', cors(), async (req, res) => {
     res.status(500).json({ error: "Error performing conversational search." });
   }
 });
+/**
+ * @swagger
+ * /llm/search-with-progress:
+ *   post:
+ *     summary: Perform LLM-based search with real-time progress updates via Server-Sent Events (SSE)
+ *     description: |
+ *       Accepts a user query and an optional memory ID to perform a comprehensive LLM-driven search.
+ *       The response is streamed using Server-Sent Events (SSE), sending progress updates and the final result.
+ *     consumes:
+ *       - application/json
+ *     produces:
+ *       - text/event-stream
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userQuery:
+ *                 type: string
+ *                 description: The user's search query.
+ *               memoryId:
+ *                 type: string
+ *                 description: (Optional) The memory ID used for context augmentation.
+ *     responses:
+ *       200:
+ *         description: Stream of progress updates and final result using SSE.
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ *               example: |
+ *                 event: status
+ *                 data: {"status":"Augmenting question..."}
+
+ *                 event: result
+ *                 data: {"answer":"..."}
+ *       500:
+ *         description: Server error occurred during search.
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ *               example: |
+ *                 event: error
+ *                 data: {"error":"Internal server error"}
+ */
 router.options('/llm/search-with-progress', cors());
 router.post('/llm/search-with-progress', cors(), async (req, res) => {
   const { userQuery, memoryId} = req.body;
