@@ -335,8 +335,8 @@ router.post('/llm/memory-id', cors(), async (req, res) => {
  */
 router.options('/llm/search', cors());
 router.post('/llm/search', cors(), async (req, res) => {
-  const { userQuery, memoryIdTmp } = req.body;
-  var memoryId = "fakeid12345";
+  const { userQuery, memoryId } = req.body;
+  //var memoryId = "fakeid12345";
   if (!userQuery) {
     return res.status(400).json({ error: "Missing userQuery in request body." });
   }
@@ -372,7 +372,7 @@ router.post('/llm/search', cors(), async (req, res) => {
 });
 router.options('/llm/search-with-progress', cors());
 router.post('/llm/search-with-progress', cors(), async (req, res) => {
-  const { userQuery, memoryIdTmp } = req.body;
+  const { userQuery, memoryId} = req.body;
 
   // Configure SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
@@ -385,7 +385,7 @@ router.post('/llm/search-with-progress', cors(), async (req, res) => {
   };
 
   try {
-    let finalMemoryId = "fakeid12345"; // Replace with your logic
+    let finalMemoryId = memoryId; // Replace with your logic
 
     // Example: Send progress when augmenting the question
     sendEvent('status', { status: 'Augmenting question...' });
