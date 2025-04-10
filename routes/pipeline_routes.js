@@ -78,13 +78,20 @@ function formatDocs(docs) {
 // Function: Generate an answer using relevant documents
 async function generateAnswer(state, temperature = 0.7, top_p = 0.9) {
   console.log("---GENERATE---");
-  const { question, documents, loop_step = 0 } = state;
+  const { question, augmentedQuery, documents, loop_step = 0 } = state;
 
   const docsTxt = formatDocs(documents);
-  const generationPrompt = `User Query: ${question}\nSearch Results:\n${docsTxt}`;
+  const systemPrompt = `You are the generation module of the LLM Search.
+1) You have already retrieved the relevant information needed.
+2) Provide a direct, clear, and confident answer to the user's query.
+3) Do not mention "the documents" or "search results".
+4) Summarize or reference the provided context naturally, as if you are the source.
+5) If insufficient context is available, state briefly that you do not have enough information.
+6) Avoid filler phrases like "it appears that you have provided" or "the documents show that."`;
+  const userPrompt = `User Query: ${question}\nAugmented user query based on chat history: ${augmentedQuery}\nSearch Results:\n${docsTxt}`;
 
   const llmResponse = await callLlamaModel(
-    createQueryPayload("llama3.1:70b", "You are the generation module of the LLM Search. You are expected to answer the user query based on the search results. The provided search results are from the search pipeline instead of the user so you can assume that you found the search results. Focus more on the question and avoid using terms like 'It appears that you have provided' or 'the search results shows that'", generationPrompt, 
+    createQueryPayload("llama3.1:70b", systemPrompt, userPrompt, 
   )
   );
 
@@ -189,7 +196,7 @@ async function handleUserQueryWithProgress(
     };
   }
 
-  let state = { question: userQuery, documents: relevantDocuments };
+  let state = { question: userQuery, augmentedQuery: comprehensiveUserQuery, documents: relevantDocuments };
   
   progressCallback("Generating answer...");
   let generationState = await generateAnswer(state);
@@ -460,9 +467,12 @@ router.get('/llm/search', async (req, res) => {
     }
 
     sendEvent('status', { status: 'Augmenting question...' });
-
     const comprehensiveQuery = await formComprehensiveUserQuery(memoryId, userQuery);
-
+    if (!comprehensiveQuery) {
+      sendEvent('error', { error: 'Error: No memory found for the session!' });
+      res.end();
+      return;
+    }
     const response = await handleUserQueryWithProgress(userQuery, comprehensiveQuery, false, (progress) => {
       sendEvent('status', { status: progress });
     });
@@ -475,6 +485,9 @@ router.get('/llm/search', async (req, res) => {
         return newEl;
       });
     }
+    await updateMemory(memoryId, userQuery, response.answer);
+    sendEvent('status', { status: 'Updatting memory...' });
+    console.log("Updating memory with id ", memoryId);
     sendEvent('result', response);
     res.end();
   } catch (err) {
