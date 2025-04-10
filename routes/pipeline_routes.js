@@ -357,7 +357,7 @@ router.post('/llm/search', cors(), async (req, res) => {
     console.log(`Searching "${comprehensiveUserQuery}" with memoryID: ${finalMemoryId}`);
 
     // Perform the search with the comprehensive user query and memory ID
-    const response = await handleUserQuery(userQuery, comprehensiveUserQuery, false);
+    const response = await handleUserQuery(userQuery, comprehensiveUserQuery, true);
     if (response.error) {
       return res.status(500).json({ error: response.error });
     }
@@ -418,14 +418,16 @@ router.post('/llm/search', cors(), async (req, res) => {
  *                 event: error
  *                 data: {"error":"Internal server error"}
  */
+// OPTIONS handler for CORS preflight (only needed if you allow other methods like POST)
 router.options('/llm/search-with-status-update', (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.sendStatus(204); // No Content
 });
 
-router.post('/llm/search-with-status-update', async (req, res) => {
+// GET-based SSE endpoint
+router.get('/llm/search-with-status-update', async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -437,7 +439,8 @@ router.post('/llm/search-with-status-update', async (req, res) => {
   };
 
   try {
-    const { userQuery, memoryId } = req.body;
+    const userQuery = req.query.userQuery;
+    const memoryId = req.query.memoryId;
 
     sendEvent('status', { status: 'Augmenting question...' });
 
@@ -446,7 +449,15 @@ router.post('/llm/search-with-status-update', async (req, res) => {
     const response = await handleUserQueryWithProgress(userQuery, comprehensiveQuery, false, (progress) => {
       sendEvent('status', { status: progress });
     });
-
+    if (Array.isArray(response.elements)) {
+      response.elements = response.elements.map((el) => {
+        const newEl = { ...el };
+        if (newEl._source && newEl._source["contents-embedding"]) {
+          delete newEl._source["contents-embedding"];
+        }
+        return newEl;
+      });
+    }
     sendEvent('result', response);
     res.end();
   } catch (err) {

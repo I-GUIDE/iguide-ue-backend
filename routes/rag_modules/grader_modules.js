@@ -162,3 +162,8 @@ export async function gradeGenerationVsDocumentsAndQuestion(state, showReason = 
   }
   return "max retries";
 }
+function formatDocs(docs) {
+  return docs
+    .map(doc => `title: ${doc._source.title}\ncontent: ${doc._source.contents}\ncontributor: ${doc._source.contributor}`)
+    .join("\n\n");
+}
