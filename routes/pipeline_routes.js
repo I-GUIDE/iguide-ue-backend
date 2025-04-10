@@ -167,7 +167,8 @@ async function handleUserQueryWithProgress(
   progressCallback = () => {} // Add progress callback parameter
 ) {
   progressCallback("Fetching search results...");
-  console.log("Fetching search results...");
+  console.log("Fetching search results for \"", comprehensiveUserQuery, "\"");
+  //console.log("Fetching search results...");
   const searchResults = await routeUserQuery(comprehensiveUserQuery);
 
   let relevantDocuments = [];
@@ -219,9 +220,19 @@ async function handleUserQueryWithProgress(
   }
 
   return {
-    answer: generationState.generation,
+    answer: generationState.generation || "I'm sorry, I couldn't generate a satisfactory answer at the moment.",
     message_id: uuidv4(),
-    elements: relevantDocuments,
+    elements: relevantDocuments.map(doc => ({
+      _id: doc._id,
+      _score: doc._score,
+      contributor: doc._source.contributor,
+      contents: doc._source.contents,
+      "resource-type": doc._source["resource-type"],
+      title: doc._source.title,
+      authors: doc._source.authors || [],
+      tags: doc._source.tags || [],
+      "thumbnail-image": doc._source["thumbnail-image"],
+    })),
     count: relevantDocuments.length,
   };
 }
@@ -333,8 +344,8 @@ router.post('/llm/memory-id', cors(), async (req, res) => {
  *       500:
  *         description: Error performing conversational search
  */
-router.options('/llm/search', cors());
-router.post('/llm/search', cors(), async (req, res) => {
+router.options('/llm/legacy-search', cors());
+router.post('/llm/legacy-search', cors(), async (req, res) => {
   const { userQuery, memoryId } = req.body;
   //var memoryId = "fakeid12345";
   if (!userQuery) {
@@ -372,7 +383,7 @@ router.post('/llm/search', cors(), async (req, res) => {
 });
 /**
  * @swagger
- * /beta/llm/search-with-status-update:
+ * /beta/llm/search:
  *   post:
  *     summary: Perform LLM-based search with real-time progress updates via Server-Sent Events (SSE)
  *     description: |
@@ -419,7 +430,7 @@ router.post('/llm/search', cors(), async (req, res) => {
  *                 data: {"error":"Internal server error"}
  */
 // OPTIONS handler for CORS preflight (only needed if you allow other methods like POST)
-router.options('/llm/search-with-status-update', (req, res) => {
+router.options('/llm/search', (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -427,7 +438,7 @@ router.options('/llm/search-with-status-update', (req, res) => {
 });
 
 // GET-based SSE endpoint
-router.get('/llm/search-with-status-update', async (req, res) => {
+router.get('/llm/search', async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -441,6 +452,12 @@ router.get('/llm/search-with-status-update', async (req, res) => {
   try {
     const userQuery = req.query.userQuery;
     const memoryId = req.query.memoryId;
+    console.log("Received userQuery:", userQuery, "with memoryId:", memoryId);
+    if (!userQuery) {
+      sendEvent('error', { error: 'Missing userQuery in request query.' });
+      res.end();
+      return;
+    }
 
     sendEvent('status', { status: 'Augmenting question...' });
 

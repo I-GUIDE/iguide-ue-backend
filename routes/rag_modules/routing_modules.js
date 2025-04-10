@@ -80,8 +80,12 @@ async function routeUserQuery(userQuery) {
         results.push(...methodResults);
       }
     }
+    // Remove duplicates based on _id
+    const uniqueResults = Array.from(
+      new Map(results.map(item => [item._id, item])).values()
+    );
 
-    return results;
+    return uniqueResults;
 
   } catch (error) {
     console.error('Error routing user query:', error);
