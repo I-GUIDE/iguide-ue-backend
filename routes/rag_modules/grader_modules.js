@@ -1,6 +1,6 @@
 import { callLlamaModel, createQueryPayload } from './llm_modules.js';
 
-export async function gradeDocuments(documents, question) {
+/*export async function gradeDocuments(documents, question) {
   const gradedDocuments = [];
   console.log("---CHECK DOCUMENT RELEVANCE TO QUESTION---");
 
@@ -28,7 +28,63 @@ export async function gradeDocuments(documents, question) {
   }
 
   return gradedDocuments;
+}*/
+export async function gradeDocuments(documents, question) {
+  const gradedDocuments = [];
+  console.log("---CHECK DOCUMENT RELEVANCE TO QUESTION---");
+
+  for (const doc of documents) {
+    const graderPrompt = `
+      You are a grader assessing the relevance of the following document to a user question.
+      You must return a JSON object with one key: "relevance_score", a numeric value between 0 and 10,
+      where 0 means completely irrelevant, 10 means highly relevant.
+
+      Document contents:
+      ${doc._source.contents}
+
+      User question:
+      ${question}
+
+      Return the result strictly in JSON format:
+      {"relevance_score": <numeric_score>}
+    `;
+
+    // Create your query payload (adjust the model & system prompt as needed)
+    const queryPayload = createQueryPayload(
+      "llama3.2:latest",
+      "You are a grader assessing document relevance. Return a single JSON object with a numeric relevance_score.",
+      graderPrompt
+    );
+
+    // Call the LLM
+    const result = await callLlamaModel(queryPayload);
+
+    // Attempt to parse the JSON response
+    try {
+      const parsed = JSON.parse(result?.message?.content.trim());
+      const relevanceScore = parsed?.relevance_score;
+
+      if (typeof relevanceScore === 'number') {
+        console.log(`---GRADE: Document scored ${relevanceScore}---`);
+        doc._score = relevanceScore;
+        if (relevanceScore > 0) {
+          //console.log("---GRADE: DOCUMENT RELEVANT---");
+          gradedDocuments.push(doc);
+        }
+        
+      } else {
+        console.log("---GRADE ERROR: Missing or invalid relevance_score---");
+      }
+    } catch (err) {
+      console.log("---GRADE ERROR: Could not parse JSON---", err);
+    }
+  }
+
+  // Sort the documents by descending relevance score
+  gradedDocuments.sort((a, b) => b._score - a._score);
+  return gradedDocuments;
 }
+
 /*export async function gradeDocuments(documents, question) {
   console.log("---CHECK DOCUMENT RELEVANCE TO QUESTION---");
 
