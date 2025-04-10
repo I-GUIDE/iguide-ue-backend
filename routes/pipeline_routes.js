@@ -172,16 +172,16 @@ async function handleUserQueryWithProgress(
 
   let relevantDocuments = [];
   if (searchResults && searchResults.length > 0) {
-    progressCallback(`Grading ${searchResults.length} documents...`);
-    console.log("Grading " + searchResults.length + " documents...");
+    progressCallback(`Grading ${searchResults.length} search results...`);
+    console.log("Grading " + searchResults.length + " search results...");
     relevantDocuments = await gradeDocuments(searchResults, userQuery);
   }
 
   if (relevantDocuments.length === 0) {
-    progressCallback("No relevant documents found");
-    console.log("No relevant documents found.");
+    progressCallback("No relevant knowledge elelement found");
+    console.log("No relevant knowledge elelement found.");
     return {
-      answer: "Sorry, I couldn't find any relevant documents for your query.",
+      answer: "Sorry, I couldn't find any relevant knowledge elelement for your question.",
       message_id: uuidv4(),
       elements: [],
       count: 0,
@@ -372,7 +372,7 @@ router.post('/llm/search', cors(), async (req, res) => {
 });
 /**
  * @swagger
- * /llm/search-with-status-update:
+ * /beta/llm/search-with-status-update:
  *   post:
  *     summary: Perform LLM-based search with real-time progress updates via Server-Sent Events (SSE)
  *     description: |
@@ -418,11 +418,15 @@ router.post('/llm/search', cors(), async (req, res) => {
  *                 event: error
  *                 data: {"error":"Internal server error"}
  */
-router.options('/llm/search-with-status-update', cors());
-router.post('/llm/search-with-status-update', cors(), async (req, res) => {
-  const { userQuery, memoryId} = req.body;
+router.options('/llm/search-with-status-update', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.sendStatus(204); // No Content
+});
 
-  // Configure SSE headers
+router.post('/llm/search-with-status-update', async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -433,27 +437,23 @@ router.post('/llm/search-with-status-update', cors(), async (req, res) => {
   };
 
   try {
-    let finalMemoryId = memoryId; // Replace with your logic
+    const { userQuery, memoryId } = req.body;
 
-    // Example: Send progress when augmenting the question
     sendEvent('status', { status: 'Augmenting question...' });
-    const comprehensiveQuery = await formComprehensiveUserQuery(finalMemoryId, userQuery);
 
-    // Example: Send progress when performing semantic search
-    sendEvent('status', { status: 'Performing semantic search...' });
-    
-    // Modify handleUserQuery to accept a progress callback
-    const response = await handleUserQueryWithProgress(userQuery, comprehensiveUserQuery, false, (progress) => {
-      sendEvent('status', { status: progress }); // e.g., "Generating answer..."
+    const comprehensiveQuery = await formComprehensiveUserQuery(memoryId, userQuery);
+
+    const response = await handleUserQueryWithProgress(userQuery, comprehensiveQuery, false, (progress) => {
+      sendEvent('status', { status: progress });
     });
 
-    // Final result
     sendEvent('result', response);
     res.end();
-  } catch (error) {
-    sendEvent('error', { error: error.message });
+  } catch (err) {
+    sendEvent('error', { error: err.message });
     res.end();
   }
 });
+
 
 export default router;
