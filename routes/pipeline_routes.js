@@ -178,8 +178,8 @@ async function handleUserQueryWithProgress(
   }
 
   if (relevantDocuments.length === 0) {
-    progressCallback("No relevant knowledge elelement found");
-    console.log("No relevant knowledge elelement found.");
+    progressCallback("No relevant knowledge element found");
+    console.log("No relevant knowledge element found.");
     return {
       answer: "Sorry, I couldn't find any relevant knowledge elelement for your question.",
       message_id: uuidv4(),
