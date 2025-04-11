@@ -500,9 +500,9 @@ router.post('/llm/legacy-search', cors(), async (req, res) => {
 
 // Allow POST preflight requests
 router.options('/llm/search', (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', 'https://dev.i-guide.io');
+  res.setHeader('Access-Control-Allow-Origin', jwtCORSOptions.origin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, JWT-API-KEY');
+  res.setHeader('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
   res.header('Access-Control-Allow-Credentials', 'true');
   res.sendStatus(204); // No Content
 });
@@ -511,8 +511,8 @@ router.options('/llm/search', (req, res) => {
 router.post('/llm/search', async (req, res) => {
   res.header('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, JWT-API-KEY');
-  res.setHeader('Access-Control-Allow-Origin', 'https://dev.i-guide.io');
+  res.setHeader('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+  res.setHeader('Access-Control-Allow-Origin', jwtCORSOptions.origin);
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
