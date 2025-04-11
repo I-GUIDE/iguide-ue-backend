@@ -3,6 +3,8 @@ import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { formComprehensiveUserQuery, getOrCreateMemory, updateMemory, deleteMemory, createMemory } from './rag_modules/memory_modules.js';
+import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
+import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
 import { getSemanticSearchResults } from './rag_modules/search_modules.js';
 import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_modules/grader_modules.js';
 import { callLlamaModel } from './rag_modules/llm_modules.js';
@@ -283,7 +285,7 @@ router.post('/llm/memory-id', cors(), async (req, res) => {
 
 /**
  * @swagger
- * /beta/llm/search:
+ * /beta/llm/legacy-search:
  *   post:
  *     summary: Perform a conversational search with memory
  *     description: Performs LLM-based search with optional memory tracking via OpenSearch.
@@ -437,15 +439,75 @@ router.post('/llm/legacy-search', cors(), async (req, res) => {
  *                 data: {"error":"Internal server error"}
  */
 // OPTIONS handler for CORS preflight (only needed if you allow other methods like POST)
+// router.options('/llm/search', (req, res) => {
+//   res.setHeader('Access-Control-Allow-Origin', '*');
+//   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+//   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+//   res.sendStatus(204); // No Content
+// });
+
+// // GET-based SSE endpoint
+// router.get('/llm/search', async (req, res) => {
+//   res.setHeader('Access-Control-Allow-Origin', '*');
+//   res.setHeader('Content-Type', 'text/event-stream');
+//   res.setHeader('Cache-Control', 'no-cache');
+//   res.setHeader('Connection', 'keep-alive');
+
+//   const sendEvent = (event, data) => {
+//     res.write(`event: ${event}\n`);
+//     res.write(`data: ${JSON.stringify(data)}\n\n`);
+//   };
+
+//   try {
+//     const userQuery = req.query.userQuery;
+//     const memoryId = req.query.memoryId;
+//     console.log("Received userQuery:", userQuery, "with memoryId:", memoryId);
+//     if (!userQuery) {
+//       sendEvent('error', { error: 'Missing userQuery in request query.' });
+//       res.end();
+//       return;
+//     }
+
+//     sendEvent('status', { status: 'Augmenting question...' });
+//     const comprehensiveQuery = await formComprehensiveUserQuery(memoryId, userQuery);
+//     if (!comprehensiveQuery) {
+//       sendEvent('error', { error: 'Error: No memory found for the session!' });
+//       res.end();
+//       return;
+//     }
+//     const response = await handleUserQueryWithProgress(userQuery, comprehensiveQuery, false, (progress) => {
+//       sendEvent('status', { status: progress });
+//     });
+//     if (Array.isArray(response.elements)) {
+//       response.elements = response.elements.map((el) => {
+//         const newEl = { ...el };
+//         if (newEl._source && newEl._source["contents-embedding"]) {
+//           delete newEl._source["contents-embedding"];
+//         }
+//         return newEl;
+//       });
+//     }
+//     await updateMemory(memoryId, userQuery, response.answer);
+//     sendEvent('status', { status: 'Updatting memory...' });
+//     console.log("Updating memory with id ", memoryId);
+//     sendEvent('result', response);
+//     res.end();
+//   } catch (err) {
+//     sendEvent('error', { error: err.message });
+//     res.end();
+//   }
+// });
+
+// Allow POST preflight requests
 router.options('/llm/search', (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.sendStatus(204); // No Content
 });
 
-// GET-based SSE endpoint
-router.get('/llm/search', async (req, res) => {
+// POST-based SSE endpoint
+router.post('/llm/search', async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -457,25 +519,28 @@ router.get('/llm/search', async (req, res) => {
   };
 
   try {
-    const userQuery = req.query.userQuery;
-    const memoryId = req.query.memoryId;
+    const { userQuery, memoryId } = req.body;
     console.log("Received userQuery:", userQuery, "with memoryId:", memoryId);
+
     if (!userQuery) {
-      sendEvent('error', { error: 'Missing userQuery in request query.' });
+      sendEvent('error', { error: 'Missing userQuery in request body.' });
       res.end();
       return;
     }
 
     sendEvent('status', { status: 'Augmenting question...' });
     const comprehensiveQuery = await formComprehensiveUserQuery(memoryId, userQuery);
+
     if (!comprehensiveQuery) {
       sendEvent('error', { error: 'Error: No memory found for the session!' });
       res.end();
       return;
     }
+
     const response = await handleUserQueryWithProgress(userQuery, comprehensiveQuery, false, (progress) => {
       sendEvent('status', { status: progress });
     });
+
     if (Array.isArray(response.elements)) {
       response.elements = response.elements.map((el) => {
         const newEl = { ...el };
@@ -485,9 +550,11 @@ router.get('/llm/search', async (req, res) => {
         return newEl;
       });
     }
+
+    sendEvent('status', { status: 'Updating memory...' });
     await updateMemory(memoryId, userQuery, response.answer);
-    sendEvent('status', { status: 'Updatting memory...' });
-    console.log("Updating memory with id ", memoryId);
+    console.log("Updated memory with id ", memoryId);
+
     sendEvent('result', response);
     res.end();
   } catch (err) {
@@ -495,6 +562,7 @@ router.get('/llm/search', async (req, res) => {
     res.end();
   }
 });
+
 
 
 export default router;
