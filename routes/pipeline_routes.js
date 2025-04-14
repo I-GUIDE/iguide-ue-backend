@@ -84,17 +84,57 @@ async function generateAnswer(state, temperature = 0.7, top_p = 0.9) {
   const { question, augmentedQuery, documents, loop_step = 0 } = state;
 
   const docsTxt = formatDocs(documents);
-  const systemPrompt = `You are the generation module of the LLM Search.
-1) You have already retrieved the relevant information needed.
-2) Provide a direct, clear, and confident answer to the user's query.
-3) Do not mention "the documents" or "search results".
-4) Summarize or reference the provided context naturally, as if you are the source.
-5) If insufficient context is available, state briefly that you do not have enough information.
-6) Avoid filler phrases like "it appears that you have provided" or "the documents show that."`;
-  const userPrompt = `User Query: ${question}\nAugmented user query based on chat history: ${augmentedQuery}\nSearch Results:\n${docsTxt}`;
+  const systemPrompt = `You are an authoritative expert answering questions based on supporing information from that you assume are given by yourself. Follow these rules:
+  1. Use ONLY the provided research results to craft a direct, actionable answer to the user's query.
+  2. NEVER mention "documents," "search results," or "data sources" – answer as if this is your own knowledge.
+  3. If information is incomplete, say "I don't have enough information to fully answer this."
+  4. Avoid phrases like "This text appears..." or "The datasets show..." – focus on delivering the answer itself.
+  5. All the supporting information comes from your internal knowledge base."`;
+  const fewShotExamples = `
+Example 1:
+User Query: What are the benefits of regular exercise?
+Retrieved Information:
+- Regular exercise improves cardiovascular health.
+- It aids in weight management.
+- Exercise enhances mental health by reducing stress and anxiety.
 
+Answer: Regular exercise offers multiple benefits, including improved cardiovascular health, effective weight management, and enhanced mental well-being through stress and anxiety reduction.
+
+Example 2:
+User Query: What are the Chicago datasets that are related to social media?
+Retrieved Information:
+
+Title: Social Media (Twitter) Data Visualization
+Author: Fangzheng Lyu
+Contents: Demonstrates visualization techniques for location-based Twitter data in Chicago and beyond.
+
+Title: Mapping Dynamic Human Sentiments of Heat Exposure
+Author: Fangzheng Lyu
+Contents: Uses near real-time location-based Twitter data to analyze and visualize how Chicago residents discuss and respond to extreme heat.
+
+Title: Twitter Data
+Author: Fangzheng Lyu
+Contents: Provides datasets associated with the “Mapping Dynamic Human Sentiments of Heat Exposure” study, focusing on geotagged tweets.
+
+Title: National-level Analysis using Twitter Data
+Author: Fangzheng Lyu
+Contents: Offers a workflow for large-scale sentiment analysis of heat exposure using location-based Twitter data.
+
+Title: Understanding Demographic and Socioeconomic Biases of Geotagged Twitter Users
+Author: Ruowei Liu
+Contents: Explores how demographic and socioeconomic factors affect Twitter usage patterns at the county level, including Chicago.
+
+Answer: Several Chicago-specific datasets center on location-based Twitter data and provide insights into social media usage in urban contexts. For example, Fangzheng Lyu’s resources illustrate how to visualize geotagged tweets in the city, offering near real-time analysis of heat exposure and human sentiments. Ruowei Liu’s work further examines biases in geotagged Twitter usage, shedding light on the demographic and socioeconomic factors shaping online engagement across counties, including Chicago. You might explore more of Lyu’s or Liu’s publications—or reach out directly—to deepen your understanding of how social media data can inform urban research and decision-making.
+`;
+  const userPrompt = `${fewShotExamples}
+  **Question**: ${question}
+  **Augmented Query based on context **: ${augmentedQuery}
+  **Supporting Information**:
+  ${docsTxt}
+  Answer the question while paying attention to the context as if this knowledge is inherent to you.`;
+  
   const llmResponse = await callLlamaModel(
-    createQueryPayload("llama3.1:70b", systemPrompt, userPrompt, 
+    createQueryPayload("llama3.3:70b", systemPrompt, userPrompt, 
   )
   );
 
@@ -110,12 +150,12 @@ async function generateAnswer(state, temperature = 0.7, top_p = 0.9) {
 
 // Function: Handle a user query
 async function handleUserQuery(userQuery, comprehensiveUserQuery, checkGenerationQuality) {
-  console.log("Fetching search results...");
+  console.log("Fetching search results");
   const searchResults = await routeUserQuery(comprehensiveUserQuery);
 
   let relevantDocuments = [];
   if (searchResults && searchResults.length > 0) {
-    console.log("Grading " + searchResults.length + " documents...");
+    console.log("Grading " + searchResults.length + " documents");
     relevantDocuments = await gradeDocuments(searchResults, userQuery);
   }
 
@@ -176,15 +216,14 @@ async function handleUserQueryWithProgress(
   checkGenerationQuality,
   progressCallback = () => {} // Add progress callback parameter
 ) {
-  progressCallback("Fetching search results...");
+  progressCallback("Fetching search results");
   console.log("Fetching search results for \"", comprehensiveUserQuery, "\"");
-  //console.log("Fetching search results...");
   const searchResults = await routeUserQuery(comprehensiveUserQuery);
 
   let relevantDocuments = [];
   if (searchResults && searchResults.length > 0) {
-    progressCallback(`Grading ${searchResults.length} search results...`);
-    console.log("Grading " + searchResults.length + " search results...");
+    progressCallback(`Grading ${searchResults.length} search results`);
+    console.log("Grading " + searchResults.length + " search results");
     relevantDocuments = await gradeDocuments(searchResults, userQuery);
   }
 
@@ -201,19 +240,19 @@ async function handleUserQueryWithProgress(
 
   let state = { question: userQuery, augmentedQuery: comprehensiveUserQuery, documents: relevantDocuments };
   
-  progressCallback("Generating answer...");
+  progressCallback("Generating answer");
   let generationState = await generateAnswer(state);
   console.log("\nGenerated Answer:", generationState.generation);
 
   if (checkGenerationQuality) {
-    progressCallback("Validating answer quality...");
+    progressCallback("Validating answer quality");
     let verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
     let retryCount = 0;
     
     while (verdict !== "useful") {
       if (verdict === "not useful") {
         retryCount++;
-        progressCallback(`Regenerating answer (attempt ${retryCount})...`);
+        progressCallback(`Regenerating answer (attempt ${retryCount})`);
         generationState = await generateAnswer(generationState);
         verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
       } else if (verdict === "max retries") {
@@ -562,7 +601,7 @@ router.post('/llm/search', async (req, res) => {
       return;
     }
 
-    sendEvent('status', { status: 'Augmenting question...' });
+    sendEvent('status', { status: 'Augmenting question' });
     const comprehensiveQuery = await formComprehensiveUserQuery(memoryId, userQuery);
     
     if (!comprehensiveQuery) {

@@ -29,6 +29,19 @@ import { callLlamaModel, createQueryPayload } from './llm_modules.js';
 
   return gradedDocuments;
 }*/
+function extractJsonFromLLMReturn(response) {
+  const match = response.match(/{[\s\S]*?}/);
+  if (match) {
+    try {
+      return JSON.parse(match[0]);
+    } catch (e) {
+      console.error("Invalid JSON:", e);
+    }
+  } else {
+    console.warn("No JSON found");
+  }
+  return null;
+}
 export async function gradeDocuments(documents, question) {
   const gradedDocuments = [];
   console.log("---CHECK DOCUMENT RELEVANCE TO QUESTION---");
@@ -61,11 +74,12 @@ export async function gradeDocuments(documents, question) {
 
     // Attempt to parse the JSON response
     try {
-      const parsed = JSON.parse(result?.message?.content.trim());
+      const parsed = extractJsonFromLLMReturn(result?.message?.content.trim());
       const relevanceScore = parsed?.relevance_score;
 
       if (typeof relevanceScore === 'number') {
         console.log(`---GRADE: Document scored ${relevanceScore}---`);
+        //console.log("---LLM RESPONSE---", result?.message?.content);
         doc._score = relevanceScore;
         if (relevanceScore > 0) {
           //console.log("---GRADE: DOCUMENT RELEVANT---");
@@ -74,9 +88,12 @@ export async function gradeDocuments(documents, question) {
         
       } else {
         console.log("---GRADE ERROR: Missing or invalid relevance_score---");
+        
       }
     } catch (err) {
       console.log("---GRADE ERROR: Could not parse JSON---", err);
+      //console.log("---DOCUMENT CONTENTS---", doc._source.contents);
+      //console.log("---LLM RESPONSE---", result?.message?.content);
     }
   }
 
