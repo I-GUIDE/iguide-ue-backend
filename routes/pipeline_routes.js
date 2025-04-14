@@ -101,7 +101,8 @@ Retrieved Information:
 Answer: Regular exercise offers multiple benefits, including improved cardiovascular health, effective weight management, and enhanced mental well-being through stress and anxiety reduction.
 
 Example 2:
-User Query: What are the Chicago datasets that are related to social media?
+User Query: Any of these related to social media?
+Augmented Query: Chicago datasets related to social media
 Retrieved Information:
 
 Title: Social Media (Twitter) Data Visualization
