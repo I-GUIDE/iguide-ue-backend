@@ -270,8 +270,8 @@ async function handleUserQueryWithProgress(
  *       500:
  *         description: Error creating memory
  */
-router.options('/llm/memory-id', cors());
-router.post('/llm/memory-id', cors(), async (req, res) => {
+router.options('/llm/memory-id', jwtCorsMiddleware);
+router.post('/llm/memory-id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
     const conversationName = `conversation-${uuidv4()}`; // Generate random conversation name
 
     try {
@@ -499,8 +499,18 @@ router.post('/llm/legacy-search', cors(), async (req, res) => {
 // });
 
 // Allow POST preflight requests
+const allowedOrigins = process.env.ALLOWED_DOMAIN_LIST ? JSON.parse(process.env.ALLOWED_DOMAIN_LIST) : [`${process.env.FRONTEND_DOMAIN}`]
 router.options('/llm/search', (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+  if (allowedOrigins.length > 1) {
+      const origin = req.headers.origin;
+      if (!origin || allowedOrigins.includes(origin)) {
+          res.header('Access-Control-Allow-Origin', origin);
+      } else {
+          res.header('Access-Control-Allow-Origin', process.env.FRONTEND_DOMAIN);
+      }
+  } else {
+      res.header('Access-Control-Allow-Origin', process.env.FRONTEND_DOMAIN);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
   res.header('Access-Control-Allow-Credentials', 'true');
@@ -512,7 +522,16 @@ router.post('/llm/search', async (req, res) => {
   res.header('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
-  res.setHeader('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+  if (allowedOrigins.length > 1) {
+      const origin = req.headers.origin;
+      if (!origin || allowedOrigins.includes(origin)) {
+          res.header('Access-Control-Allow-Origin', origin);
+      } else {
+          res.header('Access-Control-Allow-Origin', process.env.FRONTEND_DOMAIN);
+      }
+  } else {
+      res.header('Access-Control-Allow-Origin', process.env.FRONTEND_DOMAIN);
+  }
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -524,6 +543,7 @@ router.post('/llm/search', async (req, res) => {
 
   try {
     const { userQuery, memoryId } = req.body;
+    console.log("Headers received:", req.headers);
     console.log("Received userQuery:", userQuery, "with memoryId:", memoryId);
 
     if (!userQuery) {
@@ -534,7 +554,7 @@ router.post('/llm/search', async (req, res) => {
 
     sendEvent('status', { status: 'Augmenting question...' });
     const comprehensiveQuery = await formComprehensiveUserQuery(memoryId, userQuery);
-
+    
     if (!comprehensiveQuery) {
       sendEvent('error', { error: 'Error: No memory found for the session!' });
       res.end();
