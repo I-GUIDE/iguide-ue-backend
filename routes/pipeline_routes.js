@@ -312,7 +312,7 @@ async function handleUserQueryWithProgress(
  *         description: Error creating memory
  */
 router.options('/llm/memory-id', jwtCorsMiddleware);
-router.post('/llm/memory-id', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.CONTENT_MODERATOR), async (req, res) => {
+router.post('/llm/memory-id', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.UNRESTRICTED_CONTRIBUTOR), async (req, res) => {
     const conversationName = `conversation-${uuidv4()}`; // Generate random conversation name
 
     try {
@@ -582,7 +582,7 @@ router.post('/llm/search', async (req, res) => {
     }
     return {user_id:req.user.id, user_role:req.user.role}
   })();
-  if(!(user_role <= utils.Role.CONTENT_MODERATOR)) {
+  if(!(user_role <= utils.Role.UNRESTRICTED_CONTRIBUTOR)) {
       console.log(user_id, " blocked from accessing I-GUIDE AI");
       return res.status(403).json({ message: 'Forbidden: You do not have permission to access I-GUIDE AI.' });
   }
