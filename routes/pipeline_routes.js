@@ -9,6 +9,7 @@ import { getSemanticSearchResults } from './rag_modules/search_modules.js';
 import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_modules/grader_modules.js';
 import { callLlamaModel } from './rag_modules/llm_modules.js';
 import { routeUserQuery } from './rag_modules/routing_modules.js';
+import * as utils from '../utils.js';
 
 const router = express.Router();
 
@@ -271,7 +272,7 @@ async function handleUserQueryWithProgress(
  *         description: Error creating memory
  */
 router.options('/llm/memory-id', jwtCorsMiddleware);
-router.post('/llm/memory-id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.post('/llm/memory-id', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.CONTENT_MODERATOR), async (req, res) => {
     const conversationName = `conversation-${uuidv4()}`; // Generate random conversation name
 
     try {
@@ -535,7 +536,16 @@ router.post('/llm/search', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-
+  const {user_id, user_role} = (() => {
+    if (!req.user || req.user == null || typeof req.user === 'undefined'){
+        return {user_id:null, user_role:null};
+    }
+    return {user_id:req.user.id, user_role:req.user.role}
+  })();
+  if(!(user_role <= utils.Role.CONTENT_MODERATOR)) {
+      console.log(user_id, " blocked from accessing I-GUIDE AI");
+      return res.status(403).json({ message: 'Forbidden: You do not have permission to access I-GUIDE AI.' });
+  }
   const sendEvent = (event, data) => {
     res.write(`event: ${event}\n`);
     res.write(`data: ${JSON.stringify(data)}\n\n`);
