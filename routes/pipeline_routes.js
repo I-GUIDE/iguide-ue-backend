@@ -74,7 +74,7 @@ function createQueryPayload(model, systemMessage, userMessage, stream = false) {
 // Helper: Format documents for Llama model prompt
 function formatDocs(docs) {
   return docs
-    .map(doc => `title: ${doc._source.title}\ncontent: ${doc._source.contents}\ncontributor: ${doc._source.contributor}`)
+    .map(doc => `title: ${doc._source.title}\ncontributor: ${doc._source.contributor}\nauthors: ${doc._source.authors}\ncontent: ${doc._source.contents}\ntags:${doc._source.tags}`)
     .join("\n\n");
 }
 
@@ -90,7 +90,7 @@ async function generateAnswer(state, temperature = 0.7, top_p = 0.9) {
   3. If information is incomplete, say "I don't have enough information to fully answer this."
   4. Avoid phrases like "This text appears..." or "The datasets show..." – focus on delivering the answer itself.
   5. All the supporting information comes from your internal knowledge base."`;
-  const fewShotExamples = `
+  /*const fewShotExamples = `
 Example 1:
 User Query: What are the benefits of regular exercise?
 Retrieved Information:
@@ -126,7 +126,9 @@ Author: Ruowei Liu
 Contents: Explores how demographic and socioeconomic factors affect Twitter usage patterns at the county level, including Chicago.
 
 Answer: Several Chicago-specific datasets center on location-based Twitter data and provide insights into social media usage in urban contexts. For example, Fangzheng Lyu’s resources illustrate how to visualize geotagged tweets in the city, offering near real-time analysis of heat exposure and human sentiments. Ruowei Liu’s work further examines biases in geotagged Twitter usage, shedding light on the demographic and socioeconomic factors shaping online engagement across counties, including Chicago. You might explore more of Lyu’s or Liu’s publications—or reach out directly—to deepen your understanding of how social media data can inform urban research and decision-making.
-`;
+`;*/
+  const fewShotExamples = ``;
+  console.log("Documents: ", docsTxt);
   const userPrompt = `${fewShotExamples}
   **Question**: ${question}
   **Augmented Query based on context **: ${augmentedQuery}
@@ -135,7 +137,7 @@ Answer: Several Chicago-specific datasets center on location-based Twitter data 
   Answer the question while paying attention to the context as if this knowledge is inherent to you.`;
   
   const llmResponse = await callLlamaModel(
-    createQueryPayload("llama3.3:70b", systemPrompt, userPrompt, 
+    createQueryPayload("llama3:instruct", systemPrompt, userPrompt, 
   )
   );
 
@@ -593,8 +595,8 @@ router.post('/llm/search', async (req, res) => {
 
   try {
     const { userQuery, memoryId } = req.body;
-    console.log("Headers received:", req.headers);
-    console.log("Received userQuery:", userQuery, "with memoryId:", memoryId);
+    //console.log("Headers received:", req.headers);
+    //console.log("Received userQuery:", userQuery, "with memoryId:", memoryId);
 
     if (!userQuery) {
       sendEvent('error', { error: 'Missing userQuery in request body.' });
