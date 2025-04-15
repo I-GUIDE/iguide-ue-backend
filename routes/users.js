@@ -146,6 +146,21 @@ router.get('/api/users',
  *       500:
  *         description: Error in updating user role
  */
+// Handle OPTIONS requests for both methods
+router.options('/api/users/:id/role', (req, res) => {
+    const method = req.header('Access-Control-Request-Method');
+    if (method === 'PUT') {
+        res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+        res.header('Access-Control-Allow-Methods', 'PUT');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+        res.header('Access-Control-Allow-Credentials', 'true');
+    } else if (method === 'GET') {
+        res.header('Access-Control-Allow-Origin', '*');
+        res.header('Access-Control-Allow-Methods', 'GET');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
+    }
+    res.sendStatus(204); // No content
+});
 router.put('/api/users/:id/role',
 		jwtCorsMiddleware,
 		authenticateJWT,
