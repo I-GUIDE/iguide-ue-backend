@@ -77,8 +77,8 @@ export async function gradeDocuments(documents, question) {
 
     // 3) Build your grader prompt with the simplified doc
     const graderPrompt = `
-      You are a grader assessing the relevance of the following document to a user question.
-      The document has the following fields in JSON format:
+      You are a grader assessing the relevance of the following knowledge element to a user question.
+      The knowledge element has the following fields in JSON format:
 
       ${docString}
 
@@ -86,7 +86,7 @@ export async function gradeDocuments(documents, question) {
 
       Please return a JSON object with a single key: "relevance_score".
       The value must be an integer from 0 to 10, where 0 = completely irrelevant, 10 = highly relevant.
-
+      If the user asked for a specific knowledge element type, such as "notebook", "dataset", give the knowledge element a score of 0.
       For example:
       {"relevance_score": 7}
     `;

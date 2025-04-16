@@ -48,7 +48,7 @@ export async function generateAnswer(state) {
   Answer the question while paying attention to the context as if this knowledge is inherent to you.
       `.trim();
   
-      console.log("User Prompt:\n", userPrompt);
+      //console.log("User Prompt:\n", userPrompt);
   
       // Create the payload - incorporate temperature and top_p if your createQueryPayload supports them
       const payload = createQueryPayload(

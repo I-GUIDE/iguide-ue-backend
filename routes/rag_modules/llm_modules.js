@@ -36,4 +36,30 @@ export function createQueryPayload(model, systemMessage, userMessage, stream = f
     }
   }
   
+  export async function callGPTModel(queryPayload) {
+    const openaiApiKey = process.env.OPENAI_API_KEY;
+    const openaiApiUrl = process.env.OPENAI_API_URL || 'https://api.openai.com/v1/chat/completions';
+  
+    try {
+      const response = await fetch(openaiApiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(queryPayload),
+      });
+  
+      if (response.ok) {
+        return await response.json();
+      }
+  
+      const errorText = await response.text();
+      throw new Error(`OpenAI Error: ${response.status}, ${errorText}`);
+    } catch (error) {
+      console.error("Error fetching from GPT model:", error);
+      throw error;
+    }
+  }
+  
   

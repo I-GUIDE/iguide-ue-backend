@@ -12,7 +12,8 @@ import { routeUserQuery } from './rag_modules/routing_modules.js';
 import * as utils from '../utils.js';
 import { extractJsonFromLLMReturn, formatDocsJson} from './rag_modules/rag_utils.js';
 import { generateAnswer } from './rag_modules/generation_module.js';
-
+import { restrictToUIUC } from '../ip_policy.js';
+import {createQueryPayload} from './rag_modules/llm_modules.js';
 const router = express.Router();
 
 // Initialize OpenSearch client
@@ -27,17 +28,6 @@ const client = new Client({
   },
 });
 
-// Helper: Create query payload for Llama model
-function createQueryPayload(model, systemMessage, userMessage, stream = false) {
-  return {
-    model,
-    messages: [
-      { role: "system", content: systemMessage },
-      { role: "user", content: userMessage },
-    ],
-    stream,
-  };
-}
 
 
 
@@ -760,7 +750,10 @@ router.post('/llm/search', async (req, res) => {
       return;
     }
 
-    const response = await handleIterativeQuery(userQuery, comprehensiveQuery, false, (progress) => {
+    /*const response = await handleIterativeQuery(userQuery, comprehensiveQuery, false, (progress) => {
+      sendEvent('status', { status: progress });
+    });*/
+    const response = await handleUserQueryWithProgress(userQuery, comprehensiveQuery, false, (progress) => {
       sendEvent('status', { status: progress });
     });
 

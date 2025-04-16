@@ -1,8 +1,9 @@
 import { callLlamaModel, createQueryPayload } from './llm_modules.js';
-import { getKeywordSearchResults, getSemanticSearchResults } from './search_modules.js';
+import { getKeywordSearchResults, getSemanticSearchResults, getNeo4jSearchResults} from './search_modules.js';
 import { getSpatialSearchResults } from './spatial_search_modules.js';
 import fs from 'fs';
 import csv from 'csv-parser';
+import { get } from 'http';
 
 // Load search methods from CSV
 async function loadSearchMethods() {
@@ -33,13 +34,35 @@ async function generateRoutingPrompt(userQuery, searchMethods) {
     prompt += `- ${method.functionName}: ${method.description}\n`;
   });
 
-  prompt += `\nBased on the query, suggest which retrieval methods should be used (select one or more). Order them according to their relevance to the query. Respond with the method names only, separated by commas. If there is no suitable search result for the query or the user is not asking about a question about the geospatial knowledge, return a empty string.`;
+  prompt += `\nBased on the query, suggest which retrieval methods should be used (select one or more). 
+  Order them according to their relevance to the query. 
+  Respond with the method names only, separated by commas. 
+  If there is no suitable search result for the query or the user is not asking about a question about the geospatial knowledge, return a empty string.
+  Only select the methods that are relevant to the query and try to avoid selecting all methods.
+  If the query is not relevant to any of the methods, return "noSearch".
+  Examples:
+  Q: What are the most viewed datasets?
+→ getNeo4jSearchResults
+
+Q: Recommend related publications to this notebook.
+→ getNeo4jSearchResults
+
+Q: What is the flood map for Chicago?
+→ getSemanticSearchResults
+
+Q: Climate change datasets
+→ getKeywordSearchResults
+
+Q: Anything near Colorado?
+→ getSpatialSearchResults
+`;
 
   return prompt;
 }
 
 // Load the function implementations into a mapping object
 const functionMapping = {
+  getNeo4jSearchResults,
   getKeywordSearchResults,
   getSemanticSearchResults,
   getSpatialSearchResults,
