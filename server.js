@@ -105,7 +105,7 @@ const SSLOptions = {
  */
 app.options('/api/refresh-token', jwtCorsMiddleware);
 app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
-	
+
 	// updated refresh token to use env variable
     const refreshToken = req.cookies[process.env.JWT_REFRESH_TOKEN_NAME];
     //console.log("Refresh token", refreshToken);
@@ -157,10 +157,16 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 
 app.options('/api/check-tokens', jwtCorsMiddleware);
 app.get('/api/check-tokens', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
-	res.json({
-		id: req.user.id,
-		role: req.user.role
-  });});
+	try {
+		res.json({
+			id: req.user.id,
+			role: req.user.role
+  		});
+	} catch (error) {
+		console.error("Error performing check user: ", error)
+		res.status(500).json({message: 'Error checking user details'});
+	}
+});
 
 /****************************************************************************
  * General Helper Functions

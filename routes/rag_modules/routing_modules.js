@@ -33,7 +33,7 @@ async function generateRoutingPrompt(userQuery, searchMethods) {
     prompt += `- ${method.functionName}: ${method.description}\n`;
   });
 
-  prompt += `\nBased on the query, suggest which retrieval methods should be used (select one or more). Respond with the method names only, separated by commas.`;
+  prompt += `\nBased on the query, suggest which retrieval methods should be used (select one or more). Order them according to their relevance to the query. Respond with the method names only, separated by commas. If there is no suitable search result for the query or the user is not asking about a question about the geospatial knowledge, return a empty string.`;
 
   return prompt;
 }
@@ -60,7 +60,7 @@ async function routeUserQuery(userQuery) {
 
     // Parse LLM's response and extract selected methods
     const selectedMethods = result?.message?.content?.trim();
-    if (!selectedMethods) {
+    if (!selectedMethods || selectedMethods[0] === 'noSearch') {
       throw new Error('No methods selected by LLM');
     } else {
       console.log('Selected methods:', selectedMethods);
@@ -80,8 +80,12 @@ async function routeUserQuery(userQuery) {
         results.push(...methodResults);
       }
     }
+    // Remove duplicates based on _id
+    const uniqueResults = Array.from(
+      new Map(results.map(item => [item._id, item])).values()
+    );
 
-    return results;
+    return uniqueResults;
 
   } catch (error) {
     console.error('Error routing user query:', error);

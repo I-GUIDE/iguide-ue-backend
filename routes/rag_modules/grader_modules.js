@@ -1,6 +1,6 @@
 import { callLlamaModel, createQueryPayload } from './llm_modules.js';
 
-export async function gradeDocuments(documents, question) {
+/*export async function gradeDocuments(documents, question) {
   const gradedDocuments = [];
   console.log("---CHECK DOCUMENT RELEVANCE TO QUESTION---");
 
@@ -28,7 +28,160 @@ export async function gradeDocuments(documents, question) {
   }
 
   return gradedDocuments;
+}*/
+function extractJsonFromLLMReturn(response) {
+  // First, try direct parse:
+  try {
+    return JSON.parse(response.trim());
+  } catch (directParseError) {
+    // Fallback: parse substring between [ and ]
+    const match = response.match(/\[[\s\S]*\]/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch (e) {
+        console.error("Failed to parse JSON array substring:", e);
+      }
+    }
+  }
+  console.warn("Could not find valid JSON in response");
+  return null;
 }
+
+/*export async function gradeDocuments(documents, question) {
+  const gradedDocuments = [];
+  console.log("---CHECK DOCUMENT RELEVANCE TO QUESTION---");
+
+  for (const doc of documents) {
+    const graderPrompt = `
+      You are a grader assessing the relevance of the following document to a user question.
+      You must return a JSON object with one key: "relevance_score", a numeric value between 0 and 10,
+      where 0 means completely irrelevant, 10 means highly relevant.
+
+      Document contents:
+      ${doc._source.contents}
+
+      User question:
+      ${question}
+
+      Return the result strictly in JSON format:
+      {"relevance_score": <numeric_score>}
+    `;
+
+    // Create your query payload (adjust the model & system prompt as needed)
+    const queryPayload = createQueryPayload(
+      "llama3:instruct",
+      "You are a grader assessing document relevance. Return a single JSON object with a numeric relevance_score.",
+      graderPrompt
+    );
+
+    // Call the LLM
+    const result = await callLlamaModel(queryPayload);
+
+    // Attempt to parse the JSON response
+    try {
+      const parsed = extractJsonFromLLMReturn(result?.message?.content.trim());
+      const relevanceScore = parsed?.relevance_score;
+
+      if (typeof relevanceScore === 'number') {
+        console.log(`---GRADE: Document scored ${relevanceScore}---`);
+        //console.log("---LLM RESPONSE---", result?.message?.content);
+        doc._score = relevanceScore;
+        if (relevanceScore > 0) {
+          //console.log("---GRADE: DOCUMENT RELEVANT---");
+          gradedDocuments.push(doc);
+        }
+        
+      } else {
+        console.log("---GRADE ERROR: Missing or invalid relevance_score---");
+        
+      }
+    } catch (err) {
+      console.log("---GRADE ERROR: Could not parse JSON---", err);
+      //console.log("---DOCUMENT CONTENTS---", doc._source.contents);
+      //console.log("---LLM RESPONSE---", result?.message?.content);
+    }
+  }
+
+  // Sort the documents by descending relevance score
+  gradedDocuments.sort((a, b) => b._score - a._score);
+  return gradedDocuments;
+}*/
+export async function gradeDocuments(documents, question) {
+  console.log("---CHECK DOCUMENT RELEVANCE TO QUESTION (all at once)---");
+
+  // Build a string listing each document with an ID
+  const docList = documents
+    .map((doc, index) => `Document #${index + 1}:\n${doc._source.contents}`)
+    .join("\n\n");
+
+  // Single prompt with all docs
+  const graderPrompt = `
+    You are a grader assessing the relevance of multiple documents to a user question.
+    For each document, assign a relevance score between 0 and 10, where 0 means completely irrelevant, 
+    and 10 means highly relevant.
+
+    Here are the documents (each has an ID before the text):
+    ${docList}
+
+    User question:
+    ${question}
+
+    Return the results strictly as a JSON array of objects. 
+    Each object must have two keys: "doc_id" (integer) and "relevance_score" (numeric).
+    Example format:
+    [
+      {"doc_id": 1, "relevance_score": 7},
+      {"doc_id": 2, "relevance_score": 0},
+      ...
+    ]
+  `;
+
+  // Create your query payload (adjust the model & system prompt as needed)
+  const queryPayload = createQueryPayload(
+    "llama3:instruct",
+    "You are a grader assessing document relevance. Return a JSON array of { doc_id, relevance_score } objects.",
+    graderPrompt
+  );
+
+  // Call the LLM once
+  const result = await callLlamaModel(queryPayload);
+  let gradedDocuments = [];
+
+  try {
+    // Attempt to parse LLM response as JSON
+    const parsedResults = extractJsonFromLLMReturn(result?.message?.content.trim());
+    if (Array.isArray(parsedResults)) {
+      for (const item of parsedResults) {
+        // doc_id in LLM is 1-based; adjust if needed
+        const docIndex = (item.doc_id || 0) - 1;
+
+        // Validate docIndex is in range
+        if (docIndex >= 0 && docIndex < documents.length) {
+          const relevanceScore = item.relevance_score;
+          console.log(`---GRADE: Document #${docIndex + 1} scored ${relevanceScore}---`);
+
+          // Store the score on the original document object
+          documents[docIndex]._score = relevanceScore;
+
+          // Example filter: only keep docs with relevance > 0
+          if (relevanceScore > 0) {
+            gradedDocuments.push(documents[docIndex]);
+          }
+        }
+      }
+    } else {
+      console.log("---GRADE ERROR: Returned JSON is not an array---");
+    }
+  } catch (err) {
+    console.log("---GRADE ERROR: Could not parse JSON---", err);
+    console.log("---LLM RESPONSE---", result?.message?.content);
+  }
+
+  return gradedDocuments;
+}
+
+
 /*export async function gradeDocuments(documents, question) {
   console.log("---CHECK DOCUMENT RELEVANCE TO QUESTION---");
 
@@ -161,4 +314,9 @@ export async function gradeGenerationVsDocumentsAndQuestion(state, showReason = 
     return "not useful";
   }
   return "max retries";
+}
+function formatDocs(docs) {
+  return docs
+    .map(doc => `title: ${doc._source.title}\ncontent: ${doc._source.contents}\ncontributor: ${doc._source.contributor}`)
+    .join("\n\n");
 }

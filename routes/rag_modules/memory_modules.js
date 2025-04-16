@@ -48,6 +48,7 @@ export async function createMemory(conversationName) {
 export async function getOrCreateMemory(memoryId) {
   try {
     // Check if the document exists
+    console.log(`Checking memory for ID ${memoryId}`);
     const response = await client.get({
       index: MEMORY_INDEX,
       id: memoryId,
@@ -71,6 +72,24 @@ export async function getOrCreateMemory(memoryId) {
       return newMemory;
     } else {
       throw error;
+    }
+  }
+}
+export async function getMemory(memoryId) {
+  try {
+    // Check if the document exists
+    console.log(`Checking memory for ID ${memoryId}`);
+    const response = await client.get({
+      index: MEMORY_INDEX,
+      id: memoryId,
+    });
+
+    return response.body._source;
+  }catch (error) {
+    if (error.meta.statusCode === 404) {
+      // Document does not exist, return null
+      console.log(`Memory not found for ID ${memoryId}`);
+      return null;
     }
   }
 }
@@ -139,29 +158,44 @@ export async function deleteMemory(memoryId) {
 export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK = null) {
   try {
     // Retrieve or create the chat history
-    const memory = await getOrCreateMemory(memoryId);
+    const memory = await getMemory(memoryId);
+    if (!memory) {
+      return null; // Memory not found
+    }
     const chatHistory = memory.chat_history || [];
 
     // Optionally include the most recent k chat histories
     const recentChatHistory = recentK !== null ? chatHistory.slice(-recentK) : chatHistory;
 
     // Form the prompt for the LLM
-    const prompt = `
-      Here are the previous questions:
-      ${recentChatHistory && recentChatHistory.length > 0 
-        //? recentChatHistory.map((entry, index) => `(${index + 1}) ${entry.userQuery}: ${entry.response}`).join('\n') 
-        ? recentChatHistory.map((entry, index) => `(${index + 1}) ${entry.userQuery}`).join('\n') 
-        : "No previous chat history available."}
+    const systemPrompt = `Task: Expand the new query ONLY if it directly refers to the previous conversation. Return the original query if it's unrelated.
+    Rules:
+    1. Augment ONLY if the new query explicitly references previous questions (e.g., uses "these", "those", "any", or implies continuation)
+    2. Never combine with older context if the query introduces a new topic
+    3. Keep augmented queries concise (under 12 words)
+    4. Respond ONLY with the final query - no explanations
+    5. Do not include the terms that are not related to the context
 
-      Here is the new user query:
-      ${newUserQuery ? newUserQuery.trim() : "No new user query provided."}
+    Examples:
+    Previous: Chicago datasets
+    New: Any about social media?
+    Output: Chicago datasets related to social media
 
-      Form a concise user query that includes the necessary background considering the previous questions and the new user query. Do not include any additional background not in the chat history. Only expand the query if it lacks background or is a followup question of the previous questions. Otherwise, keep the query as is. Just return the query without explaination.
-      `.trim();
+    Previous: Chicago datasets
+    New: Show climate data
+    Output: Climate data`.trim();
+    const userPrompt = `
+    Previous Questions (most recent first):
+    ${recentChatHistory.length > 0 
+      ? recentChatHistory.slice().reverse().map((entry) => `- ${entry.userQuery}`).join('\n')
+      : "No previous questions"}
+
+    New Query: "${newUserQuery}"
+    `.trim();
     //console.log('Prompt for comprehensive chat question:', prompt);
 
     // Call the LLM to form the comprehensive user query
-    var payload = createQueryPayload("llama3.2:latest", "You are an assistant that forms comprehensive user queries based on the new query and the previous questions. Only expand the query if it lacks background or is a followup question of the previous questions. Otherwise, keep the query as is. Avoid adding additional backgrounds. If there is no chat history just return the original query.", prompt)
+    var payload = createQueryPayload("llama3.2:latest", systemPrompt, userPrompt)
     const llmResponse = await callLlamaModel(payload);
     //console.log("Comprehensive quesiton: ", llmResponse);
     return llmResponse?.message?.content || "No response from LLM.";
