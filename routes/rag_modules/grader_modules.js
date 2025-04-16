@@ -1,4 +1,5 @@
 import { callLlamaModel, createQueryPayload } from './llm_modules.js';
+import { extractJsonFromLLMReturn, formatDocs } from './rag_utils.js';
 
 /*export async function gradeDocuments(documents, question) {
   const gradedDocuments = [];
@@ -29,7 +30,7 @@ import { callLlamaModel, createQueryPayload } from './llm_modules.js';
 
   return gradedDocuments;
 }*/
-function extractJsonFromLLMReturn(response) {
+/*function extractJsonFromLLMReturn(response) {
   // First, try direct parse:
   try {
     return JSON.parse(response.trim());
@@ -46,68 +47,83 @@ function extractJsonFromLLMReturn(response) {
   }
   console.warn("Could not find valid JSON in response");
   return null;
-}
-
-/*export async function gradeDocuments(documents, question) {
+}*/
+export async function gradeDocuments(documents, question) {
   const gradedDocuments = [];
   console.log("---CHECK DOCUMENT RELEVANCE TO QUESTION---");
 
   for (const doc of documents) {
+    // 1) Remove "contents-embedding" (and anything else unnecessary)
+    // This uses destructuring to "pull out" the key and discard it
+    const { 
+      "contents-embedding": _embeddings,  // discard
+      ...docWithoutEmbedding 
+    } = doc._source;
+
+    // 2) Build a simpler, consistent schema for the grader
+    //    (you can rename or reorder fields as you wish)
+    const docForGrading = {
+      title: docWithoutEmbedding.title || "",
+      resourceType: docWithoutEmbedding["resource-type"] || "",
+      authors: docWithoutEmbedding.authors || [],
+      tags: docWithoutEmbedding.tags || [],
+      contributor: docWithoutEmbedding.contributor || "",
+      contents: docWithoutEmbedding.contents || ""
+      // Add or remove fields as needed
+    };
+
+    // Convert the simplified doc to JSON or a string for the prompt
+    const docString = JSON.stringify(docForGrading, null, 2);
+
+    // 3) Build your grader prompt with the simplified doc
     const graderPrompt = `
       You are a grader assessing the relevance of the following document to a user question.
-      You must return a JSON object with one key: "relevance_score", a numeric value between 0 and 10,
-      where 0 means completely irrelevant, 10 means highly relevant.
+      The document has the following fields in JSON format:
 
-      Document contents:
-      ${doc._source.contents}
+      ${docString}
 
-      User question:
-      ${question}
+      The user question is: ${question}
 
-      Return the result strictly in JSON format:
-      {"relevance_score": <numeric_score>}
+      Please return a JSON object with a single key: "relevance_score".
+      The value must be an integer from 0 to 10, where 0 = completely irrelevant, 10 = highly relevant.
+
+      For example:
+      {"relevance_score": 7}
     `;
 
-    // Create your query payload (adjust the model & system prompt as needed)
+    // 4) Create your query payload (adjust system prompt as needed)
     const queryPayload = createQueryPayload(
       "llama3:instruct",
       "You are a grader assessing document relevance. Return a single JSON object with a numeric relevance_score.",
       graderPrompt
     );
 
-    // Call the LLM
+    // 5) Call the LLM
     const result = await callLlamaModel(queryPayload);
 
-    // Attempt to parse the JSON response
+    // 6) Parse LLM response as JSON
     try {
       const parsed = extractJsonFromLLMReturn(result?.message?.content.trim());
       const relevanceScore = parsed?.relevance_score;
 
       if (typeof relevanceScore === 'number') {
         console.log(`---GRADE: Document scored ${relevanceScore}---`);
-        //console.log("---LLM RESPONSE---", result?.message?.content);
         doc._score = relevanceScore;
         if (relevanceScore > 0) {
-          //console.log("---GRADE: DOCUMENT RELEVANT---");
           gradedDocuments.push(doc);
         }
-        
       } else {
-        console.log("---GRADE ERROR: Missing or invalid relevance_score---");
-        
+        console.warn("---GRADE ERROR: Missing or invalid relevance_score---");
       }
     } catch (err) {
-      console.log("---GRADE ERROR: Could not parse JSON---", err);
-      //console.log("---DOCUMENT CONTENTS---", doc._source.contents);
-      //console.log("---LLM RESPONSE---", result?.message?.content);
+      console.error("---GRADE ERROR: Could not parse JSON---", err);
     }
   }
 
-  // Sort the documents by descending relevance score
-  gradedDocuments.sort((a, b) => b._score - a._score);
   return gradedDocuments;
-}*/
-export async function gradeDocuments(documents, question) {
+}
+
+/*export async function gradeDocuments(documents, question) {
   console.log("---CHECK DOCUMENT RELEVANCE TO QUESTION (all at once)---");
 
   // Build a string listing each document with an ID
@@ -179,7 +195,7 @@ export async function gradeDocuments(documents, question) {
   }
 
   return gradedDocuments;
-}
+}*/
 
 
 /*export async function gradeDocuments(documents, question) {
@@ -314,9 +330,4 @@ export async function gradeGenerationVsDocumentsAndQuestion(state, showReason = 
     return "not useful";
   }
   return "max retries";
-}
-function formatDocs(docs) {
-  return docs
-    .map(doc => `title: ${doc._source.title}\ncontent: ${doc._source.contents}\ncontributor: ${doc._source.contributor}`)
-    .join("\n\n");
 }

@@ -10,6 +10,7 @@ import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_mod
 import { callLlamaModel } from './rag_modules/llm_modules.js';
 import { routeUserQuery } from './rag_modules/routing_modules.js';
 import * as utils from '../utils.js';
+import { extractJsonFromLLMReturn, formatDocs } from './rag_modules/rag_utils.js';
 
 const router = express.Router();
 
@@ -71,12 +72,8 @@ function createQueryPayload(model, systemMessage, userMessage, stream = false) {
   return gradedDocuments;
 }*/
 
-// Helper: Format documents for Llama model prompt
-function formatDocs(docs) {
-  return docs
-    .map(doc => `title: ${doc._source.title}\ncontributor: ${doc._source.contributor}\nauthors: ${doc._source.authors}\ncontent: ${doc._source.contents}\ntags:${doc._source.tags}`)
-    .join("\n\n");
-}
+
+
 
 // Function: Generate an answer using relevant documents
 async function generateAnswer(state, temperature = 0.7, top_p = 0.9) {
@@ -128,7 +125,7 @@ Contents: Explores how demographic and socioeconomic factors affect Twitter usag
 Answer: Several Chicago-specific datasets center on location-based Twitter data and provide insights into social media usage in urban contexts. For example, Fangzheng Lyu’s resources illustrate how to visualize geotagged tweets in the city, offering near real-time analysis of heat exposure and human sentiments. Ruowei Liu’s work further examines biases in geotagged Twitter usage, shedding light on the demographic and socioeconomic factors shaping online engagement across counties, including Chicago. You might explore more of Lyu’s or Liu’s publications—or reach out directly—to deepen your understanding of how social media data can inform urban research and decision-making.
 `;*/
   const fewShotExamples = ``;
-  console.log("Documents: ", docsTxt);
+  //console.log("Documents: ", docsTxt);
   const userPrompt = `${fewShotExamples}
   **Question**: ${question}
   **Augmented Query based on context **: ${augmentedQuery}
@@ -137,13 +134,19 @@ Answer: Several Chicago-specific datasets center on location-based Twitter data 
   Answer the question while paying attention to the context as if this knowledge is inherent to you.`;
   
   const llmResponse = await callLlamaModel(
-    createQueryPayload("llama3:instruct", systemPrompt, userPrompt, 
+    createQueryPayload("deepseek-r1:70b", systemPrompt, userPrompt, 
   )
   );
+  //console.log("LLM Response: ", llmResponse);
+  // Anywhere in your code after receiving the LLM response:
+  const rawContent = llmResponse?.message?.content || "No response from LLM.";
+
+  // Remove blocks of <think>...</think>
+  const sanitizedContent = rawContent.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 
   return {
     documents,
-    generation: llmResponse?.message?.content || "No response from LLM.",
+    generation: sanitizedContent,
     question,
     loop_step: loop_step + 1,
   };
@@ -212,6 +215,179 @@ async function handleUserQuery(userQuery, comprehensiveUserQuery, checkGeneratio
     count: relevantDocuments.length,
   };
 }
+export async function handleIterativeQuery(
+  userQuery,
+  comprehensiveUserQuery,
+  checkGenerationQuality,
+  progressCallback = () => {}
+) {
+  // Step 1: Start the process
+  progressCallback(`Starting iterative retrieval for: "${comprehensiveUserQuery}"`);
+  console.log("Starting iterative retrieval for", comprehensiveUserQuery);
+
+  // We'll store all relevant documents gathered across multiple LLM requests
+  let relevantDocuments = [];
+
+  // We cap the loop to avoid infinite iteration
+  const MAX_ITERATIONS = 5;
+  let iterationCount = 0;
+
+  // The LLM's final "answer" or reason to stop
+  let finalAction = null;
+  let finalAnswerContent = "";
+
+  while (iterationCount < MAX_ITERATIONS) {
+    iterationCount++;
+    progressCallback(`Iteration #${iterationCount}: Checking if we have enough info`);
+
+    // Build a prompt that:
+    //  1) Shows the user query
+    //  2) Summarizes which documents we have so far (optional)
+    //  3) Tells the LLM to respond in JSON with either "search" or "answer"
+    const iterationPrompt = buildIterativePrompt(userQuery, relevantDocuments);
+    console.log(`Iteration #${iterationCount}, Prompt:`, iterationPrompt);
+    // Call the LLM
+    const llmResponse = await callLlamaModel(
+      createQueryPayload(
+        "llama3:instruct", // or your model name
+        "You are a retrieval agent. Decide if you have enough info fora answerring the user query or you need more information through search.",
+        iterationPrompt
+      )
+    );
+
+    const rawContent = llmResponse?.message?.content?.trim() || "";
+    console.log("LLM Iteration Response:", rawContent);
+
+    // Attempt to parse JSON
+    let parsedAction;
+    try {
+      console.log("Extracting JSON block from LLM response...");
+      
+      parsedAction = extractJsonFromLLMReturn(rawContent);
+      console.log("Json from the response: ", parsedAction);
+      //parsedAction = JSON.parse(jsonBlock);
+      //console.log("Parsed JSON block:", parsedAction);
+    } catch (err) {
+      // If not valid JSON, treat entire text as final answer or break
+      console.warn("LLM returned invalid JSON. Stopping iteration.");
+      finalAction = "answer";
+      finalAnswerContent = rawContent;
+      break;
+    }
+    console.log("Parsed Action:", parsedAction);
+
+    if (parsedAction.action === "search") {
+      // The LLM wants more data for the query in "search_query"
+      const searchQuery = parsedAction.search_query || "";
+      progressCallback(`LLM requests more info via search: "${searchQuery}"`);
+
+      // Execute another search
+      const newResults = await routeUserQuery(searchQuery);
+
+      // Optionally grade them if you want:
+      progressCallback(`Grading ${newResults.length} newly found documents`);
+      const newlyRelevant = await gradeDocuments(newResults, userQuery);
+
+      // Append newly relevant docs
+      relevantDocuments.push(...newlyRelevant);
+
+    } else if (parsedAction.action === "answer") {
+      // LLM says it has enough info
+      finalAction = "answer";
+      finalAnswerContent = parsedAction.content || "No content from LLM.";
+      progressCallback("LLM indicates it has enough info to answer.");
+      break;
+    } else {
+      // Unrecognized action => treat as final
+      console.warn("LLM returned unrecognized action:", parsedAction.action);
+      finalAction = "answer";
+      finalAnswerContent = rawContent;
+      break;
+    }
+  }
+
+  // If we never got "answer" from the LLM, we can still do a final generation ourselves
+  if (finalAction !== "answer") {
+    progressCallback("Maximum iterations reached. Generating final answer anyway.");
+  }
+
+  // STEP 2: If we want a final, consolidated answer from our own summarizer:
+  progressCallback("Generating final answer from all relevant documents");
+  let state = {
+    question: userQuery,
+    augmentedQuery: comprehensiveUserQuery,
+    documents: relevantDocuments,
+  };
+
+  let generationState = await generateAnswer(state);
+  console.log("Generated Answer:", generationState.generation);
+
+  // (Optional) If you want to incorporate the LLM's direct finalAnswerContent, you could do so here:
+  // e.g., generationState.generation = finalAnswerContent
+
+  // STEP 3: If checkGenerationQuality is true, do the same retry loop as your existing code
+  if (checkGenerationQuality) {
+    progressCallback("Validating answer quality");
+    let verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
+    let retryCount = 0;
+    while (verdict !== "useful") {
+      if (verdict === "not useful") {
+        retryCount++;
+        progressCallback(`Regenerating answer (attempt ${retryCount})`);
+        generationState = await generateAnswer(generationState);
+        verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
+      } else if (verdict === "max retries") {
+        progressCallback("Maximum retries reached - using best available answer");
+        console.log("Unable to get a satisfactory answer.");
+        return {
+          answer: "I'm sorry, I couldn't generate a satisfactory answer at the moment. Please try rephrasing your question.",
+          message_id: uuidv4(),
+          elements: [],
+          count: 0,
+        };
+      }
+    }
+  }
+  
+
+  // Finally, return your response object
+  return {
+    answer: generationState.generation || finalAnswerContent || "No final answer",
+    message_id: uuidv4(),
+    elements: relevantDocuments.map(doc => ({
+      _id: doc._id,
+      _score: doc._score,
+      contributor: doc._source.contributor,
+      contents: doc._source.contents,
+      "resource-type": doc._source["resource-type"],
+      title: doc._source.title,
+      authors: doc._source.authors || [],
+      tags: doc._source.tags || [],
+      "thumbnail-image": doc._source["thumbnail-image"],
+    })),
+    count: relevantDocuments.length,
+  };
+}
+function buildIterativePrompt(userQuery, docsSoFar) {
+  // Summarize or list the documents
+  let docsText = "";
+  docsSoFar.forEach((doc, i) => {
+    docsText += `Document #${i + 1}: ${formatDocs([doc])}\n\n`;
+  });
+
+  return `
+You are a retrieval agent. The user asked: "${userQuery}"
+
+You have these documents so far:
+${docsText}
+
+If you do NOT have enough info to fully answer, return:
+{"action":"search","search_query":"some additional keywords"}
+
+If you have enough info, return:
+{"action":"answer","content":"Your final answer here"}
+  `.trim();
+}
 
 async function handleUserQueryWithProgress(
   userQuery,
@@ -243,7 +419,7 @@ async function handleUserQueryWithProgress(
 
   let state = { question: userQuery, augmentedQuery: comprehensiveUserQuery, documents: relevantDocuments };
   
-  progressCallback("Generating answer");
+  progressCallback("Generating answer with reasoning");
   let generationState = await generateAnswer(state);
   console.log("\nGenerated Answer:", generationState.generation);
 
@@ -613,7 +789,7 @@ router.post('/llm/search', async (req, res) => {
       return;
     }
 
-    const response = await handleUserQueryWithProgress(userQuery, comprehensiveQuery, false, (progress) => {
+    const response = await handleIterativeQuery(userQuery, comprehensiveQuery, false, (progress) => {
       sendEvent('status', { status: progress });
     });
 
