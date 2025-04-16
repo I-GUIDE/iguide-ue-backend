@@ -1314,7 +1314,12 @@ export async function getContributorByID(id){
  * from and size are optional parameters by default set to return 1st 100 records
  * @returns {Object} Map of objects with serial Ids. If no users found returns empty
  */
-export async function getAllContributors(from=0, size=100, sort_by='first-name', filter_key='none', filter_value=''){
+export async function getAllContributors(
+		from=0,
+		size=100,
+		sort_by=utils.SortBy.FIRST_NAME,
+		filter_key='none',
+		filter_value=''){
 	let query_str = "MATCH (c:Contributor)";
 	let query_params = {};
 	/**
@@ -1324,16 +1329,16 @@ export async function getAllContributors(from=0, size=100, sort_by='first-name',
 		case "role-no":
 			filter_key = "role"
 			filter_value = neo4j.int(filter_value)
+			query_str += " WHERE c." + filter_key + ' = $filter_val'
+			query_params['filter_val'] = filter_value
 			break
 		case "affiliation":
 			filter_key = "affiliation"
+			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
 			break
 		default:
 			filter_key = "none"
-	}
-	if (filter_key !== "none") {
-		query_str += " WHERE c." + filter_key + ' = $filter_val'
-		query_params['filter_val'] = filter_value
 	}
 	/**
 	 * Set the return parameter
@@ -1342,16 +1347,7 @@ export async function getAllContributors(from=0, size=100, sort_by='first-name',
 	/**
 	 * Set the default value for sort_by parameter
 	 */
-	switch (sort_by) {
-		case "first-name":
-			sort_by = "first_name"
-			break
-		case "last-name":
-			sort_by = "last_name"
-			break
-		default:
-			sort_by = "first_name"
-	}
+	sort_by = utils.parseSortBy(sort_by)
 	if (sort_by && sort_by !== "") {
 		query_str += " ORDER BY c." + sort_by
 	}
