@@ -17,7 +17,7 @@
  */
 import request from "supertest";
 import app from "../../server.js";
-import testData from "./testUserData.json";
+import testData from "./test_user_data.json";
 import {generateAccessToken} from "../../jwtUtils.js";
 import {ElementType, Role} from "../../utils.js";
 import path from "path";
@@ -154,7 +154,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
     });
     it("1. Should be able to upload a thumbnail image and get the image data", async () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
-        const file_path = path.join(__dirname, "test-avatar-image.jpg");
+        const file_path = path.join(__dirname, "test_avatar_image.jpg");
         const res = await request(app)
             .post('/api/elements/thumbnail')
             .set('Cookie', generated_auth_cookie)

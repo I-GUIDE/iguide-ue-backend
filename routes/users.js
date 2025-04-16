@@ -622,26 +622,26 @@ router.get('/api/users/bookmark/:elementId',
     }
 });
 
-/**
- * @swagger
- * /api/users/{id}:
- *   delete:
- *     summary: Delete the user document
- *     tags: ['users']
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: The OpenID of the user
- *     responses:
- *       200:
- *         description: User deleted successfully
- *       500:
- *         description: Internal server error
- * @swagger ignore
- */
+// Commenting the swagger definition makes sure the API is not visible in the Swagger Definition
+// /**
+//  * @swagger
+//  * /api/users/{id}:
+//  *   delete:
+//  *     summary: Delete the user document
+//  *     tags: ['users']
+//  *     parameters:
+//  *       - in: path
+//  *         name: id
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *         description: The OpenID of the user
+//  *     responses:
+//  *       200:
+//  *         description: User deleted successfully
+//  *       500:
+//  *         description: Internal server error
+//  */
 router.delete('/api/users/:id',
 	jwtCorsMiddleware,
 	authenticateJWT,

@@ -17,7 +17,7 @@
 
 import request from "supertest";
 import app from "../../server.js";
-import testData from "./testUserData.json";
+import testData from "./test_user_data.json";
 import {generateAccessToken} from "../../jwtUtils.js";
 import {Role} from "../../utils.js";
 import * as url from "node:url";
@@ -124,7 +124,7 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         expect(res.body).toHaveProperty("email", testData.trusted_user.email);
     });
     it("7. Should allow the user to update the user's avatar", async () => {
-        const file_path = path.join(__dirname, "test-avatar-image.jpg");
+        const file_path = path.join(__dirname, "test_avatar_image.jpg");
         const res = await request(app)
             .post('/api/users/avatar')
             .set('Cookie', generated_auth_cookie)

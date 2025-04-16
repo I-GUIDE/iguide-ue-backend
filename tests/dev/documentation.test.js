@@ -1,6 +1,6 @@
 import request from "supertest";
 import app from "../../server.js";
-import testData from "./testUserData.json";
+import testData from "./test_user_data.json";
 import {generateAccessToken} from "../../jwtUtils.js";
 import {Role} from "../../utils.js";
 
