@@ -119,9 +119,9 @@ router.get('/api/users/:id', cors(), async (req, res) => {
  *         description: Error fetching the user list
  */
 router.get('/api/users',
-		// jwtCorsMiddleware,
-		// authenticateJWT,
-		// authorizeRole(Role.SUPER_ADMIN),
+		jwtCorsMiddleware,
+		authenticateJWT,
+		authorizeRole(Role.SUPER_ADMIN),
 		async (req, res) => {
     try {
 		const {
