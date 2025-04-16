@@ -51,7 +51,7 @@ export async function getSemanticSearchResults(userQuery) {
       body: {
         size: 15,
         query: {
-          knn: { 'contents-embedding': { vector: embedding, k: 15 } },
+          knn: { 'contents-embedding': { vector: embedding, k: 10 } },
         },
       },
     });

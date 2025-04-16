@@ -1,5 +1,5 @@
 import { callLlamaModel, createQueryPayload } from './llm_modules.js';
-import { extractJsonFromLLMReturn, formatDocs } from './rag_utils.js';
+import { extractJsonFromLLMReturn, formatDocsString, formatDocsJson } from './rag_utils.js';
 
 /*export async function gradeDocuments(documents, question) {
   const gradedDocuments = [];
@@ -313,7 +313,7 @@ export async function gradeGenerationVsDocumentsAndQuestion(state, showReason = 
   console.log("---DECISION: MAX RETRIES REACHED---");
   return "max retries";*/
   const graderPrompt = `
-    QUESTION: \n\n ${question} \n\n FACTS: \n\n ${formatDocs(documents)} \n\n STUDENT ANSWER: ${generation}.
+    QUESTION: \n\n ${question} \n\n FACTS: \n\n ${formatDocsString(documents)} \n\n STUDENT ANSWER: ${generation}.
     Ensure the answer is grounded in the facts and does not contain hallucinated information. Ensure the answer is relevant to the question.
     Return JSON with keys binary_score ('yes' or 'no') and explanation.
   `;
@@ -330,4 +330,98 @@ export async function gradeGenerationVsDocumentsAndQuestion(state, showReason = 
     return "not useful";
   }
   return "max retries";
+}
+export async function addAndGradeDocuments(relevantDocuments, newDocuments, question) {
+  // We'll store newly-graded documents here
+  const newlyGraded = [];
+  console.log("---CHECK DOCUMENT RELEVANCE TO QUESTION---");
+
+  for (const doc of newDocuments) {
+    // 1) Remove fields you don't need, like embeddings
+    const {
+      "contents-embedding": _embeddings, // discard
+      ...docWithoutEmbedding
+    } = doc._source;
+
+    // 2) Build a simpler, consistent schema for the grader
+    const docForGrading = {
+      title: docWithoutEmbedding.title || "",
+      resourceType: docWithoutEmbedding["resource-type"] || "",
+      authors: docWithoutEmbedding.authors || [],
+      tags: docWithoutEmbedding.tags || [],
+      contributor: docWithoutEmbedding.contributor || "",
+      contents: docWithoutEmbedding.contents || "",
+      // or any other fields you need
+    };
+
+    // Convert the simplified doc to JSON or a string for the prompt
+    const docString = JSON.stringify(docForGrading, null, 2);
+
+    // 3) Build your grader prompt
+    const graderPrompt = `
+      You are a grader assessing the relevance of the following document to a user question.
+      The document has the following fields in JSON format:
+
+      ${docString}
+
+      The user question is: ${question}
+
+      Please return a JSON object with a single key: "relevance_score".
+      The value must be an integer from 0 to 10, where 0 = completely irrelevant, 10 = highly relevant.
+
+      For example:
+      {"relevance_score": 7}
+    `;
+
+    // 4) Create your query payload (adjust system prompt as needed)
+    const queryPayload = createQueryPayload(
+      "llama3:instruct",
+      "You are a grader assessing document relevance. Return a single JSON object with a numeric relevance_score.",
+      graderPrompt
+    );
+
+    // 5) Call the LLM
+    const result = await callLlamaModel(queryPayload);
+
+    // 6) Parse LLM response as JSON
+    try {
+      const parsed = extractJsonFromLLMReturn(result?.message?.content.trim());
+      const relevanceScore = parsed?.relevance_score;
+
+      if (typeof relevanceScore === "number") {
+        console.log(`---GRADE: Document scored ${relevanceScore}---`);
+        // Attach the score directly to the doc
+        doc._score = relevanceScore;
+        // Keep doc in newlyGraded only if it has a score > 0
+        if (relevanceScore > 0) {
+          newlyGraded.push(doc);
+        }
+      } else {
+        console.warn("---GRADE ERROR: Missing or invalid relevance_score---");
+      }
+    } catch (err) {
+      console.error("---GRADE ERROR: Could not parse JSON---", err);
+    }
+  }
+
+  // Merge newly graded documents with existing relevantDocuments
+  // We'll keep them in one array, then remove duplicates by _id
+  const allDocuments = [...relevantDocuments, ...newlyGraded];
+
+  // 7) Remove duplicates by _id (adapt if your docs have a different unique key)
+  const uniqueDocsMap = new Map();
+  for (const doc of allDocuments) {
+    uniqueDocsMap.set(doc._id, doc);
+  }
+  // Convert Map back to an array
+  const deduplicatedDocs = Array.from(uniqueDocsMap.values());
+
+  // 8) Sort in descending order by _score
+  deduplicatedDocs.sort((a, b) => b._score - a._score);
+
+  // 9) Keep top 10
+  const topDocs = deduplicatedDocs.slice(0, 10);
+
+  // Return them — this becomes your updated relevantDocuments
+  return topDocs;
 }

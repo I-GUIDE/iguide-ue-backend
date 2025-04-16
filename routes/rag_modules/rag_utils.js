@@ -1,9 +1,24 @@
 // Helper: Format documents for Llama model prompt
-export function formatDocs(docs) {
+export function formatDocsString(docs) {
     return docs
       .map(doc => `title: ${doc._source.title}\ntype: ${doc._source["resource-type"]}\ncontributor: ${doc._source.contributor}\nauthors: ${doc._source.authors}\ncontent: ${doc._source.contents}\ntags:${doc._source.tags}`)
       .join("\n\n");
 }
+export function formatDocsJson(docs) {
+    // Map each doc to a sanitized object, removing "contents-embedding" and "thumbnail-image"
+    const sanitized = docs.map(doc => {
+      const {
+        "contents-embedding": _omitEmbedding,
+        "thumbnail-image": _omitThumbnail,
+        ...rest
+      } = doc._source;
+      return rest;
+    });
+  
+    // Return a stringified JSON array of sanitized docs
+    return JSON.stringify(sanitized, null, 2);
+  }
+  
 export function extractJsonFromLLMReturn(response) {
     const match = response.match(/{[\s\S]*?}/);
     if (match) {

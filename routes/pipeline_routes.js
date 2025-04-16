@@ -10,7 +10,8 @@ import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_mod
 import { callLlamaModel } from './rag_modules/llm_modules.js';
 import { routeUserQuery } from './rag_modules/routing_modules.js';
 import * as utils from '../utils.js';
-import { extractJsonFromLLMReturn, formatDocs } from './rag_modules/rag_utils.js';
+import { extractJsonFromLLMReturn, formatDocsJson} from './rag_modules/rag_utils.js';
+import { generateAnswer } from './rag_modules/generation_module.js';
 
 const router = express.Router();
 
@@ -37,6 +38,8 @@ function createQueryPayload(model, systemMessage, userMessage, stream = false) {
     stream,
   };
 }
+
+
 
 
 
@@ -74,83 +77,6 @@ function createQueryPayload(model, systemMessage, userMessage, stream = false) {
 
 
 
-
-// Function: Generate an answer using relevant documents
-async function generateAnswer(state, temperature = 0.7, top_p = 0.9) {
-  console.log("---GENERATE---");
-  const { question, augmentedQuery, documents, loop_step = 0 } = state;
-
-  const docsTxt = formatDocs(documents);
-  const systemPrompt = `You are an authoritative expert answering questions based on supporing information from that you assume are given by yourself. Follow these rules:
-  1. Use ONLY the provided research results to craft a direct, actionable answer to the user's query.
-  2. NEVER mention "documents," "search results," or "data sources" – answer as if this is your own knowledge.
-  3. If information is incomplete, say "I don't have enough information to fully answer this."
-  4. Avoid phrases like "This text appears..." or "The datasets show..." – focus on delivering the answer itself.
-  5. All the supporting information comes from your internal knowledge base."`;
-  /*const fewShotExamples = `
-Example 1:
-User Query: What are the benefits of regular exercise?
-Retrieved Information:
-- Regular exercise improves cardiovascular health.
-- It aids in weight management.
-- Exercise enhances mental health by reducing stress and anxiety.
-
-Answer: Regular exercise offers multiple benefits, including improved cardiovascular health, effective weight management, and enhanced mental well-being through stress and anxiety reduction.
-
-Example 2:
-User Query: Any of these related to social media?
-Augmented Query: Chicago datasets related to social media
-Retrieved Information:
-
-Title: Social Media (Twitter) Data Visualization
-Author: Fangzheng Lyu
-Contents: Demonstrates visualization techniques for location-based Twitter data in Chicago and beyond.
-
-Title: Mapping Dynamic Human Sentiments of Heat Exposure
-Author: Fangzheng Lyu
-Contents: Uses near real-time location-based Twitter data to analyze and visualize how Chicago residents discuss and respond to extreme heat.
-
-Title: Twitter Data
-Author: Fangzheng Lyu
-Contents: Provides datasets associated with the “Mapping Dynamic Human Sentiments of Heat Exposure” study, focusing on geotagged tweets.
-
-Title: National-level Analysis using Twitter Data
-Author: Fangzheng Lyu
-Contents: Offers a workflow for large-scale sentiment analysis of heat exposure using location-based Twitter data.
-
-Title: Understanding Demographic and Socioeconomic Biases of Geotagged Twitter Users
-Author: Ruowei Liu
-Contents: Explores how demographic and socioeconomic factors affect Twitter usage patterns at the county level, including Chicago.
-
-Answer: Several Chicago-specific datasets center on location-based Twitter data and provide insights into social media usage in urban contexts. For example, Fangzheng Lyu’s resources illustrate how to visualize geotagged tweets in the city, offering near real-time analysis of heat exposure and human sentiments. Ruowei Liu’s work further examines biases in geotagged Twitter usage, shedding light on the demographic and socioeconomic factors shaping online engagement across counties, including Chicago. You might explore more of Lyu’s or Liu’s publications—or reach out directly—to deepen your understanding of how social media data can inform urban research and decision-making.
-`;*/
-  const fewShotExamples = ``;
-  //console.log("Documents: ", docsTxt);
-  const userPrompt = `${fewShotExamples}
-  **Question**: ${question}
-  **Augmented Query based on context **: ${augmentedQuery}
-  **Supporting Information**:
-  ${docsTxt}
-  Answer the question while paying attention to the context as if this knowledge is inherent to you.`;
-  
-  const llmResponse = await callLlamaModel(
-    createQueryPayload("deepseek-r1:70b", systemPrompt, userPrompt, 
-  )
-  );
-  //console.log("LLM Response: ", llmResponse);
-  // Anywhere in your code after receiving the LLM response:
-  const rawContent = llmResponse?.message?.content || "No response from LLM.";
-
-  // Remove blocks of <think>...</think>
-  const sanitizedContent = rawContent.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-
-  return {
-    documents,
-    generation: sanitizedContent,
-    question,
-    loop_step: loop_step + 1,
-  };
-}
 
 
 
@@ -221,36 +147,43 @@ export async function handleIterativeQuery(
   checkGenerationQuality,
   progressCallback = () => {}
 ) {
-  // Step 1: Start the process
+  // 1) Initialization
   progressCallback(`Starting iterative retrieval for: "${comprehensiveUserQuery}"`);
   console.log("Starting iterative retrieval for", comprehensiveUserQuery);
 
   // We'll store all relevant documents gathered across multiple LLM requests
-  let relevantDocuments = [];
+  const relevantDocuments = [];
+  // We'll also store each retrieval step: { searchQuery, results: [...] }
+  const retrievalSteps = [];
 
-  // We cap the loop to avoid infinite iteration
-  const MAX_ITERATIONS = 5;
   let iterationCount = 0;
+  const MAX_ITERATIONS = 5;
 
-  // The LLM's final "answer" or reason to stop
   let finalAction = null;
   let finalAnswerContent = "";
 
+  // 2) Iteration loop
   while (iterationCount < MAX_ITERATIONS) {
     iterationCount++;
     progressCallback(`Iteration #${iterationCount}: Checking if we have enough info`);
 
-    // Build a prompt that:
-    //  1) Shows the user query
-    //  2) Summarizes which documents we have so far (optional)
-    //  3) Tells the LLM to respond in JSON with either "search" or "answer"
-    const iterationPrompt = buildIterativePrompt(userQuery, relevantDocuments);
-    console.log(`Iteration #${iterationCount}, Prompt:`, iterationPrompt);
+    // Prompt the LLM with user query + current docs
+    const iterationPrompt = buildIterativePrompt(userQuery, relevantDocuments, retrievalSteps);
+    //console.log(`Iteration #${iterationCount}, Prompt:`, iterationPrompt);
+
     // Call the LLM
     const llmResponse = await callLlamaModel(
       createQueryPayload(
-        "llama3:instruct", // or your model name
-        "You are a retrieval agent. Decide if you have enough info fora answerring the user query or you need more information through search.",
+        "deepseek-r1:70b",
+        `You are a retrieval agent.
+
+        1. Decide if you have enough information to answer the user's query directly.
+        2. If more information is needed, propose exactly one next search query. 
+          - Use any newly discovered facts from the documents or from previous steps. 
+          - For example, if you find an author’s name, incorporate that in the new query.
+        3. Output your response as valid JSON only: either {"action":"search","search_query":"..."} or {"action":"answer","content":"..."}.
+        4. Do not repeat or rephrase the original query if new information is available.
+`,
         iterationPrompt
       )
     );
@@ -258,15 +191,12 @@ export async function handleIterativeQuery(
     const rawContent = llmResponse?.message?.content?.trim() || "";
     console.log("LLM Iteration Response:", rawContent);
 
-    // Attempt to parse JSON
+    // Attempt to parse JSON from the LLM response
     let parsedAction;
     try {
       console.log("Extracting JSON block from LLM response...");
-      
       parsedAction = extractJsonFromLLMReturn(rawContent);
       console.log("Json from the response: ", parsedAction);
-      //parsedAction = JSON.parse(jsonBlock);
-      //console.log("Parsed JSON block:", parsedAction);
     } catch (err) {
       // If not valid JSON, treat entire text as final answer or break
       console.warn("LLM returned invalid JSON. Stopping iteration.");
@@ -276,20 +206,37 @@ export async function handleIterativeQuery(
     }
     console.log("Parsed Action:", parsedAction);
 
+    // 3) Check the action from the LLM
     if (parsedAction.action === "search") {
-      // The LLM wants more data for the query in "search_query"
+      // LLM wants more data: run search
       const searchQuery = parsedAction.search_query || "";
       progressCallback(`LLM requests more info via search: "${searchQuery}"`);
 
-      // Execute another search
       const newResults = await routeUserQuery(searchQuery);
 
-      // Optionally grade them if you want:
+      // Optionally grade them if you want
       progressCallback(`Grading ${newResults.length} newly found documents`);
       const newlyRelevant = await gradeDocuments(newResults, userQuery);
 
-      // Append newly relevant docs
+      // (A) Record the retrieval step
+      retrievalSteps.push({
+        searchQuery,
+        results: newlyRelevant
+      });
+
+      // (B) Merge newly relevant docs into our main set
       relevantDocuments.push(...newlyRelevant);
+      try{
+        const uniqueDocsMap = new Map();
+        for (const doc of relevantDocuments) {
+          uniqueDocsMap.set(doc._id, doc);
+        }
+        relevantDocuments = Array.from(uniqueDocsMap.values());
+        relevantDocuments.sort((a, b) => b._score - a._score);
+        relevantDocuments = relevantDocuments.slice(0, 10);
+      }catch(err){
+        console.error("Error while removing duplicates: ", err);
+      }
 
     } else if (parsedAction.action === "answer") {
       // LLM says it has enough info
@@ -297,6 +244,7 @@ export async function handleIterativeQuery(
       finalAnswerContent = parsedAction.content || "No content from LLM.";
       progressCallback("LLM indicates it has enough info to answer.");
       break;
+
     } else {
       // Unrecognized action => treat as final
       console.warn("LLM returned unrecognized action:", parsedAction.action);
@@ -306,12 +254,12 @@ export async function handleIterativeQuery(
     }
   }
 
-  // If we never got "answer" from the LLM, we can still do a final generation ourselves
+  // If we never got "answer", we'll still generate a final answer ourselves
   if (finalAction !== "answer") {
     progressCallback("Maximum iterations reached. Generating final answer anyway.");
   }
 
-  // STEP 2: If we want a final, consolidated answer from our own summarizer:
+  // 4) Generate final answer from all relevant docs
   progressCallback("Generating final answer from all relevant documents");
   let state = {
     question: userQuery,
@@ -322,10 +270,11 @@ export async function handleIterativeQuery(
   let generationState = await generateAnswer(state);
   console.log("Generated Answer:", generationState.generation);
 
-  // (Optional) If you want to incorporate the LLM's direct finalAnswerContent, you could do so here:
-  // e.g., generationState.generation = finalAnswerContent
+  // If you wish, you can replace or augment generationState.generation
+  // with finalAnswerContent from the LLM's last iteration:
+  // generationState.generation = finalAnswerContent;
 
-  // STEP 3: If checkGenerationQuality is true, do the same retry loop as your existing code
+  // 5) (Optional) Check generation quality
   if (checkGenerationQuality) {
     progressCallback("Validating answer quality");
     let verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
@@ -344,13 +293,13 @@ export async function handleIterativeQuery(
           message_id: uuidv4(),
           elements: [],
           count: 0,
+          retrievalSteps
         };
       }
     }
   }
-  
 
-  // Finally, return your response object
+  // 6) Return final result
   return {
     answer: generationState.generation || finalAnswerContent || "No final answer",
     message_id: uuidv4(),
@@ -366,27 +315,49 @@ export async function handleIterativeQuery(
       "thumbnail-image": doc._source["thumbnail-image"],
     })),
     count: relevantDocuments.length,
+    retrievalSteps // Provide the array of search steps for context
   };
 }
-function buildIterativePrompt(userQuery, docsSoFar) {
-  // Summarize or list the documents
-  let docsText = "";
-  docsSoFar.forEach((doc, i) => {
-    docsText += `Document #${i + 1}: ${formatDocs([doc])}\n\n`;
-  });
+function buildIterativePrompt(userQuery, docsSoFar, retrievalSteps) {
+  const stepsText = retrievalSteps.map((step, index) => {
+    const docTitles = step.results
+      .map((doc, i) => `(${i + 1}) ${doc._source.title || "Untitled"}`)
+      .join(", ");
+    return `Step #${index + 1} -> Searched: "${step.searchQuery}"
+Found: ${docTitles}
+
+`;
+  }).join("");
+
+  // Summarize or shorten large docs
+  const docsText = docsSoFar.map((doc, i) => {
+    const title = doc._source.title || "Untitled";
+    // Provide a short excerpt of the doc contents (limit to ~200 characters)
+    const snippet = doc._source.contents?.slice(0, 200) || "";
+    return `Document #${i + 1}: "${title}"\nExcerpt: "${snippet}..."\n`;
+  }).join("\n");
 
   return `
 You are a retrieval agent. The user asked: "${userQuery}"
 
-You have these documents so far:
+**Instructions**:
+1. Check if the information from the "final relevant documents" plus the user's query is sufficient to answer completely. 
+2. If NOT, output ONLY this JSON:
+   {"action":"search","search_query":"<a single search query>"}
+   - Incorporate any newly discovered facts from the documents or search history into this query. 
+   - Do not merely repeat or rephrase the user’s original query if you found new details (e.g., an author’s name).
+3. If yes, output ONLY this JSON:
+   {"action":"answer","content":"<your final answer>"}
+4. Output valid JSON only, with no extra fields or text outside the JSON.
+
+Search History:
+${stepsText}
+
+Final Relevant Documents (summarized):
 ${docsText}
 
-If you do NOT have enough info to fully answer, return:
-{"action":"search","search_query":"some additional keywords"}
-
-If you have enough info, return:
-{"action":"answer","content":"Your final answer here"}
-  `.trim();
+IMPORTANT: Follow the instructions exactly, and respond with valid JSON only.
+`.trim();
 }
 
 async function handleUserQueryWithProgress(
