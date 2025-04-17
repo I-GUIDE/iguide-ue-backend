@@ -1,5 +1,5 @@
 function_name,description
-noSearch,"Select if the query is not relevant to the I-GUIDE geospatial platform or is simply a greeting such as 'Hi' or 'Hello' and does not warrant a search."
+noSearch,"Select if the query is not relevant to the knowledge elements of I-GUIDE geospatial platform or is simply a greeting such as 'Hi' or 'Hello' and does not warrant a search."
 getNeo4jSearchResults,"Select only this one if the user is asking about knowledge element properties (e.g., popularity, contributor, type, tags) or relationships between elements (e.g., recommending related datasets or publications). Examples: 'most viewed datasets', 'top clicked notebooks', 'most popular oers', 'recommend related resources to this map', 'which elements did John Doe contribute?'."
 getKeywordSearchResults,"Select if the user query contains domain-specific keywords relevant to I-GUIDE or geospatial data but is not in a full sentence. The user is providing direct keywords or short phrases."
 getSemanticSearchResults,"Only select if the user is asking a domain-specific question relevant to I-GUIDE or geospatial data in more natural language (e.g., complete sentences)."

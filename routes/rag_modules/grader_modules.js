@@ -1,4 +1,4 @@
-import { callLlamaModel, createQueryPayload } from './llm_modules.js';
+import { callLlamaModel, createQueryPayload, callGPTModel } from './llm_modules.js';
 import { extractJsonFromLLMReturn, formatDocsString, formatDocsJson } from './rag_utils.js';
 
 /*export async function gradeDocuments(documents, question) {
@@ -92,18 +92,27 @@ export async function gradeDocuments(documents, question) {
     `;
 
     // 4) Create your query payload (adjust system prompt as needed)
-    const queryPayload = createQueryPayload(
-      "llama3:instruct",
-      "You are a grader assessing document relevance. Return a single JSON object with a numeric relevance_score.",
-      graderPrompt
-    );
-
-    // 5) Call the LLM
-    const result = await callLlamaModel(queryPayload);
+    let result
+    if(process.env.USE_GPT==true){
+      const queryPayload = createQueryPayload(
+        "gpt-4o-mini",
+        "You are a grader assessing document relevance. Return a single JSON object with a numeric relevance_score.",
+        graderPrompt
+      );
+      result = await callGPTModel(queryPayload);
+    }else{
+      const queryPayload = createQueryPayload(
+        "llama3:instruct",
+        "You are a grader assessing document relevance. Return a single JSON object with a numeric relevance_score.",
+        graderPrompt
+      );
+      result = await callLlamaModel(queryPayload);
+    }
+    
 
     // 6) Parse LLM response as JSON
     try {
-      const parsed = extractJsonFromLLMReturn(result?.message?.content.trim());
+      const parsed = extractJsonFromLLMReturn(result.trim());
       const relevanceScore = parsed?.relevance_score;
 
       if (typeof relevanceScore === 'number') {
@@ -322,7 +331,7 @@ export async function gradeGenerationVsDocumentsAndQuestion(state, showReason = 
   );
 
   if (showReason) console.log(hallucinationRelevanceResponse?.message?.content);
-  const grade = hallucinationRelevanceResponse?.message?.content?.toLowerCase().includes('"binary_score": "yes"') ? "yes" : "no";
+  const grade = hallucinationRelevanceResponse?.toLowerCase().includes('"binary_score": "yes"') ? "yes" : "no";
   //return grade
   if (grade === "yes") {
     return "useful";
@@ -385,7 +394,7 @@ export async function addAndGradeDocuments(relevantDocuments, newDocuments, ques
 
     // 6) Parse LLM response as JSON
     try {
-      const parsed = extractJsonFromLLMReturn(result?.message?.content.trim());
+      const parsed = extractJsonFromLLMReturn(result?.trim());
       const relevanceScore = parsed?.relevance_score;
 
       if (typeof relevanceScore === "number") {

@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { raw } from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
@@ -7,7 +7,7 @@ import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cor
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
 import { getSemanticSearchResults } from './rag_modules/search_modules.js';
 import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_modules/grader_modules.js';
-import { callLlamaModel } from './rag_modules/llm_modules.js';
+import { callGPTModel, callLlamaModel } from './rag_modules/llm_modules.js';
 import { routeUserQuery } from './rag_modules/routing_modules.js';
 import * as utils from '../utils.js';
 import { extractJsonFromLLMReturn, formatDocsJson} from './rag_modules/rag_utils.js';
@@ -142,7 +142,7 @@ export async function handleIterativeQuery(
   console.log("Starting iterative retrieval for", comprehensiveUserQuery);
 
   // We'll store all relevant documents gathered across multiple LLM requests
-  const relevantDocuments = [];
+  let relevantDocuments = [];
   // We'll also store each retrieval step: { searchQuery, results: [...] }
   const retrievalSteps = [];
 
@@ -160,38 +160,64 @@ export async function handleIterativeQuery(
     // Prompt the LLM with user query + current docs
     const iterationPrompt = buildIterativePrompt(userQuery, relevantDocuments, retrievalSteps);
     //console.log(`Iteration #${iterationCount}, Prompt:`, iterationPrompt);
+    const systemPrompt = `You are a multistep *retrieval‑and‑reasoning* agent.
 
+### Goal
+Answer the user's question by chaining searches **only when truly necessary**.
+
+### Sufficiency Test (Stop searching when BOTH are true)
+1. You can answer every part of the user’s question.
+2. Your answer is supported by at least one cited document in the context.
+
+### Procedure for each iteration
+1. **Think in the Scratchpad** about whether the Sufficiency Test is met.
+2. If the test is met ➜ prepare a ONE‑sentence answer summary.
+3. If the test is *not* met ➜ plan ONE new, more‑specific search query that uses newly discovered facts.
+4. After the Scratchpad, output *only* valid JSON:
+   • {"action":"answer","content":"<final answer>"}  
+   • or  
+   • {"action":"search","search_query":"<next query>"}
+
+### Constraints
+- Never propose a search that merely rephrases an earlier one.  
+- Answer concisely; cite facts from the documents implicitly (no URLs needed).  
+- The Scratchpad must never appear in the JSON.`;
+
+    let llmResponse;
     // Call the LLM
-    const llmResponse = await callLlamaModel(
-      createQueryPayload(
-        "deepseek-r1:70b",
-        `You are a retrieval agent.
-
-        1. Decide if you have enough information to answer the user's query directly.
-        2. If more information is needed, propose exactly one next search query. 
-          - Use any newly discovered facts from the documents or from previous steps. 
-          - For example, if you find an author’s name, incorporate that in the new query.
-        3. Output your response as valid JSON only: either {"action":"search","search_query":"..."} or {"action":"answer","content":"..."}.
-        4. Do not repeat or rephrase the original query if new information is available.
-`,
-        iterationPrompt
-      )
+    if(process.env.USE_GPT==true){
+      llmResponse = await callGPTModel(
+        createQueryPayload(
+          "gpt-4o",
+          systemPrompt,
+          iterationPrompt
+        )
+      );
+    }
+    else{
+      llmResponse = await callLlamaModel(
+        createQueryPayload(
+          "llama3:instruct",
+          systemPrompt,
+          iterationPrompt
+        )
     );
+  }
 
-    const rawContent = llmResponse?.message?.content?.trim() || "";
-    console.log("LLM Iteration Response:", rawContent);
+    //const rawContent = llmResponse;
+    console.log("LLM Iteration Response:", llmResponse);
 
     // Attempt to parse JSON from the LLM response
     let parsedAction;
     try {
-      console.log("Extracting JSON block from LLM response...");
-      parsedAction = extractJsonFromLLMReturn(rawContent);
+      console.log("Extracting JSON block from LLM response", llmResponse);
+      parsedAction = extractJsonFromLLMReturn(llmResponse);
       console.log("Json from the response: ", parsedAction);
     } catch (err) {
       // If not valid JSON, treat entire text as final answer or break
-      console.warn("LLM returned invalid JSON. Stopping iteration.");
+      console.warn("LLM returned invalid JSON. Stopping iteration." ,err);
       finalAction = "answer";
-      finalAnswerContent = rawContent;
+      finalAnswerContent = llmResponse;
       break;
     }
     console.log("Parsed Action:", parsedAction);
@@ -328,25 +354,26 @@ Found: ${docTitles}
   }).join("\n");
 
   return `
-You are a retrieval agent. The user asked: "${userQuery}"
+The user asked: "${userQuery}"
 
-**Instructions**:
-1. Check if the information from the "final relevant documents" plus the user's query is sufficient to answer completely. 
-2. If NOT, output ONLY this JSON:
-   {"action":"search","search_query":"<a single search query>"}
-   - Incorporate any newly discovered facts from the documents or search history into this query. 
-   - Do not merely repeat or rephrase the user’s original query if you found new details (e.g., an author’s name).
-3. If yes, output ONLY this JSON:
-   {"action":"answer","content":"<your final answer>"}
-4. Output valid JSON only, with no extra fields or text outside the JSON.
+==================  Scratchpad  (free‑form thinking, NOT visible to user)  ==================
+• First, restate in 1–2 clauses what the user wants.
+• Second, list the *new* facts gleaned from the current documents.
+• Third, decide: do these facts satisfy the Sufficiency Test?  If yes, draft a 1‑sentence answer;
+  if no, draft ONE sharper search query that exploits the new facts.
+================  END Scratchpad – the user never sees anything above  =====================
 
-Search History:
+Now output ONLY one of the following JSON objects
+• {"action":"answer","content":"<your one‑sentence answer>"}  
+• {"action":"search","search_query":"<one next query>"}  
+
+Previous Searches:
 ${stepsText}
 
-Final Relevant Documents (summarized):
+Current Documents (summaries):
 ${docsText}
 
-IMPORTANT: Follow the instructions exactly, and respond with valid JSON only.
+REMINDER: absolutely no extra keys or text outside the JSON.
 `.trim();
 }
 
@@ -749,13 +776,19 @@ router.post('/llm/search', async (req, res) => {
       res.end();
       return;
     }
-
-    /*const response = await handleIterativeQuery(userQuery, comprehensiveQuery, false, (progress) => {
-      sendEvent('status', { status: progress });
-    });*/
-    const response = await handleUserQueryWithProgress(userQuery, comprehensiveQuery, false, (progress) => {
-      sendEvent('status', { status: progress });
-    });
+    let response = null;
+    if(process.env.MULTIHOP_RAG==true){
+      sendEvent('status', { status: 'Iterative retrieval' });
+      console.log("Iterative retrieval for", comprehensiveQuery);
+      response = await handleIterativeQuery(userQuery, comprehensiveQuery, false, (progress) => {
+        sendEvent('status', { status: progress });
+      });
+    }else{
+      response = await handleUserQueryWithProgress(userQuery, comprehensiveQuery, false, (progress) => {
+        sendEvent('status', { status: progress });
+      });
+    }
+    
 
     if (Array.isArray(response.elements)) {
       response.elements = response.elements.map((el) => {

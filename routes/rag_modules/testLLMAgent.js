@@ -4,7 +4,7 @@ import { agentSearchWithLLM } from './neo4j_agent.js';            // Your combin
 async function testLLMAgent() {
   const schema = await getComprehensiveSchema();
     
-  const question = "What are the most popular knowledge elements";
+  const question = "What are the most viewed knowledge elements";
 
   const result = await agentSearchWithLLM(question, schema);
 

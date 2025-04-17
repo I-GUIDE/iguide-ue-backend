@@ -198,7 +198,7 @@ export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK
     var payload = createQueryPayload("llama3.2:latest", systemPrompt, userPrompt)
     const llmResponse = await callLlamaModel(payload);
     //console.log("Comprehensive quesiton: ", llmResponse);
-    return llmResponse?.message?.content || "No response from LLM.";
+    return llmResponse || "No response from LLM.";
   } catch (error) {
     console.error('Error forming comprehensive user query:', error);
     throw error;

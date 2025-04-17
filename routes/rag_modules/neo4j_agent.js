@@ -11,11 +11,14 @@ let lastSchemaFetchTime = null;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 // Load .env from ../../.env
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+let neo4j_server = process.env.NEO4J_CONNECTION_STRING;
+if(process.env.NEO4J_FORCE_PROD=="true"){
+    neo4j_server = process.env.NEO4J_CONNECTION_STRING_PROD;
+}
 const driver = neo4j.driver(
-  process.env.NEO4J_CONNECTION_STRING,
-  neo4j.auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASSWORD)
-);
-
+    neo4j_server,
+    neo4j.auth.basic(process.env.NEO4J_USER, process.env.NEO4J_PASSWORD)
+  );
 export async function getComprehensiveSchema(forceRefresh = false) {
     const now = Date.now();
     const isExpired = !lastSchemaFetchTime || (now - lastSchemaFetchTime > CACHE_TTL_MS);
@@ -94,7 +97,8 @@ export async function generateCypherQueryFromSchema(question, schema) {
   1. Knowledge element refers to all nodes except for Contributor nodes.
   2. Popularity is determined by the number of counts.
   3. Connections between nodes are defined by the relationships in the schema.
-  4. Limit the results to 5.
+  4. Limit the results to 10 if the query does not specify.
+  5. When generating a Cypher query involving sorting, always use "coalesce(n.property, 0)" to safely handle missing values and sort properly.
   Your job is to generate a valid Cypher query that can be used to answer it using the schema above.
   Only return the Cypher query. Do not include explanations or formatting.
   If the question cannot be answered with this schema, return: "/* Insufficient information to generate Cypher query */"
@@ -125,11 +129,11 @@ Contributor information must be retrieved via an OPTIONAL MATCH: (c:Contributor)
       );
       
       // Now add parameters
-      payload.temperature = 0.3;
+      payload.temperature = 0.1;
       payload.top_p = 0.8;
       
       const response = await callLlamaModel(payload);
-    const query = response?.message?.content?.trim();
+    const query = response?.trim();
   
     //console.log("Generated Cypher Query:\n", query);
     return query;

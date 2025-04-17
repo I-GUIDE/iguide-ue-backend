@@ -1,9 +1,10 @@
-import { callLlamaModel, createQueryPayload } from './llm_modules.js';
+import { callLlamaModel, createQueryPayload, callGPTModel } from './llm_modules.js';
 import { getKeywordSearchResults, getSemanticSearchResults, getNeo4jSearchResults} from './search_modules.js';
 import { getSpatialSearchResults } from './spatial_search_modules.js';
 import fs from 'fs';
 import csv from 'csv-parser';
 import { get } from 'http';
+
 
 // Load search methods from CSV
 async function loadSearchMethods() {
@@ -38,8 +39,7 @@ async function generateRoutingPrompt(userQuery, searchMethods) {
   Order them according to their relevance to the query. 
   Respond with the method names only, separated by commas. 
   If there is no suitable search result for the query or the user is not asking about a question about the geospatial knowledge, return a empty string.
-  Only select the methods that are relevant to the query and try to avoid selecting all methods.
-  If the query is not relevant to any of the methods, return "noSearch".
+  Only select 1 or 2 methods that are relevant to the query.
   Examples:
   Q: What are the most viewed datasets?
 → getNeo4jSearchResults
@@ -78,13 +78,27 @@ async function routeUserQuery(userQuery) {
     const routingPrompt = await generateRoutingPrompt(userQuery, searchMethods);
 
     // Call LLM to decide which methods to use
-    const queryPayload = createQueryPayload("llama3.2:latest", "You are a routing agent for search methods.", routingPrompt);
-    const result = await callLlamaModel(queryPayload);
+    //const queryPayload = createQueryPayload("llama3.2:latest", "You are a routing agent for search methods.", routingPrompt);
+    //const result = await callLlamaModel(queryPayload);
+    let result;
+    // Call the LLM to get the response
+    if(process.env.USE_GPT==true){
+      const queryPayload = createQueryPayload(
+        "gpt-4o",
+        "You are a routing agent for search methods",
+        routingPrompt
+      );
+      result = await callGPTModel(queryPayload);
+    }else{
+      const queryPayload = createQueryPayload("llama3.2:latest", "You are a routing agent for search methods.", routingPrompt);
+      result = await callLlamaModel(queryPayload);
+    }
 
     // Parse LLM's response and extract selected methods
-    const selectedMethods = result?.message?.content?.trim();
+    //const selectedMethods = result?.message?.content?.trim();
+    const selectedMethods = result;
     if (!selectedMethods || selectedMethods[0] === 'noSearch') {
-      throw new Error('No methods selected by LLM');
+      throw new Error('No methods selected by LLM： ' + selectedMethods);
     } else {
       console.log('Selected methods:', selectedMethods);
     }

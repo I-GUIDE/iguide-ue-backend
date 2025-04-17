@@ -1,8 +1,19 @@
 // Helper: Format documents for Llama model prompt
-export function formatDocsString(docs) {
-    return docs
-      .map(doc => `title: ${doc._source.title}\ntype: ${doc._source["resource-type"]}\ncontributor: ${doc._source.contributor}\nauthors: ${doc._source.authors}\ncontent: ${doc._source.contents}\ntags:${doc._source.tags}\nclick_count: ${doc._source.click_count}\n\n`)
-      .join("\n\n");
+export function formatDocsString(docs, k = docs.length) {
+  return docs
+    .slice(0, k)                                   // ⬅️ keep only the first k hits
+    .map(
+      doc => `title: ${doc._source.title}
+type: ${doc._source["resource-type"]}
+contributor: ${doc._source.contributor}
+authors: ${doc._source.authors}
+content: ${doc._source.contents}
+tags: ${doc._source.tags}
+click_count: ${doc._source.click_count}
+
+`
+    )
+    .join("\n\n");
 }
 export function formatDocsJson(docs) {
     // Map each doc to a sanitized object, removing "contents-embedding" and "thumbnail-image"

@@ -25,7 +25,9 @@ export function createQueryPayload(model, systemMessage, userMessage, stream = f
       if (response.ok){
         //var returnResponse = await response;
         //console.log("Response from Llama model:", returnResponse);
-        return await response.json();
+        //return await response.json();
+        const result = await response.json();
+        return result?.message?.content || null;
       }
         
       const errorText = await response.text();
@@ -37,7 +39,7 @@ export function createQueryPayload(model, systemMessage, userMessage, stream = f
   }
   
   export async function callGPTModel(queryPayload) {
-    const openaiApiKey = process.env.OPENAI_API_KEY;
+    const openaiApiKey = process.env.OPENAI_KEY;
     const openaiApiUrl = process.env.OPENAI_API_URL || 'https://api.openai.com/v1/chat/completions';
   
     try {
@@ -51,7 +53,8 @@ export function createQueryPayload(model, systemMessage, userMessage, stream = f
       });
   
       if (response.ok) {
-        return await response.json();
+        const result = await response.json();
+        return result?.choices?.[0]?.message?.content || null;
       }
   
       const errorText = await response.text();
