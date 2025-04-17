@@ -92,6 +92,26 @@ router.get('/api/users/:id', cors(), async (req, res) => {
  *         schema:
  *           type: integer
  *         description: The limit value for pagination
+ *       - in: query
+ *         name: sort-by
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [first_name, last_name]
+ *         description: Sorting order for the values
+ *       - in: query
+ *         name: filter-name
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [none, role-no, affiliation]
+ *         description: Filter attribute for the values
+ *       - in: query
+ *         name: filter-value
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Filter attribute value for the values
  *     responses:
  *       200:
  *         description: All user documents found
@@ -106,10 +126,13 @@ router.get('/api/users',
     try {
 		const {
 	    	'from': from,
-	    	'size': size
+	    	'size': size,
+			'sort-by': sort_by,
+			'filter-name': filter_key,
+			'filter-value': filter_value
 		} = req.query;
 
-		const response = await n4j.getAllContributors(from, size);
+		const response = await n4j.getAllContributors(from, size, sort_by, filter_key, filter_value);
 		res.status(200).json(response);
     } catch (error) {
 		console.error('Error fetching user list:', error);
