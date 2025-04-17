@@ -104,7 +104,7 @@ router.get('/api/users/:id', cors(), async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *           enum: [none, role-no, affiliation]
+ *           enum: [none, role-no, affiliation, first-name, last-name]
  *         description: Filter attribute for the values
  *       - in: query
  *         name: filter-value

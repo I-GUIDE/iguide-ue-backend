@@ -1337,12 +1337,23 @@ export async function getAllContributors(
 			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
 			query_params['filter_val'] = filter_value
 			break
+		case "first-name":
+			filter_key = "first_name"
+			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
+			break
+		case "last-name":
+			filter_key = "last_name"
+			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
+			break
 		default:
 			filter_key = "none"
 	}
 	/**
 	 * Set the return parameter
 	 */
+	let count_query_str = query_str + " return COUNT(c) AS count"
 	query_str += " RETURN c{.*}"
 	/**
 	 * Set the default value for sort_by parameter
@@ -1374,10 +1385,9 @@ export async function getAllContributors(
 				contributor_list.push(temp_contributor);
 			}
 		});
-		let count_query_str = "MATCH (c:Contributor) return COUNT(c) AS count";
 		({records, summary} = await driver.executeQuery(
 				count_query_str,
-				{},
+				query_params,
 				{routing: 'READ', database: process.env.NEO4J_DB}));
 		let total_count = utils.parse64BitNumber(records[0].get('count'));
 		let contributor_final_list = Object.values(makeFrontendCompatible(contributor_list));
