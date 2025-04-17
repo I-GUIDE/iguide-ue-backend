@@ -1318,6 +1318,7 @@ export async function getAllContributors(
 		from=0,
 		size=100,
 		sort_by=utils.SortBy.FIRST_NAME,
+		sort_order="asc",
 		filter_key='none',
 		filter_value=''){
 	let query_str = "MATCH (c:Contributor)";
@@ -1360,7 +1361,7 @@ export async function getAllContributors(
 	 */
 	sort_by = utils.parseSortBy(sort_by)
 	if (sort_by && sort_by !== "") {
-		query_str += " ORDER BY c." + sort_by
+		query_str += " ORDER BY c." + sort_by + " " + sort_order
 	}
 	/**
 	 * Set the pagination condition

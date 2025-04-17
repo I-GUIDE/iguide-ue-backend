@@ -98,6 +98,15 @@ router.get('/api/users/:id', cors(), async (req, res) => {
  *         schema:
  *           type: string
  *           enum: [first_name, last_name]
+ *           default: first_name
+ *         description: Sorting order for the values
+ *       - in: query
+ *         name: sort-order
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: asc
  *         description: Sorting order for the values
  *       - in: query
  *         name: filter-name
@@ -105,6 +114,7 @@ router.get('/api/users/:id', cors(), async (req, res) => {
  *         schema:
  *           type: string
  *           enum: [none, role-no, affiliation, first-name, last-name]
+ *           default: none
  *         description: Filter attribute for the values
  *       - in: query
  *         name: filter-value
@@ -128,11 +138,12 @@ router.get('/api/users',
 	    	'from': from,
 	    	'size': size,
 			'sort-by': sort_by,
+			'sort-order': sort_order,
 			'filter-name': filter_key,
 			'filter-value': filter_value
 		} = req.query;
 
-		const response = await n4j.getAllContributors(from, size, sort_by, filter_key, filter_value);
+		const response = await n4j.getAllContributors(from, size, sort_by, sort_order, filter_key, filter_value);
 		res.status(200).json(response);
     } catch (error) {
 		console.error('Error fetching user list:', error);
