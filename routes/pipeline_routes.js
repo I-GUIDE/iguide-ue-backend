@@ -870,7 +870,7 @@ export async function handleIterativeQuery(
 
   let finalAnswerContent = "";
   for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
-    progressCallback(`Iteration #${iteration}: reasoning…`);
+    progressCallback(`Iteration #${iteration}: reasoning`);
 
     const iterationPrompt = buildIterativePrompt(
       userQuery,
