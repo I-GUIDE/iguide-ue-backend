@@ -1113,6 +1113,22 @@ export async function deleteElementByID(id){
     return false;
 }
 
+export async function deleteUserById(id){
+    const query_str = "MATCH (c:Contributor{id:$id_param}) " +
+	  "DETACH DELETE c";
+    try {
+	const {_, summary} =
+	      await driver.executeQuery(query_str,
+					{id_param: id},
+					{database: process.env.NEO4J_DB});
+	if (summary.counters.updates()['nodesDeleted'] == 1){
+	    return true;
+	}
+    } catch(err){console.log('deleteUserByOpenId() - Error in query: '+ err);}
+    // something went wrong
+    return false;
+}
+
 /**
  * Set visibility for an element/resource given ID
  * @param {string} id
@@ -1314,9 +1330,60 @@ export async function getContributorByID(id){
  * from and size are optional parameters by default set to return 1st 100 records
  * @returns {Object} Map of objects with serial Ids. If no users found returns empty
  */
-export async function getAllContributors(from=0, size=100){
-	const query_str = "MATCH (c:Contributor) return c{.*} SKIP $from LIMIT $size";
+export async function getAllContributors(
+		from=0,
+		size=100,
+		sort_by=utils.SortBy.FIRST_NAME,
+		sort_order="asc",
+		filter_key='none',
+		filter_value=''){
+	let query_str = "MATCH (c:Contributor)";
 	let query_params = {};
+	/**
+	 * Set the filter by value if required
+	 */
+	switch (filter_key) {
+		case "role-no":
+			filter_key = "role"
+			filter_value = neo4j.int(filter_value)
+			query_str += " WHERE c." + filter_key + ' = $filter_val'
+			query_params['filter_val'] = filter_value
+			break
+		case "affiliation":
+			filter_key = "affiliation"
+			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
+			break
+		case "first-name":
+			filter_key = "first_name"
+			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
+			break
+		case "last-name":
+			filter_key = "last_name"
+			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
+			break
+		default:
+			filter_key = "none"
+	}
+	/**
+	 * Set the return parameter
+	 */
+	let count_query_str = query_str + " return COUNT(c) AS count"
+	query_str += " RETURN c{.*}"
+	/**
+	 * Set the default value for sort_by parameter
+	 */
+	sort_by = utils.parseSortBy(sort_by)
+	if (sort_by && sort_by !== "") {
+		query_str += " ORDER BY c." + sort_by + " " + sort_order
+	}
+	/**
+	 * Set the pagination condition
+	 */
+	let pagination_str = " SKIP $from LIMIT $size";
+	query_str += pagination_str;
 	query_params['from'] = neo4j.int(from);
 	query_params['size'] = neo4j.int(size);
 	try {
@@ -1335,10 +1402,9 @@ export async function getAllContributors(from=0, size=100){
 				contributor_list.push(temp_contributor);
 			}
 		});
-		let count_query_str = "MATCH (c:Contributor) return COUNT(c) AS count";
 		({records, summary} = await driver.executeQuery(
 				count_query_str,
-				{},
+				query_params,
 				{routing: 'READ', database: process.env.NEO4J_DB}));
 		let total_count = utils.parse64BitNumber(records[0].get('count'));
 		let contributor_final_list = Object.values(makeFrontendCompatible(contributor_list));

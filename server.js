@@ -297,9 +297,15 @@ app.get('/api/url-title', cors(), async (req, res) => {
 console.log(`${process.env.SERV_TAG} server is up`);
 
 const HTTP_PORT = parseInt(process.env.PORT, 10)+1; //3501;
-app.listen(HTTP_PORT, () => {
-    console.log(`HTTP server is running on port ${HTTP_PORT}`);
-});
+/**
+ * Changes to handle JEST Testing module this if statement will run only when running the server
+ * and not run when jest is operating to avoid dual execution of the same and stop the process form JEST side
+ */
+if (import.meta.url === `file://${process.argv[1]}`) {
+	app.listen(HTTP_PORT, () => {
+		console.log(`HTTP server is running on port ${HTTP_PORT}`);
+	});
+}
 
 https.createServer(SSLOptions, app).listen(process.env.PORT, () => {
     console.log(`HTTPS server is running on port ${process.env.PORT}`);
@@ -308,3 +314,7 @@ https.createServer(SSLOptions, app).listen(process.env.PORT, () => {
 // Serve Swagger docs
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 console.log(`Swagger UI started at http://${process.env.DOMAIN}:${HTTP_PORT}/api-docs`);
+/**
+ * Exporting the default app to be imported for Testing
+ */
+export default app;

@@ -92,6 +92,36 @@ router.get('/api/users/:id', cors(), async (req, res) => {
  *         schema:
  *           type: integer
  *         description: The limit value for pagination
+ *       - in: query
+ *         name: sort-by
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [first_name, last_name]
+ *           default: first_name
+ *         description: Sorting order for the values
+ *       - in: query
+ *         name: sort-order
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: asc
+ *         description: Sorting order for the values
+ *       - in: query
+ *         name: filter-name
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [none, role-no, affiliation, first-name, last-name]
+ *           default: none
+ *         description: Filter attribute for the values
+ *       - in: query
+ *         name: filter-value
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Filter attribute value for the values
  *     responses:
  *       200:
  *         description: All user documents found
@@ -106,10 +136,14 @@ router.get('/api/users',
     try {
 		const {
 	    	'from': from,
-	    	'size': size
+	    	'size': size,
+			'sort-by': sort_by,
+			'sort-order': sort_order,
+			'filter-name': filter_key,
+			'filter-value': filter_value
 		} = req.query;
 
-		const response = await n4j.getAllContributors(from, size);
+		const response = await n4j.getAllContributors(from, size, sort_by, sort_order, filter_key, filter_value);
 		res.status(200).json(response);
     } catch (error) {
 		console.error('Error fetching user list:', error);
@@ -622,6 +656,7 @@ router.get('/api/users/bookmark/:elementId',
     }
 });
 
+// Commenting the swagger definition makes sure the API is not visible in the Swagger Definition
 // /**
 //  * @swagger
 //  * /api/users/{id}:
@@ -641,21 +676,39 @@ router.get('/api/users/bookmark/:elementId',
 //  *       500:
 //  *         description: Internal server error
 //  */
-// router.delete('/users/:id', async (req, res) => {
-//   const openid = decodeURIComponent(req.params.id);
+router.delete('/api/users/:id',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	authorizeRole(utils.Role.SUPER_ADMIN),
+	async (req, res) => {
+		const id = decodeURIComponent(req.params.id);
 
-//   try {
-//   throw Error('Neo4j: Delete user is not implemented');
-//   // const response = await os.client.delete({
-//   //     index: 'users',
-//   //     id: openid
-//   // });
-
-//   // res.json({ message: 'User deleted successfully', result: response.body.result });
-//   } catch (error) {
-//   console.error('Error deleting user:', error);
-//   res.status(500).json({ message: 'Internal server error' });
-//   }
-// });
+		try {
+			/**
+			 * Get the all the public elements created by user
+			 */
+			let public_elements_cnt_resp = await n4j.getElementsCountByContributor(id);
+			/**
+			 * Get the all the public elements created by user
+			 */
+			let private_elements_cnt_resp = await n4j.getElementsCountByContributor(id, true);
+			if (public_elements_cnt_resp + private_elements_cnt_resp > 0) {
+				res.status(403).json({message: 'Cannot delete user as it has elements associated'});
+				return;
+			}
+			/**
+			 * Delete the user from neo4J
+			 */
+			const del_resp = await n4j.deleteUserById(id)
+			if (del_resp) {
+				res.status(200).json({message: 'User deleted successfully', result: del_resp});
+			} else {
+				res.status(200).json({message: 'Error in deleting user', result: del_resp});
+			}
+		} catch (error) {
+			console.error('Error deleting user:', error);
+			res.status(500).json({message: 'Internal server error'});
+		}
+	});
 
 export default router;
