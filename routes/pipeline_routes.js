@@ -10,7 +10,7 @@ import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_mod
 import { callGPTModel, callLlamaModel } from './rag_modules/llm_modules.js';
 import { routeUserQuery } from './rag_modules/routing_modules.js';
 import * as utils from '../utils.js';
-import { extractJsonFromLLMReturn, formatDocsJson} from './rag_modules/rag_utils.js';
+import { extractJsonFromLLMReturn, formatDocsJson, safeParseLLMJson} from './rag_modules/rag_utils.js';
 import { generateAnswer } from './rag_modules/generation_module.js';
 import { restrictToUIUC } from '../ip_policy.js';
 import {createQueryPayload} from './rag_modules/llm_modules.js';
@@ -131,7 +131,7 @@ async function handleUserQuery(userQuery, comprehensiveUserQuery, checkGeneratio
     count: relevantDocuments.length,
   };
 }
-export async function handleIterativeQuery(
+/*export async function handleIterativeQuery(
   userQuery,
   comprehensiveUserQuery,
   checkGenerationQuality,
@@ -179,7 +179,8 @@ Answer the user's question by chaining searches **only when truly necessary**.
    • {"action":"search","search_query":"<next query>"}
 
 ### Constraints
-- Never propose a search that merely rephrases an earlier one.  
+- If you discover a specific name, title, or value for something in the question, **use that specific fact in your next search** instead of vague terms. (E.g., replace "the author of X" with "Dr. Jane Smith" if learned.)
+- Never propose a search that merely repeats a previous one without new details.
 - Answer concisely; cite facts from the documents implicitly (no URLs needed).  
 - The Scratchpad must never appear in the JSON.`;
 
@@ -333,8 +334,8 @@ Answer the user's question by chaining searches **only when truly necessary**.
     count: relevantDocuments.length,
     retrievalSteps // Provide the array of search steps for context
   };
-}
-function buildIterativePrompt(userQuery, docsSoFar, retrievalSteps) {
+}*/
+/*function buildIterativePrompt(userQuery, docsSoFar, retrievalSteps) {
   const stepsText = retrievalSteps.map((step, index) => {
     const docTitles = step.results
       .map((doc, i) => `(${i + 1}) ${doc._source.title || "Untitled"}`)
@@ -375,7 +376,7 @@ ${docsText}
 
 REMINDER: absolutely no extra keys or text outside the JSON.
 `.trim();
-}
+}*/
 
 async function handleUserQueryWithProgress(
   userQuery,
@@ -777,7 +778,7 @@ router.post('/llm/search', async (req, res) => {
       return;
     }
     let response = null;
-    if(process.env.MULTIHOP_RAG==true){
+    if(process.env.MULTIHOP_RAG=="true"){
       sendEvent('status', { status: 'Iterative retrieval' });
       console.log("Iterative retrieval for", comprehensiveQuery);
       response = await handleIterativeQuery(userQuery, comprehensiveQuery, false, (progress) => {
@@ -812,6 +813,213 @@ router.post('/llm/search', async (req, res) => {
   }
 });
 
+/* ──────────────────────────────────────────────────────────────────────────────
+   1.  Generic helpers
+   ─────────────────────────────────────────────────────────────────────────── */
 
+
+/** Ask the LLM to pull any new concrete facts from top snippets. */
+async function autoExtractFacts(question, docs, known = {}) {
+  if (docs.length === 0) return {};
+  const sys = "Extract concrete facts (names, numbers, IDs, percentages…) that help answer the question.";
+  const user = `Question: "${question}"
+Known facts: ${JSON.stringify(known)}
+Snippet:
+"""${docs[0]._source.contents.slice(0, 400)}"""
+Return ONLY a JSON object of new facts.`;
+  const txt = await callLlamaModel(createQueryPayload("llama3:instruct", sys, user));
+  return safeParseLLMJson(txt);
+}
+
+/** Replace $placeholders & pronouns with concrete facts. */
+async function resolveReferences(query, facts) {
+  Object.entries(facts).forEach(([k, v]) => {
+    query = query.replace(new RegExp("\\$" + k, "gi"), v);
+  });
+  if (/\b(they|their|his|her|its|this|that|those|these)\b/i.test(query)) {
+    const sys = "Resolve pronouns using the given facts. Return ONLY the rewritten query.";
+    const user = `Facts: ${JSON.stringify(facts)}\nQuery: "${query}"`;
+    query = await callLlamaModel(createQueryPayload("llama3:instruct", sys, user));
+  }
+  return query.trim();
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   2.  Iterative retrieval & reasoning
+   ─────────────────────────────────────────────────────────────────────────── */
+
+export async function handleIterativeQuery(
+  userQuery,
+  comprehensiveUserQuery,
+  checkGenerationQuality,
+  progressCallback = () => {}
+) {
+  progressCallback(`Starting iterative retrieval for: "${comprehensiveUserQuery}"`);
+  console.log("Starting iterative retrieval for", comprehensiveUserQuery);
+
+  const retrievalSteps = [];
+  const MAX_ITERATIONS = 5;
+
+  // State object with working memory
+  const state = {
+    question: userQuery,
+    augmentedQuery: comprehensiveUserQuery,
+    documents: [],
+    knowledge: {},           // 👈 discovered facts live here
+  };
+
+  let finalAnswerContent = "";
+  for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
+    progressCallback(`Iteration #${iteration}: reasoning…`);
+
+    const iterationPrompt = buildIterativePrompt(
+      userQuery,
+      state.documents,
+      retrievalSteps,
+      state.knowledge
+    );
+
+    const systemPrompt = `
+You are a multi‑step retrieval‑and‑reasoning agent.
+
+### Contract
+Return valid JSON only:
+  {"action":"search","search_query":"…","new_facts":{…}}
+  or
+  {"action":"answer","content":"…","new_facts":{…}}
+
+### Rules
+1. Think in a hidden Scratch‑pad (never shown to user).
+2. If you learn any concrete value (name, %, id, date…), add it to "new_facts".
+3. When facts exist, use them in the next search instead of vague phrases.
+4. Stop searching when the question is fully answered and supported by ≥1 doc.
+5. Keep answers ≤1–2 sentences.
+6. Every key *and* every string value **MUST** be wrapped in double quotes.
+   Example: { "name": "Finn Roberts" }   NOT  { "name": Finn Roberts }.
+`;
+
+    const raw = process.env.USE_GPT === true
+      ? await callGPTModel(createQueryPayload("gpt-4o", systemPrompt, iterationPrompt))
+      : await callLlamaModel(createQueryPayload("llama3:instruct", systemPrompt, iterationPrompt));
+
+    console.log("LLM Iteration Response:", raw);
+
+    let act;
+    try { act = safeParseLLMJson(raw); }
+    catch (e) { console.warn("Bad JSON:", e); finalAnswerContent = raw; break; }
+
+    // merge LLM‑reported facts
+    if (act.new_facts) Object.assign(state.knowledge, act.new_facts);
+
+    if (act.action === "search") {
+      let nextQ = await resolveReferences(act.search_query || "", state.knowledge);
+      progressCallback(`Searching: "${nextQ}"`);
+      const newResults = await routeUserQuery(nextQ);
+      const newlyRelevant = await gradeDocuments(newResults, userQuery);
+
+      // auto‑extract facts (fail‑safe)
+      const extracted = await autoExtractFacts(userQuery, newlyRelevant, state.knowledge);
+      Object.assign(state.knowledge, extracted);
+
+      // bookkeeping
+      retrievalSteps.push({ searchQuery: nextQ, results: newlyRelevant });
+      state.documents.push(...newlyRelevant);
+
+      // dedupe + keep top‑10 by score
+      const uniq = new Map();
+      state.documents.forEach(d => uniq.set(d._id, d));
+      state.documents = [...uniq.values()].sort((a, b) => b._score - a._score).slice(0, 10);
+      continue;                       // next iteration
+    }
+
+    if (act.action === "answer") { finalAnswerContent = act.content; break; }
+
+    // fallback: treat whatever came as final
+    finalAnswerContent = raw; break;
+  }
+
+  /* ----------- generate final answer (uses your existing generateAnswer) --- */
+  progressCallback("Generating final answer");
+  const generationState = await generateAnswer({
+    question: state.question,
+    augmentedQuery: state.augmentedQuery,
+    documents: state.documents,
+  });
+
+  /* ------------ optional quality check (unchanged) ------------------------- */
+  if (checkGenerationQuality) {
+    let verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
+    let retry = 0;
+    while (verdict !== "useful" && retry < 3) {
+      retry++;
+      generationState.generation = (await generateAnswer(generationState)).generation;
+      verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
+    }
+  }
+
+  return {
+    answer: generationState.generation || finalAnswerContent || "No answer",
+    message_id: uuidv4(),
+    elements: state.documents.map(d => ({
+      _id: d._id,
+      _score: d._score,
+      contributor: d._source.contributor,
+      contents: d._source.contents,
+      "resource-type": d._source["resource-type"],
+      title: d._source.title,
+      authors: d._source.authors || [],
+      tags: d._source.tags || [],
+      "thumbnail-image": d._source["thumbnail-image"],
+    })),
+    count: state.documents.length,
+    retrievalSteps,
+  };
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   3.  Prompt builder (now shows knowledge)
+   ─────────────────────────────────────────────────────────────────────────── */
+
+   function buildIterativePrompt(userQuery, docs, steps, knowledge) {
+    const stepTxt = steps.map((s, i) =>
+      `Step #${i + 1}  →  searched: "${s.searchQuery}"  •  docs: ${s.results.length}`
+    ).join("\n");
+  
+    const docTxt = docs.map((d, i) => {
+      const src = d._source || {};
+      const authors = Array.isArray(src.authors) ? src.authors.join("; ") : src.authors || "";
+      const tags    = Array.isArray(src.tags)    ? src.tags.join(", ")   : src.tags   || "";
+      return [
+        `Doc #${i + 1}`,
+        `  title      : ${src.title || "Untitled"}`,
+        `  authors    : ${authors || "(none)"}`,
+        `  contributor: ${src.contributor || "(unknown)"}`,
+        `  tags       : ${tags || "(none)"}`,
+        `  contents    : ${(src.contents || "").slice(0, 160)}…`
+      ].join("\n");
+    }).join("\n\n");
+  
+    return `
+  User question: "${userQuery}"
+  
+  Known facts so far:
+  ${JSON.stringify(knowledge, null, 2)}
+  
+  Previous steps:
+  ${stepTxt || "(none)"}
+  
+  Current documents:
+  ${docTxt || "(none)"}
+  
+  /*** Scratch‑pad (hidden from user) ******************************************
+   * Write your chain‑of‑thought here. DO NOT include braces in the scratch‑pad *
+   *****************************************************************************/
+  
+  REMINDER: After the scratch‑pad output ONLY one JSON object:
+    { "action":"search", "search_query":"…", "new_facts":{…} }
+    or
+    { "action":"answer", "content":"…",     "new_facts":{…} }
+  `.trim();
+  }
 
 export default router;

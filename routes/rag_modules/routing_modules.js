@@ -71,6 +71,24 @@ const functionMapping = {
 // Route the user query dynamically based on LLM's selection
 async function routeUserQuery(userQuery) {
   try {
+    console.log("Routing user query:", userQuery);
+    // 1. Keyword-based routing overrides
+    const uq = userQuery.toLowerCase();
+    if (/(most viewed|top clicked|most popular|related)/.test(uq)) {
+      console.log("Routing to Neo4j for query:", userQuery);
+      return getNeo4jSearchResults(userQuery);
+    }
+    if (/(\\bnear\\b|latitude|longitude|bounding box)/.test(uq)) {
+      console.log("Routing to Spatial search for query:", userQuery);
+      return getSpatialSearchResults(userQuery);
+    }
+    // If query is short or looks like a list of terms (no question words)
+    const isShort = userQuery.split(/\s+/).length < 4 && !/[?]/.test(uq);
+    if (isShort) {
+      console.log("Routing to Keyword search for query:", userQuery);
+      return getKeywordSearchResults(userQuery);
+    }
+    // 2. Otherwise, use LLM to decide (existing logic)
     // Load the search methods descriptions from the CSV
     const searchMethods = await loadSearchMethods();
 
