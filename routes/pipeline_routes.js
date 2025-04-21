@@ -10,11 +10,15 @@ import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_mod
 import { callGPTModel, callLlamaModel } from './rag_modules/llm_modules.js';
 import { routeUserQuery } from './rag_modules/routing_modules.js';
 import * as utils from '../utils.js';
-import { extractJsonFromLLMReturn, formatDocsJson} from './rag_modules/rag_utils.js';
+import { extractJsonFromLLMReturn, formatDocsJson, makeSearchRateLimiter} from './rag_modules/rag_utils.js';
 import { generateAnswer } from './rag_modules/generation_module.js';
 import { restrictToUIUC } from '../ip_policy.js';
 import {createQueryPayload} from './rag_modules/llm_modules.js';
 const router = express.Router();
+
+const MAX_SEARCHES_PER_HOUR =1;
+
+const searchRateLimiter = makeSearchRateLimiter(MAX_SEARCHES_PER_HOUR);
 
 // Initialize OpenSearch client
 const client = new Client({
@@ -725,7 +729,7 @@ router.options('/llm/search', (req, res) => {
 });
 
 // POST-based SSE endpoint
-router.post('/llm/search', async (req, res) => {
+router.post('/llm/search', searchRateLimiter, async (req, res) => {
   res.header('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);

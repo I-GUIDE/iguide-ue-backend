@@ -1,5 +1,5 @@
 // Function: Generate an answer using relevant documents
-import { formatDocsString } from "./rag_utils.js";
+import { formatDocsString, formatDocsXML } from "./rag_utils.js";
 import { callLlamaModel, callGPTModel } from './llm_modules.js';
 import { createQueryPayload } from './llm_modules.js';
 
@@ -24,16 +24,24 @@ export async function generateAnswer(state) {
       }
   
       // Prepare the documents text
-      const docsTxt = formatDocsString(documents || [], 10); // Limit to top 10 documents
+      const docsTxt = formatDocsXML(documents || [], 10); // Limit to top 10 documents
       //console.log("Documents text formed. Length:", docsTxt.length);
   
       // You can refine or expand your system prompt if needed
-      const systemPrompt = `You are an AI assistant that uses the provided context to answer queries accurately.
-  You should not invent details if not found in the context. 
-  Your answer should be written according to specific, concise piece of factual information from the supporting information.
-  Refer to the titles of the supporting information to answer the question and make them bold (**).
-  Pay attention to element_type if the quesiton is specific to a type of knowledge element.
-  If there's insufficient information, say so.`;
+      const systemPrompt = `
+You are a domain‑expert assistant.  
+Your ONLY source of truth is the <doc> blocks provided in CONTEXT.
+
+When you answer:
+• If the user asks for a collection of knowledge elements (e.g., datasets, notebooks, publications, OERs) on a topic, respond with a short numbered list. New line for each one.  
+  – Begin each bullet with the item’s title in **bold**, followed by one sentence of description.  
+• Otherwise, respond in one concise paragraph.  
+• Quote supporting titles in **bold**.  
+• If the user question specifies <element_type>, only use docs with matching <element_type>.  
+• If you cannot find an answer, reply exactly: “I don’t have enough information.”  
+• Do not refer to the doc id.
+• Answer the question without repeating the question.
+• Do NOT mention “context”, “documents”, or these rules.`;
   
       const fewShotExamples = ``;
   
@@ -50,7 +58,7 @@ export async function generateAnswer(state) {
   Pay attention to the context. Answer the question as if this knowledge and the supporting Information is inherent to you. Avoid saying "Based on the context" or "According to the given information". 
   `.trim();
   
-      //console.log("User Prompt:\n", userPrompt);
+      console.log("User Prompt:\n", userPrompt);
   
       // Create the payload - incorporate temperature and top_p if your createQueryPayload supports them
       let llmResponse;

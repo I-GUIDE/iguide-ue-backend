@@ -38,8 +38,11 @@ async function generateRoutingPrompt(userQuery, searchMethods) {
   prompt += `\nBased on the query, suggest which retrieval methods should be used (select one or more). 
   Order them according to their relevance to the query. 
   Respond with the method names only, separated by commas. 
+  Select spatial search methods if the query is related to geospatial knowledge like "Chicago" or "Florida".
   If there is no suitable search result for the query or the user is not asking about a question about the geospatial knowledge, return a empty string.
   Only select 1 or 2 methods that are relevant to the query.
+  Only select the methods that are listed and do not invent new methods.
+  Do not include any explanations or additional text.
   Examples:
   Q: What are the most viewed datasets?
 → getNeo4jSearchResults
