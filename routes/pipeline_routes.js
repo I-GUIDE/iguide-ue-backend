@@ -16,7 +16,7 @@ import { restrictToUIUC } from '../ip_policy.js';
 import {createQueryPayload} from './rag_modules/llm_modules.js';
 const router = express.Router();
 
-const MAX_SEARCHES_PER_HOUR =1;
+const MAX_SEARCHES_PER_HOUR =process.env.MAX_SEARCHES_PER_HOUR || 10; // Set a default value if not provided
 
 const searchRateLimiter = makeSearchRateLimiter(MAX_SEARCHES_PER_HOUR);
 
