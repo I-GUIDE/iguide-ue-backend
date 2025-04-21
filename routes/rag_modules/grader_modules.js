@@ -104,7 +104,9 @@ export async function gradeDocuments(documents, question) {
       const queryPayload = createQueryPayload(
         "llama3:instruct",
         "You are a grader assessing document relevance. Return a single JSON object with a numeric relevance_score.",
-        graderPrompt
+        graderPrompt,
+        0.0,
+        1.0
       );
       result = await callLlamaModel(queryPayload);
     }

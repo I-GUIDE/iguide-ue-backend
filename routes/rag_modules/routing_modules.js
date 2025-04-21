@@ -38,9 +38,12 @@ async function generateRoutingPrompt(userQuery, searchMethods) {
   prompt += `\nBased on the query, suggest which retrieval methods should be used (select one or more). 
   Order them according to their relevance to the query. 
   Respond with the method names only, separated by commas. 
+  Select spatial search methods if the query is related to geospatial knowledge like "Chicago" or "Florida".
   If there is no suitable search result for the query or the user is not asking about a question about the geospatial knowledge, return a empty string.
   Avoid selecting neo4j search methods if other search methods are selected.
   Include the spatial search method if the query contains geospatial keywords like locations or longitude.
+  Only select the methods that are listed and do not invent new methods.
+  Do not include any explanations or additional text.
   Examples:
   Q: What are the most viewed datasets?
 → getNeo4jSearchResults
@@ -109,7 +112,7 @@ async function routeUserQuery(userQuery) {
       );
       result = await callGPTModel(queryPayload);
     }else{
-      const queryPayload = createQueryPayload("llama3.2:latest", "You are a routing agent for search methods.", routingPrompt);
+      const queryPayload = createQueryPayload("llama3.2:latest", "You are a routing agent for search methods.", routingPrompt, 0.2, 1.0);
       result = await callLlamaModel(queryPayload);
     }
 
