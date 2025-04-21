@@ -407,7 +407,7 @@ async function handleUserQueryWithProgress(
 
   let state = { question: userQuery, augmentedQuery: comprehensiveUserQuery, documents: relevantDocuments };
   
-  progressCallback("Generating answer with reasoning");
+  progressCallback("Generating answer");
   let generationState = await generateAnswer(state);
   console.log("\nGenerated Answer:", generationState.generation);
 

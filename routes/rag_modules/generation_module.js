@@ -32,7 +32,6 @@ export async function generateAnswer(state) {
   You should not invent details if not found in the context. 
   If there's insufficient information, say so.`;
   
-      // If you have any few-shot examples, they can be appended here
       const fewShotExamples = ``;
   
       // Construct the user prompt
@@ -45,8 +44,8 @@ export async function generateAnswer(state) {
   **Supporting Information**:
   ${docsTxt}
   
-  Answer the question while paying attention to the context as if this knowledge is inherent to you. Justify the answer by referencing the supporting information.
-      `.trim();
+  Pay attention to the context. Answer the question as if this knowledge and the supporting Information is inherent to you. Avoid saying "Based on the context" or "According to the given information". 
+  `.trim();
   
       //console.log("User Prompt:\n", userPrompt);
   
