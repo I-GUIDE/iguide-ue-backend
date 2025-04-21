@@ -24,12 +24,15 @@ export async function generateAnswer(state) {
       }
   
       // Prepare the documents text
-      const docsTxt = formatDocsString(documents || [], 3); // Limit to top 5 documents
+      const docsTxt = formatDocsString(documents || [], 10); // Limit to top 10 documents
       //console.log("Documents text formed. Length:", docsTxt.length);
   
       // You can refine or expand your system prompt if needed
       const systemPrompt = `You are an AI assistant that uses the provided context to answer queries accurately.
   You should not invent details if not found in the context. 
+  Your answer should be written according to specific, concise piece of factual information from the supporting information.
+  Refer to the titles of the supporting information to answer the question and make them bold (**).
+  Pay attention to element_type if the quesiton is specific to a type of knowledge element.
   If there's insufficient information, say so.`;
   
       const fewShotExamples = ``;

@@ -4,7 +4,7 @@ export function formatDocsString(docs, k = docs.length) {
     .slice(0, k)                                   // ⬅️ keep only the first k hits
     .map(
       doc => `title: ${doc._source.title}
-type: ${doc._source["resource-type"]}
+element_type: ${doc._source["resource-type"]}
 contributor: ${doc._source.contributor}
 authors: ${doc._source.authors}
 content: ${doc._source.contents}

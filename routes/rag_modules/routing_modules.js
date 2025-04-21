@@ -90,7 +90,7 @@ async function routeUserQuery(userQuery) {
       );
       result = await callGPTModel(queryPayload);
     }else{
-      const queryPayload = createQueryPayload("llama3.2:latest", "You are a routing agent for search methods.", routingPrompt);
+      const queryPayload = createQueryPayload("llama3.2:latest", "You are a routing agent for search methods.", routingPrompt, 0.2, 1.0);
       result = await callLlamaModel(queryPayload);
     }
 
