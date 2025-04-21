@@ -53,6 +53,7 @@ export async function generateAnswer(state) {
       // Create the payload - incorporate temperature and top_p if your createQueryPayload supports them
       let llmResponse;
       if(process.env.USE_GPT==true){
+        console.log("Using GPT model for generation");
         const payload = createQueryPayload(
           "gpt-4o",
           systemPrompt,
@@ -62,6 +63,7 @@ export async function generateAnswer(state) {
         // Call the LLM to get the response
         llmResponse = await callGPTModel(payload);
       }else{
+        console.log("Using Llama model for generation");
         const payload = createQueryPayload(
           "llama3:instruct",
           systemPrompt,

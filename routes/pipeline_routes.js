@@ -865,7 +865,7 @@ export async function handleIterativeQuery(
     question: userQuery,
     augmentedQuery: comprehensiveUserQuery,
     documents: [],
-    knowledge: {},           // 👈 discovered facts live here
+    knowledge: {},
   };
 
   let finalAnswerContent = "";
@@ -896,6 +896,7 @@ Return valid JSON only:
 5. Keep answers ≤1–2 sentences.
 6. Every key *and* every string value **MUST** be wrapped in double quotes.
    Example: { "name": "Finn Roberts" }   NOT  { "name": Finn Roberts }.
+7. Avoid doing new searches that are just rephrased versions of previous ones. For example, if the previous search is "Works from Alice" then you should avoid searching for "Alice's works" or "Alice's publications". Instead, you should go for a follow-up search if there is unknown facts or choose to answer.
 `;
 
     const raw = process.env.USE_GPT === true

@@ -1,3 +1,4 @@
+import JSON5 from 'json5';
 // Helper: Format documents for Llama model prompt
 export function formatDocsString(docs, k = docs.length) {
   return docs
@@ -72,48 +73,57 @@ export function extractJsonFromLLMReturn(response) {
   export function safeParseLLMJson(raw) {
     if (!raw) return null;
   
-    // helper filters
-    const stripCodeFence = t => t.replace(/^```(?:json)?/i, '').replace(/```$/, '');
-    const normaliseQuotes = t => t.replace(/[“”]/g, '"');
-    const removeTrailingComma = t => t.replace(/,\s*([}\]])/g, '$1');
+    // ── Helpers
+    const stripFence = t => t.replace(/^```(?:json)?/i, '').replace(/```$/, '');
+    const normQuotes = t => t.replace(/[“”]/g, '"');
+    const noTrailing = t => t.replace(/,\s*([}\]])/g, '$1');
+    const quoteBare = t => t.replace(/:\s*([A-Za-z_][^",}\]\n\r]*)/g,
+                                     (_, g) => `: "${g.trim()}"`);
+    const deleteNewlinesInsideStrings = t =>
+      t.replace(/"([^"\\]*(\\.[^"\\]*)*)"/gs, m => m.replace(/[\n\r]+/g, ' '));
   
-    let txt = removeTrailingComma(normaliseQuotes(stripCodeFence(raw)).trim());
+    // ── Pre‑sanitize
+    let txt = noTrailing(normQuotes(stripFence(raw)).trim());
   
-    /* ── prefer object that starts with {"action" ────────────────────────── */
-    const actIdx = txt.indexOf('{"action"');
-    if (actIdx !== -1) {
-      const slice = balancedBraces(txt, actIdx);
-      if (slice) {
-        try { return JSON.parse(slice); } catch {/* fall through */ }
-      }
+    // ── Prefer block that starts with {"action"
+    const cand = selectBalancedBlockRE(txt, /\{\s*"action"\s*:/) ||
+                   selectBalancedBlock(txt, '{');
+    if (!cand) return null;
+  
+    // ── Repairs in order
+    const attempts = [
+      cand,
+      quoteBare(cand),
+      deleteNewlinesInsideStrings(cand),
+      deleteNewlinesInsideStrings(quoteBare(cand))
+    ];
+  
+    for (const s of attempts) {
+      try { return JSON.parse(s);       } catch {}
+      try { return JSON5.parse(s);      } catch {}
     }
+    console.warn('safeParseLLMJson failed on all repairs');
+    return null;
   
-    /* ── fallback: first { … last }  (original logic) ────────────────────── */
-    const first = txt.indexOf('{');
-    const last  = txt.lastIndexOf('}');
-    if (first === -1 || last === -1) return null;
-  
-    txt = txt.slice(first, last + 1);
-    try { return JSON.parse(txt); }
-    catch (err) {
-      console.warn('safeParseLLMJson failed:', err.message);
-      return null;
-    }
-  
-    /* ────────────────────────────────────────────────────────────────────── */
-    function balancedBraces(str, start) {
-      let depth = 0;
-      for (let i = start; i < str.length; i++) {
-        if (str[i] === '{') depth++;
-        else if (str[i] === '}') {
-          if (--depth === 0) return str.slice(start, i + 1);
-        }
-      }
-      return null; // unbalanced
-    }
-  }
+/* return the first balanced { … } that matches a regex right after '{' */
+function selectBalancedBlockRE(str, regex) {
+  const m = str.match(regex);
+  if (!m) return null;
+  return selectBalancedBlock(str, m.index);   // reuse depth counter below
+}
 
- export  async function autoExtractFacts(question, docs, known = {}) {
+/* existing depth‑counter, but index param instead of token --------------- */
+function selectBalancedBlock(str, startIdx) {
+  let depth = 0;
+  for (let i = startIdx; i < str.length; i++) {
+    if (str[i] === '{') depth++;
+    else if (str[i] === '}' && --depth === 0)
+      return str.slice(startIdx, i + 1);
+  }
+  return null;                               // unbalanced
+}
+
+async function autoExtractFacts(question, docs, known = {}) {
     const facts = { ...known };                    // start with existing
   
     // 1‑A  structured harvest  ────────────────────────────────────────────────
@@ -152,4 +162,4 @@ export function extractJsonFromLLMReturn(response) {
       Object.keys(extracted).forEach(k => { if (k in known) delete extracted[k]; });
       return extracted;
     } catch { return {}; }
-  }
+  }}

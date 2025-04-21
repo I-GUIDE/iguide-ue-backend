@@ -39,7 +39,8 @@ async function generateRoutingPrompt(userQuery, searchMethods) {
   Order them according to their relevance to the query. 
   Respond with the method names only, separated by commas. 
   If there is no suitable search result for the query or the user is not asking about a question about the geospatial knowledge, return a empty string.
-  Only select 1 or 2 methods that are relevant to the query.
+  Avoid selecting neo4j search methods if other search methods are selected.
+  Include the spatial search method if the query contains geospatial keywords like locations or longitude.
   Examples:
   Q: What are the most viewed datasets?
 → getNeo4jSearchResults
@@ -83,11 +84,11 @@ async function routeUserQuery(userQuery) {
       return getSpatialSearchResults(userQuery);
     }
     // If query is short or looks like a list of terms (no question words)
-    const isShort = userQuery.split(/\s+/).length < 4 && !/[?]/.test(uq);
+    /*const isShort = userQuery.split(/\s+/).length < 4 && !/[?]/.test(uq);
     if (isShort) {
       console.log("Routing to Keyword search for query:", userQuery);
       return getKeywordSearchResults(userQuery);
-    }
+    }*/
     // 2. Otherwise, use LLM to decide (existing logic)
     // Load the search methods descriptions from the CSV
     const searchMethods = await loadSearchMethods();
@@ -100,7 +101,7 @@ async function routeUserQuery(userQuery) {
     //const result = await callLlamaModel(queryPayload);
     let result;
     // Call the LLM to get the response
-    if(process.env.USE_GPT==true){
+    if(process.env.USE_GPT=="true"){
       const queryPayload = createQueryPayload(
         "gpt-4o",
         "You are a routing agent for search methods",
