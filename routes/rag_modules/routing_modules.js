@@ -1,8 +1,10 @@
-import { callLlamaModel, createQueryPayload } from './llm_modules.js';
-import { getKeywordSearchResults, getSemanticSearchResults } from './search_modules.js';
+import { callLlamaModel, createQueryPayload, callGPTModel } from './llm_modules.js';
+import { getKeywordSearchResults, getSemanticSearchResults, getNeo4jSearchResults} from './search_modules.js';
 import { getSpatialSearchResults } from './spatial_search_modules.js';
 import fs from 'fs';
 import csv from 'csv-parser';
+import { get } from 'http';
+
 
 // Load search methods from CSV
 async function loadSearchMethods() {
@@ -33,13 +35,37 @@ async function generateRoutingPrompt(userQuery, searchMethods) {
     prompt += `- ${method.functionName}: ${method.description}\n`;
   });
 
-  prompt += `\nBased on the query, suggest which retrieval methods should be used (select one or more). Order them according to their relevance to the query. Respond with the method names only, separated by commas.`;
+  prompt += `\nBased on the query, suggest which retrieval methods should be used (select one or more). 
+  Order them according to their relevance to the query. 
+  Respond with the method names only, separated by commas. 
+  Select spatial search methods if the query is related to geospatial knowledge like "Chicago" or "Florida".
+  If there is no suitable search result for the query or the user is not asking about a question about the geospatial knowledge, return a empty string.
+  Only select 1 or 2 methods that are relevant to the query.
+  Only select the methods that are listed and do not invent new methods.
+  Do not include any explanations or additional text.
+  Examples:
+  Q: What are the most viewed datasets?
+→ getNeo4jSearchResults
+
+Q: Recommend related publications to this notebook.
+→ getNeo4jSearchResults
+
+Q: What is the flood map for Chicago?
+→ getSemanticSearchResults
+
+Q: Climate change datasets
+→ getKeywordSearchResults
+
+Q: Anything near Colorado?
+→ getSpatialSearchResults
+`;
 
   return prompt;
 }
 
 // Load the function implementations into a mapping object
 const functionMapping = {
+  getNeo4jSearchResults,
   getKeywordSearchResults,
   getSemanticSearchResults,
   getSpatialSearchResults,
@@ -55,13 +81,27 @@ async function routeUserQuery(userQuery) {
     const routingPrompt = await generateRoutingPrompt(userQuery, searchMethods);
 
     // Call LLM to decide which methods to use
-    const queryPayload = createQueryPayload("llama3.2:latest", "You are a routing agent for search methods.", routingPrompt);
-    const result = await callLlamaModel(queryPayload);
+    //const queryPayload = createQueryPayload("llama3.2:latest", "You are a routing agent for search methods.", routingPrompt);
+    //const result = await callLlamaModel(queryPayload);
+    let result;
+    // Call the LLM to get the response
+    if(process.env.USE_GPT==true){
+      const queryPayload = createQueryPayload(
+        "gpt-4o",
+        "You are a routing agent for search methods",
+        routingPrompt
+      );
+      result = await callGPTModel(queryPayload);
+    }else{
+      const queryPayload = createQueryPayload("llama3.2:latest", "You are a routing agent for search methods.", routingPrompt, 0.2, 1.0);
+      result = await callLlamaModel(queryPayload);
+    }
 
     // Parse LLM's response and extract selected methods
-    const selectedMethods = result?.message?.content?.trim();
-    if (!selectedMethods) {
-      throw new Error('No methods selected by LLM');
+    //const selectedMethods = result?.message?.content?.trim();
+    const selectedMethods = result;
+    if (!selectedMethods || selectedMethods[0] === 'noSearch') {
+      throw new Error('No methods selected by LLM： ' + selectedMethods);
     } else {
       console.log('Selected methods:', selectedMethods);
     }
@@ -80,8 +120,12 @@ async function routeUserQuery(userQuery) {
         results.push(...methodResults);
       }
     }
+    // Remove duplicates based on _id
+    const uniqueResults = Array.from(
+      new Map(results.map(item => [item._id, item])).values()
+    );
 
-    return results;
+    return uniqueResults;
 
   } catch (error) {
     console.error('Error routing user query:', error);

@@ -73,10 +73,13 @@ async function getBoundingBox(location) {
 export async function getSpatialSearchResults(userQuery, memoryId) {
     try {
         const locations = extractLocationFromQuery(userQuery);
+        console.log('Extracted Locations for spatial search:', locations);
         let boundingBox = null;
 
         if (locations.length > 0) {
             boundingBox = await getBoundingBox(locations[0]);
+        }else{
+            return [];  // No location found, return empty
         }
 
         // Build the base query

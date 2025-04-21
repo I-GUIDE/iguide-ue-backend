@@ -1,0 +1,6 @@
+function_name,description
+noSearch,"Select if the query is not relevant to the I-GUIDE geospatial platform or is simply a greeting such as 'Hi' or 'Hello' and does not warrant a search."
+getSemanticSearchResults,"Only select if the user is asking a domain-specific question relevant to I-GUIDE or geospatial data in more natural language (e.g., complete sentences)."
+getSpatialSearchResults,"Only select if the user specifically mentions a spatial or geographic range relevant to I-GUIDE (for example, bounding boxes, lat/long coordinates, or a named region)."
+getNeo4jSearchResults,"Select if the user query involves reasoning over the structure or properties of the knowledge graph — such as identifying popular knowledge elements (e.g., 'most viewed datasets'), filtering by metadata (e.g., tags, types, contributors), or retrieving elements based on their relationships (e.g., 'Recommend related knowledge elements to this notebook', 'What are the most popular publications related to flood risk?'). Use this when the query depends on graph traversal or property-based ranking rather than free-text relevance."
+getKeywordSearchResults,"Select only if the user query contains domain-specific keywords relevant to I-GUIDE or geospatial data but is not in a full sentence. The user is providing direct keywords or short phrases."
