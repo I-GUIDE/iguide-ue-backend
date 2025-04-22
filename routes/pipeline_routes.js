@@ -2,7 +2,7 @@ import express, { raw } from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
-import { formComprehensiveUserQuery, getOrCreateMemory, updateMemory, deleteMemory, createMemory } from './rag_modules/memory_modules.js';
+import { formComprehensiveUserQuery, getOrCreateMemory, updateMemory, deleteMemory, createMemory, updateRating } from './rag_modules/memory_modules.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
 import { getSemanticSearchResults } from './rag_modules/search_modules.js';
@@ -595,7 +595,7 @@ router.post('/llm/legacy-search', cors(), async (req, res) => {
     }
 
     // Update the chat history
-    await updateMemory(finalMemoryId, userQuery, response.answer);
+    await updateMemory(finalMemoryId, userQuery, response.message_id, response);
     res.status(200).json(response);
   } catch (error) {
     console.error("Error performing conversational search:", error);
@@ -806,7 +806,15 @@ router.post('/llm/search', searchRateLimiter, async (req, res) => {
     }
 
     sendEvent('status', { status: 'Updating memory...' });
-    await updateMemory(memoryId, userQuery, response.answer);
+    try{
+      await updateMemory(memoryId, userQuery, response.message_id, response.answer, response.elements);
+    }catch(err){
+      console.error("Error while updating memory: ", err);
+      sendEvent('error', { error: 'Error while updating memory' });
+      res.end();
+      return;
+    }
+    
     console.log("Updated memory with id ", memoryId);
 
     sendEvent('result', response);
@@ -1026,5 +1034,76 @@ Return valid JSON only:
     { "action":"answer", "content":"…",     "new_facts":{…} }
   `.trim();
   }
+/**
+ * @swagger
+ * /beta/llm/rating:
+ *   post:
+ *     summary: Attach user‑quality scores to a specific assistant message
+ *     tags: [Conversational Search]
+ *     description: |
+ *       Store six Likert (1‑5) ratings on retrieval & answer quality for the
+ *       chat turn identified by `messageId` inside the conversation `memoryId`.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - memoryId
+ *               - messageId
+ *               - relevance
+ *               - sufficiency
+ *               - accuracy
+ *               - clarity
+ *               - completeness
+ *               - trust
+ *             properties:
+ *               memoryId:     { type: string, example: "mem_1234" }
+ *               messageId:    { type: string, example: "msg_a1b2" }
+ *               relevance:    { type: integer, minimum: 1, maximum: 5 }
+ *               sufficiency:  { type: integer, minimum: 1, maximum: 5 }
+ *               accuracy:     { type: integer, minimum: 1, maximum: 5 }
+ *               clarity:      { type: integer, minimum: 1, maximum: 5 }
+ *               completeness: { type: integer, minimum: 1, maximum: 5 }
+ *               trust:        { type: integer, minimum: 1, maximum: 5 }
+ *               comment:      { type: string }
+ *     responses:
+ *       204: { description: Scores stored }
+ *       400: { description: Bad request }
+ *       404: { description: Conversation not found }
+ *       500: { description: Indexing error }
+ */
+router.options('/llm/rating', jwtCorsMiddleware);
+router.post('/llm/rating', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.UNRESTRICTED_CONTRIBUTOR), async (req, res) => {
+  const {
+    memoryId, messageId,
+    relevance, sufficiency, accuracy,
+    clarity, completeness, trust,
+    comment = ''
+  } = req.body;
 
+  /* ---------- 1. basic validation ---------------------------------------- */
+  const nums = [relevance, sufficiency, accuracy, clarity, completeness, trust];
+  const valid = nums.every(n => Number.isInteger(n) && n >= 1 && n <= 5);
+  if (!memoryId || !messageId || !valid) {
+    return res.status(400).json({ error: 'Invalid payload' });
+  }
+
+  /* ---------- 2. painless script update ---------------------------------- */
+  const ratings = { relevance, sufficiency, accuracy, clarity, completeness, trust, comment };
+
+  try {
+    await updateRating(memoryId, messageId, {
+      relevance, sufficiency, accuracy,
+      clarity, completeness, trust,
+      comment
+    });
+  
+    return res.status(204).end();
+  } catch (err) {
+    console.error('Rating‑update error:', err);
+    return res.status(500).json({ error: 'Failed to store ratings' });
+  }
+});
 export default router;

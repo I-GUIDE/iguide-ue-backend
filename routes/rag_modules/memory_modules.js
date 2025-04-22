@@ -102,30 +102,49 @@ export async function getMemory(memoryId) {
  * @param {object} response - The response to add to the chat history.
  * @returns {Promise<void>}
  */
-export async function updateMemory(memoryId, userQuery, response) {
+/**
+ * Persist an exchange + optional rating block
+ * @param {string} memoryId
+ * @param {string} userQuery
+ * @param {string} messageId
+ * @param {string} answer
+ * @param {Array<Object>} elements
+ * @param {Object} ratings   // { relevance:1…5, sufficiency:1…5, … }
+ */
+export async function updateMemory(
+  memoryId,
+  userQuery,
+  messageId,
+  answer,
+  elements,
+  ratings = null          // <- new optional arg
+) {
   try {
-    const memoryResponse = await client.get({
-      index: MEMORY_INDEX,
-      id: memoryId,
-    });
+    const { body } = await client.get({ index: MEMORY_INDEX, id: memoryId });
+    const chatHistory = body._source.chat_history || [];
 
-    const chatHistory = memoryResponse.body._source.chat_history || [];
-    chatHistory.push({ userQuery, response });
+    chatHistory.push({
+      userQuery,
+      messageId,
+      answer,
+      elements,
+      ...(ratings && { ratings })   // only attach if provided
+    });
 
     await client.update({
       index: MEMORY_INDEX,
-      id: memoryId,
-      body: {
-        doc: {
-          chat_history: chatHistory,
-        },
-      },
+      id   : memoryId,
+      body : {
+        doc: { chat_history: chatHistory }
+      }
+      // no script needed – partial merge is fine :contentReference[oaicite:1]{index=1}
     });
-  } catch (error) {
-    console.error('Error updating memory:', error);
-    throw error;
+  } catch (err) {
+    console.error('Error updating memory:', err);
+    throw err;
   }
 }
+
 /**
  * Deletes a memory document by memoryId.
  *
@@ -202,5 +221,35 @@ export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK
   } catch (error) {
     console.error('Error forming comprehensive user query:', error);
     throw error;
+  }
+}
+
+export async function updateRating(memoryId, messageId, ratings) {
+  try {
+    await client.update({
+      index: MEMORY_INDEX,
+      id   : memoryId,
+      body : {
+        script: {
+          lang: 'painless',
+          source: `
+            boolean found = false;
+            for (item in ctx._source.chat_history) {
+              if (item.messageId == params.mid) {
+                item.ratings = params.ratings;   // add or overwrite
+                found = true;
+                break;
+              }
+            }
+            if (!found) ctx.op = 'none';         // Do nothing if not found
+          `,
+          params: { mid: messageId, ratings }
+        }
+      },
+      refresh: 'false'                           // async for speed
+    });
+  } catch (err) {
+    console.error('updateRating error:', err);
+    throw err;
   }
 }
