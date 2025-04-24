@@ -175,7 +175,7 @@ export function convertGeoSpatialFields(resource) {
                         geo_json_value = convertWktToGeoJson(resource_value)
                     }
                     if (geo_json_value) {
-                        temp_resource[spatial_field] = geo_json_value
+                        temp_resource[spatial_field+"-geojson"] = geo_json_value
                     }
                 } catch (err) {
                     console.log("spatial_utils.js - convertGeoSpatialFields ", spatial_field," - error: ", err)
