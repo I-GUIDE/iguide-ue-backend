@@ -607,6 +607,7 @@ router.post('/llm/legacy-search', cors(), async (req, res) => {
  * /beta/llm/search:
  *   post:
  *     summary: Perform LLM-based search with real-time progress updates via Server-Sent Events (SSE)
+ *     tags: [Conversational Search]
  *     description: |
  *       Accepts a user query and an optional memory ID to perform a comprehensive LLM-driven search.
  *       The response is streamed using Server-Sent Events (SSE), sending progress updates and the final result.
@@ -1036,7 +1037,7 @@ Return valid JSON only:
   }
 /**
  * @swagger
- * /beta/llm/rating:
+ * /beta/llm/advanced-rating:
  *   post:
  *     summary: Attach user‑quality scores to a specific assistant message
  *     tags: [Conversational Search]
@@ -1074,8 +1075,8 @@ Return valid JSON only:
  *       404: { description: Conversation not found }
  *       500: { description: Indexing error }
  */
-router.options('/llm/rating', jwtCorsMiddleware);
-router.post('/llm/rating', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.UNRESTRICTED_CONTRIBUTOR), async (req, res) => {
+router.options('/llm/advanced-rating', jwtCorsMiddleware);
+router.post('/llm/advanced-rating', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.UNRESTRICTED_CONTRIBUTOR), async (req, res) => {
   const {
     memoryId, messageId,
     relevance, sufficiency, accuracy,
@@ -1085,7 +1086,7 @@ router.post('/llm/rating', jwtCorsMiddleware, authenticateJWT, authorizeRole(uti
 
   /* ---------- 1. basic validation ---------------------------------------- */
   const nums = [relevance, sufficiency, accuracy, clarity, completeness, trust];
-  const valid = nums.every(n => Number.isInteger(n) && n >= 1 && n <= 5);
+  const valid = nums.every(n => Number.isInteger(n) && n >= -1 && n <= 5);
   if (!memoryId || !messageId || !valid) {
     return res.status(400).json({ error: 'Invalid payload' });
   }
@@ -1100,10 +1101,92 @@ router.post('/llm/rating', jwtCorsMiddleware, authenticateJWT, authorizeRole(uti
       comment
     });
   
-    return res.status(204).end();
+    return res.status(200).json({ message: 'Start tatings stored successfully' });
   } catch (err) {
-    console.error('Rating‑update error:', err);
-    return res.status(500).json({ error: 'Failed to store ratings' });
+    console.error('Star rating‑update error:', err);
+    return res.status(500).json({ error: 'Failed to store star ratings' });
   }
 });
+/**
+ * @swagger
+ * /beta/llm/basic-rating:
+ *   post:
+ *     summary: Attach a thumbs up/down rating to a specific assistant message
+ *     tags: [Conversational Search]
+ *     description: |
+ *       Store a thumbs up (1) or thumbs down (0) rating for the chat turn identified by `messageId` inside the conversation `memoryId`.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - memoryId
+ *               - messageId
+ *               - thumbsUp
+ *             properties:
+ *               memoryId:
+ *                 type: string
+ *                 example: "mem_1234"
+ *                 description: The memory ID of the conversation.
+ *               messageId:
+ *                 type: string
+ *                 example: "msg_a1b2"
+ *                 description: The message ID of the assistant's response.
+ *               thumbsUp:
+ *                 type: integer
+ *                 enum: [0, 1]
+ *                 description: Thumbs up (1) or thumbs down (0) rating.
+ *     responses:
+ *       200:
+ *         description: Thumbs rating stored successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Thumbs rating stored successfully"
+ *       400:
+ *         description: Invalid payload
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Invalid payload"
+ *       500:
+ *         description: Failed to store thumbs rating
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Failed to store thumbs rating"
+ */
+router.options('/llm/basic-rating', jwtCorsMiddleware);
+router.post('/llm/basic-rating', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.UNRESTRICTED_CONTRIBUTOR), async (req, res) => {
+  const { memoryId, messageId, thumbsUp } = req.body;
+
+  /* ---------- 1. basic validation ---------------------------------------- */
+  if (!memoryId || !messageId || (thumbsUp !== 0 && thumbsUp !== 1)) {
+    return res.status(400).json({ error: 'Invalid payload' });
+  }
+
+  /* ---------- 2. painless script update ---------------------------------- */
+  try {
+    await updateRating(memoryId, messageId, { thumbsUp });
+    return res.status(200).json({ message: 'Thumbs rating stored successfully' });
+  } catch (err) {
+    console.error('Thumbs-rating update error:', err);
+    return res.status(500).json({ error: 'Failed to store thumbs rating' });
+  }
+});
+
 export default router;
