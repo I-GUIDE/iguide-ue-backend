@@ -2,7 +2,7 @@ import express, { raw } from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
-import { formComprehensiveUserQuery, getOrCreateMemory, updateMemory, deleteMemory, createMemory } from './rag_modules/memory_modules.js';
+import { formComprehensiveUserQuery, getOrCreateMemory, updateMemory, deleteMemory, createMemory, updateRating } from './rag_modules/memory_modules.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
 import { getSemanticSearchResults } from './rag_modules/search_modules.js';
@@ -10,7 +10,7 @@ import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_mod
 import { callGPTModel, callLlamaModel } from './rag_modules/llm_modules.js';
 import { routeUserQuery } from './rag_modules/routing_modules.js';
 import * as utils from '../utils.js';
-import { extractJsonFromLLMReturn, formatDocsJson, makeSearchRateLimiter} from './rag_modules/rag_utils.js';
+import { extractJsonFromLLMReturn, formatDocsJson, makeSearchRateLimiter, safeParseLLMJson} from './rag_modules/rag_utils.js';
 import { generateAnswer } from './rag_modules/generation_module.js';
 import { restrictToUIUC } from '../ip_policy.js';
 import {createQueryPayload} from './rag_modules/llm_modules.js';
@@ -135,7 +135,7 @@ async function handleUserQuery(userQuery, comprehensiveUserQuery, checkGeneratio
     count: relevantDocuments.length,
   };
 }
-export async function handleIterativeQuery(
+/*export async function handleIterativeQuery(
   userQuery,
   comprehensiveUserQuery,
   checkGenerationQuality,
@@ -183,7 +183,8 @@ Answer the user's question by chaining searches **only when truly necessary**.
    • {"action":"search","search_query":"<next query>"}
 
 ### Constraints
-- Never propose a search that merely rephrases an earlier one.  
+- If you discover a specific name, title, or value for something in the question, **use that specific fact in your next search** instead of vague terms. (E.g., replace "the author of X" with "Dr. Jane Smith" if learned.)
+- Never propose a search that merely repeats a previous one without new details.
 - Answer concisely; cite facts from the documents implicitly (no URLs needed).  
 - The Scratchpad must never appear in the JSON.`;
 
@@ -337,8 +338,8 @@ Answer the user's question by chaining searches **only when truly necessary**.
     count: relevantDocuments.length,
     retrievalSteps // Provide the array of search steps for context
   };
-}
-function buildIterativePrompt(userQuery, docsSoFar, retrievalSteps) {
+}*/
+/*function buildIterativePrompt(userQuery, docsSoFar, retrievalSteps) {
   const stepsText = retrievalSteps.map((step, index) => {
     const docTitles = step.results
       .map((doc, i) => `(${i + 1}) ${doc._source.title || "Untitled"}`)
@@ -379,7 +380,7 @@ ${docsText}
 
 REMINDER: absolutely no extra keys or text outside the JSON.
 `.trim();
-}
+}*/
 
 async function handleUserQueryWithProgress(
   userQuery,
@@ -594,7 +595,7 @@ router.post('/llm/legacy-search', cors(), async (req, res) => {
     }
 
     // Update the chat history
-    await updateMemory(finalMemoryId, userQuery, response.answer);
+    await updateMemory(finalMemoryId, userQuery, response.message_id, response);
     res.status(200).json(response);
   } catch (error) {
     console.error("Error performing conversational search:", error);
@@ -606,6 +607,7 @@ router.post('/llm/legacy-search', cors(), async (req, res) => {
  * /beta/llm/search:
  *   post:
  *     summary: Perform LLM-based search with real-time progress updates via Server-Sent Events (SSE)
+ *     tags: [Conversational Search]
  *     description: |
  *       Accepts a user query and an optional memory ID to perform a comprehensive LLM-driven search.
  *       The response is streamed using Server-Sent Events (SSE), sending progress updates and the final result.
@@ -781,7 +783,7 @@ router.post('/llm/search', searchRateLimiter, async (req, res) => {
       return;
     }
     let response = null;
-    if(process.env.MULTIHOP_RAG==true){
+    if(process.env.MULTIHOP_RAG=="true"){
       sendEvent('status', { status: 'Iterative retrieval' });
       console.log("Iterative retrieval for", comprehensiveQuery);
       response = await handleIterativeQuery(userQuery, comprehensiveQuery, false, (progress) => {
@@ -805,7 +807,15 @@ router.post('/llm/search', searchRateLimiter, async (req, res) => {
     }
 
     sendEvent('status', { status: 'Updating memory...' });
-    await updateMemory(memoryId, userQuery, response.answer);
+    try{
+      await updateMemory(memoryId, userQuery, response.message_id, response.answer, response.elements);
+    }catch(err){
+      console.error("Error while updating memory: ", err);
+      sendEvent('error', { error: 'Error while updating memory' });
+      res.end();
+      return;
+    }
+    
     console.log("Updated memory with id ", memoryId);
 
     sendEvent('result', response);
@@ -816,6 +826,367 @@ router.post('/llm/search', searchRateLimiter, async (req, res) => {
   }
 });
 
+/* ──────────────────────────────────────────────────────────────────────────────
+   1.  Generic helpers
+   ─────────────────────────────────────────────────────────────────────────── */
 
+
+/** Ask the LLM to pull any new concrete facts from top snippets. */
+async function autoExtractFacts(question, docs, known = {}) {
+  if (docs.length === 0) return {};
+  const sys = "Extract concrete facts (names, numbers, IDs, percentages…) that help answer the question.";
+  const user = `Question: "${question}"
+Known facts: ${JSON.stringify(known)}
+Snippet:
+"""${docs[0]._source.contents.slice(0, 400)}"""
+Return ONLY a JSON object of new facts.`;
+  const txt = await callLlamaModel(createQueryPayload("llama3:instruct", sys, user));
+  return safeParseLLMJson(txt);
+}
+
+/** Replace $placeholders & pronouns with concrete facts. */
+async function resolveReferences(query, facts) {
+  Object.entries(facts).forEach(([k, v]) => {
+    query = query.replace(new RegExp("\\$" + k, "gi"), v);
+  });
+  if (/\b(they|their|his|her|its|this|that|those|these)\b/i.test(query)) {
+    const sys = "Resolve pronouns using the given facts. Return ONLY the rewritten query.";
+    const user = `Facts: ${JSON.stringify(facts)}\nQuery: "${query}"`;
+    query = await callLlamaModel(createQueryPayload("llama3:instruct", sys, user));
+  }
+  return query.trim();
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   2.  Iterative retrieval & reasoning
+   ─────────────────────────────────────────────────────────────────────────── */
+
+export async function handleIterativeQuery(
+  userQuery,
+  comprehensiveUserQuery,
+  checkGenerationQuality,
+  progressCallback = () => {}
+) {
+  progressCallback(`Starting iterative retrieval for: "${comprehensiveUserQuery}"`);
+  console.log("Starting iterative retrieval for", comprehensiveUserQuery);
+
+  const retrievalSteps = [];
+  const MAX_ITERATIONS = 5;
+
+  // State object with working memory
+  const state = {
+    question: userQuery,
+    augmentedQuery: comprehensiveUserQuery,
+    documents: [],
+    knowledge: {},
+  };
+
+  let finalAnswerContent = "";
+  for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
+    progressCallback(`Iteration #${iteration}: reasoning`);
+
+    const iterationPrompt = buildIterativePrompt(
+      userQuery,
+      state.documents,
+      retrievalSteps,
+      state.knowledge
+    );
+
+    const systemPrompt = `
+You are a multi‑step retrieval‑and‑reasoning agent.
+
+### Contract
+Return valid JSON only:
+  {"action":"search","search_query":"…","new_facts":{…}}
+  or
+  {"action":"answer","content":"…","new_facts":{…}}
+
+### Rules
+1. Think in a hidden Scratch‑pad (never shown to user).
+2. If you learn any concrete value (name, %, id, date…), add it to "new_facts".
+3. When facts exist, use them in the next search instead of vague phrases.
+4. Stop searching when the question is fully answered and supported by ≥1 doc.
+5. Keep answers ≤1–2 sentences.
+6. Every key *and* every string value **MUST** be wrapped in double quotes.
+   Example: { "name": "Finn Roberts" }   NOT  { "name": Finn Roberts }.
+7. Avoid doing new searches that are just rephrased versions of previous ones. For example, if the previous search is "Works from Alice" then you should avoid searching for "Alice's works" or "Alice's publications". Instead, you should go for a follow-up search if there is unknown facts or choose to answer.
+`;
+
+    const raw = process.env.USE_GPT === true
+      ? await callGPTModel(createQueryPayload("gpt-4o", systemPrompt, iterationPrompt))
+      : await callLlamaModel(createQueryPayload("llama3:instruct", systemPrompt, iterationPrompt));
+
+    console.log("LLM Iteration Response:", raw);
+
+    let act;
+    try { act = safeParseLLMJson(raw); }
+    catch (e) { console.warn("Bad JSON:", e); finalAnswerContent = raw; break; }
+
+    // merge LLM‑reported facts
+    if (act.new_facts) Object.assign(state.knowledge, act.new_facts);
+
+    if (act.action === "search") {
+      let nextQ = await resolveReferences(act.search_query || "", state.knowledge);
+      progressCallback(`Searching: "${nextQ}"`);
+      const newResults = await routeUserQuery(nextQ);
+      const newlyRelevant = await gradeDocuments(newResults, userQuery);
+
+      // auto‑extract facts (fail‑safe)
+      const extracted = await autoExtractFacts(userQuery, newlyRelevant, state.knowledge);
+      Object.assign(state.knowledge, extracted);
+
+      // bookkeeping
+      retrievalSteps.push({ searchQuery: nextQ, results: newlyRelevant });
+      state.documents.push(...newlyRelevant);
+
+      // dedupe + keep top‑10 by score
+      const uniq = new Map();
+      state.documents.forEach(d => uniq.set(d._id, d));
+      state.documents = [...uniq.values()].sort((a, b) => b._score - a._score).slice(0, 10);
+      continue;                       // next iteration
+    }
+
+    if (act.action === "answer") { finalAnswerContent = act.content; break; }
+
+    // fallback: treat whatever came as final
+    finalAnswerContent = raw; break;
+  }
+
+  /* ----------- generate final answer (uses your existing generateAnswer) --- */
+  progressCallback("Generating final answer");
+  const generationState = await generateAnswer({
+    question: state.question,
+    augmentedQuery: state.augmentedQuery,
+    documents: state.documents,
+  });
+
+  /* ------------ optional quality check (unchanged) ------------------------- */
+  if (checkGenerationQuality) {
+    let verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
+    let retry = 0;
+    while (verdict !== "useful" && retry < 3) {
+      retry++;
+      generationState.generation = (await generateAnswer(generationState)).generation;
+      verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
+    }
+  }
+
+  return {
+    answer: generationState.generation || finalAnswerContent || "No answer",
+    message_id: uuidv4(),
+    elements: state.documents.map(d => ({
+      _id: d._id,
+      _score: d._score,
+      contributor: d._source.contributor,
+      contents: d._source.contents,
+      "resource-type": d._source["resource-type"],
+      title: d._source.title,
+      authors: d._source.authors || [],
+      tags: d._source.tags || [],
+      "thumbnail-image": d._source["thumbnail-image"],
+    })),
+    count: state.documents.length,
+    retrievalSteps,
+  };
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   3.  Prompt builder (now shows knowledge)
+   ─────────────────────────────────────────────────────────────────────────── */
+
+   function buildIterativePrompt(userQuery, docs, steps, knowledge) {
+    const stepTxt = steps.map((s, i) =>
+      `Step #${i + 1}  →  searched: "${s.searchQuery}"  •  docs: ${s.results.length}`
+    ).join("\n");
+  
+    const docTxt = docs.map((d, i) => {
+      const src = d._source || {};
+      const authors = Array.isArray(src.authors) ? src.authors.join("; ") : src.authors || "";
+      const tags    = Array.isArray(src.tags)    ? src.tags.join(", ")   : src.tags   || "";
+      return [
+        `Doc #${i + 1}`,
+        `  title      : ${src.title || "Untitled"}`,
+        `  authors    : ${authors || "(none)"}`,
+        `  contributor: ${src.contributor || "(unknown)"}`,
+        `  tags       : ${tags || "(none)"}`,
+        `  contents    : ${(src.contents || "").slice(0, 160)}…`
+      ].join("\n");
+    }).join("\n\n");
+  
+    return `
+  User question: "${userQuery}"
+  
+  Known facts so far:
+  ${JSON.stringify(knowledge, null, 2)}
+  
+  Previous steps:
+  ${stepTxt || "(none)"}
+  
+  Current documents:
+  ${docTxt || "(none)"}
+  
+  /*** Scratch‑pad (hidden from user) ******************************************
+   * Write your chain‑of‑thought here. DO NOT include braces in the scratch‑pad *
+   *****************************************************************************/
+  
+  REMINDER: After the scratch‑pad output ONLY one JSON object:
+    { "action":"search", "search_query":"…", "new_facts":{…} }
+    or
+    { "action":"answer", "content":"…",     "new_facts":{…} }
+  `.trim();
+  }
+/**
+ * @swagger
+ * /beta/llm/advanced-rating:
+ *   post:
+ *     summary: Attach user‑quality scores to a specific assistant message
+ *     tags: [Conversational Search]
+ *     description: |
+ *       Store six Likert (1‑5) ratings on retrieval & answer quality for the
+ *       chat turn identified by `messageId` inside the conversation `memoryId`.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - memoryId
+ *               - messageId
+ *               - relevance
+ *               - sufficiency
+ *               - accuracy
+ *               - clarity
+ *               - completeness
+ *               - trust
+ *             properties:
+ *               memoryId:     { type: string, example: "mem_1234" }
+ *               messageId:    { type: string, example: "msg_a1b2" }
+ *               relevance:    { type: integer, minimum: 1, maximum: 5 }
+ *               sufficiency:  { type: integer, minimum: 1, maximum: 5 }
+ *               accuracy:     { type: integer, minimum: 1, maximum: 5 }
+ *               clarity:      { type: integer, minimum: 1, maximum: 5 }
+ *               completeness: { type: integer, minimum: 1, maximum: 5 }
+ *               trust:        { type: integer, minimum: 1, maximum: 5 }
+ *               comment:      { type: string }
+ *     responses:
+ *       204: { description: Scores stored }
+ *       400: { description: Bad request }
+ *       404: { description: Conversation not found }
+ *       500: { description: Indexing error }
+ */
+router.options('/llm/advanced-rating', jwtCorsMiddleware);
+router.post('/llm/advanced-rating', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.UNRESTRICTED_CONTRIBUTOR), async (req, res) => {
+  const {
+    memoryId, messageId,
+    relevance, sufficiency, accuracy,
+    clarity, completeness, trust,
+    comment = ''
+  } = req.body;
+
+  /* ---------- 1. basic validation ---------------------------------------- */
+  const nums = [relevance, sufficiency, accuracy, clarity, completeness, trust];
+  const valid = nums.every(n => Number.isInteger(n) && n >= -1 && n <= 5);
+  if (!memoryId || !messageId || !valid) {
+    return res.status(400).json({ error: 'Invalid payload' });
+  }
+
+  /* ---------- 2. painless script update ---------------------------------- */
+  const ratings = { relevance, sufficiency, accuracy, clarity, completeness, trust, comment };
+
+  try {
+    await updateRating(memoryId, messageId, {
+      relevance, sufficiency, accuracy,
+      clarity, completeness, trust,
+      comment
+    });
+  
+    return res.status(200).json({ message: 'Start tatings stored successfully' });
+  } catch (err) {
+    console.error('Star rating‑update error:', err);
+    return res.status(500).json({ error: 'Failed to store star ratings' });
+  }
+});
+/**
+ * @swagger
+ * /beta/llm/basic-rating:
+ *   post:
+ *     summary: Attach a thumbs up/down rating to a specific assistant message
+ *     tags: [Conversational Search]
+ *     description: |
+ *       Store a thumbs up (1) or thumbs down (0) rating for the chat turn identified by `messageId` inside the conversation `memoryId`.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - memoryId
+ *               - messageId
+ *               - thumbsUp
+ *             properties:
+ *               memoryId:
+ *                 type: string
+ *                 example: "mem_1234"
+ *                 description: The memory ID of the conversation.
+ *               messageId:
+ *                 type: string
+ *                 example: "msg_a1b2"
+ *                 description: The message ID of the assistant's response.
+ *               thumbsUp:
+ *                 type: integer
+ *                 enum: [0, 1]
+ *                 description: Thumbs up (1) or thumbs down (0) rating.
+ *     responses:
+ *       200:
+ *         description: Thumbs rating stored successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Thumbs rating stored successfully"
+ *       400:
+ *         description: Invalid payload
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Invalid payload"
+ *       500:
+ *         description: Failed to store thumbs rating
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Failed to store thumbs rating"
+ */
+router.options('/llm/basic-rating', jwtCorsMiddleware);
+router.post('/llm/basic-rating', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.UNRESTRICTED_CONTRIBUTOR), async (req, res) => {
+  const { memoryId, messageId, thumbsUp } = req.body;
+
+  /* ---------- 1. basic validation ---------------------------------------- */
+  if (!memoryId || !messageId || (thumbsUp !== 0 && thumbsUp !== 1)) {
+    return res.status(400).json({ error: 'Invalid payload' });
+  }
+
+  /* ---------- 2. painless script update ---------------------------------- */
+  try {
+    await updateRating(memoryId, messageId, { thumbsUp });
+    return res.status(200).json({ message: 'Thumbs rating stored successfully' });
+  } catch (err) {
+    console.error('Thumbs-rating update error:', err);
+    return res.status(500).json({ error: 'Failed to store thumbs rating' });
+  }
+});
 
 export default router;

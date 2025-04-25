@@ -16,6 +16,7 @@ export async function getKeywordSearchResults(userQuery) {
   try {
     const response = await client.search({
       index: 'neo4j-elements-knn' || process.env.OPENSEARCH_INDEX,
+      size: 5,
       body: {
         query: { match: { contents: userQuery } },
       },
@@ -50,7 +51,7 @@ export async function getSemanticSearchResults(userQuery) {
     const response = await client.search({
       index: 'neo4j-elements-knn' || process.env.OPENSEARCH_INDEX,
       body: {
-        size: 15,
+        size: 5,
         query: {
           knn: { 'contents-embedding': { vector: embedding, k: 3 } },
         },

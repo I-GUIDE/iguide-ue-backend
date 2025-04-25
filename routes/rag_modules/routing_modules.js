@@ -40,7 +40,8 @@ async function generateRoutingPrompt(userQuery, searchMethods) {
   Respond with the method names only, separated by commas. 
   Select spatial search methods if the query is related to geospatial knowledge like "Chicago" or "Florida".
   If there is no suitable search result for the query or the user is not asking about a question about the geospatial knowledge, return a empty string.
-  Only select 1 or 2 methods that are relevant to the query.
+  Avoid selecting neo4j search methods if other search methods are selected.
+  Include the spatial search method if the query contains geospatial keywords like locations or longitude.
   Only select the methods that are listed and do not invent new methods.
   Do not include any explanations or additional text.
   Examples:
@@ -74,6 +75,24 @@ const functionMapping = {
 // Route the user query dynamically based on LLM's selection
 async function routeUserQuery(userQuery) {
   try {
+    console.log("Routing user query:", userQuery);
+    // 1. Keyword-based routing overrides
+    const uq = userQuery.toLowerCase();
+    if (/(most viewed|top clicked|most popular|related)/.test(uq)) {
+      console.log("Routing to Neo4j for query:", userQuery);
+      return getNeo4jSearchResults(userQuery);
+    }
+    if (/(\\bnear\\b|latitude|longitude|bounding box)/.test(uq)) {
+      console.log("Routing to Spatial search for query:", userQuery);
+      return getSpatialSearchResults(userQuery);
+    }
+    // If query is short or looks like a list of terms (no question words)
+    /*const isShort = userQuery.split(/\s+/).length < 4 && !/[?]/.test(uq);
+    if (isShort) {
+      console.log("Routing to Keyword search for query:", userQuery);
+      return getKeywordSearchResults(userQuery);
+    }*/
+    // 2. Otherwise, use LLM to decide (existing logic)
     // Load the search methods descriptions from the CSV
     const searchMethods = await loadSearchMethods();
 
@@ -85,7 +104,7 @@ async function routeUserQuery(userQuery) {
     //const result = await callLlamaModel(queryPayload);
     let result;
     // Call the LLM to get the response
-    if(process.env.USE_GPT==true){
+    if(process.env.USE_GPT=="true"){
       const queryPayload = createQueryPayload(
         "gpt-4o",
         "You are a routing agent for search methods",

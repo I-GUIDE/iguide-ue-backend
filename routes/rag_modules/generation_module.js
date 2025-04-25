@@ -10,7 +10,7 @@ export async function generateAnswer(state) {
   
       // Pull out needed fields from state with default values if needed
       const { question, augmentedQuery, documents, loop_step = 0 } = state;
-      console.log("Question:", question);
+      //console.log("Question:", question);
   
       // Early return if question is empty or undefined
       if (!question) {
@@ -63,6 +63,7 @@ When you answer:
       // Create the payload - incorporate temperature and top_p if your createQueryPayload supports them
       let llmResponse;
       if(process.env.USE_GPT==true){
+        console.log("Using GPT model for generation");
         const payload = createQueryPayload(
           "gpt-4o",
           systemPrompt,
@@ -72,6 +73,7 @@ When you answer:
         // Call the LLM to get the response
         llmResponse = await callGPTModel(payload);
       }else{
+        console.log("Using Llama model for generation");
         const payload = createQueryPayload(
           "llama3:instruct",
           systemPrompt,
@@ -100,4 +102,28 @@ When you answer:
         loop_step: (state.loop_step || 0) + 1,
       };
     }
+  }
+
+  async function extractFactsFromDocs(question, docs) {
+    const docsContent = docs.map(d => d._source.contents).join("\n");
+    const prompt = `
+      Below are documents containing information. 
+      Question: "${question}"
+      Extract the specific facts from the documents that are needed to answer the question. 
+      - List them as bullet points or a JSON list.
+      - Only include factual statements from the docs, no extra commentary.
+    `;
+    const response = await callLLM(prompt);
+    return parseFacts(response);  // parse the LLM output into an array of facts
+  }
+  async function generateAnswerFromFacts(question, facts) {
+    const factsList = facts.map(f => `- ${f}`).join("\n");
+    const prompt = `
+      Question: "${question}"
+      Here are relevant facts:
+      ${factsList}
+      Using ONLY these facts, answer the question in a complete sentence or two.
+    `;
+    const response = await callLLM(prompt);
+    return response;
   }
