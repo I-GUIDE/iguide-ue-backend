@@ -148,7 +148,7 @@ Contributor information must be retrieved via an OPTIONAL MATCH: (c:Contributor)
   
     try {
       const result = await session.run(query);
-      return result.records.map(record => {
+      return result.records.slice(0, 10).map(record => {
         const doc = record.get('doc');
         return {
           _id: doc._id,
