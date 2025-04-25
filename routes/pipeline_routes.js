@@ -398,6 +398,8 @@ async function handleUserQueryWithProgress(
     console.log("Grading " + searchResults.length + " search results");
     relevantDocuments = await gradeDocuments(searchResults, userQuery);
   }
+  relevantDocuments.sort((a, b) => b._score - a._score);
+  relevantDocuments = relevantDocuments.slice(0, 12);
 
   if (relevantDocuments.length === 0) {
     progressCallback("No relevant knowledge element found");
