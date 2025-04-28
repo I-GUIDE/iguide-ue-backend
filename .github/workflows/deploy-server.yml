@@ -48,4 +48,8 @@ jobs:
       - name: Start Server
         run: |
           cd ${{secrets.SOURCE_DIR_PATH}}
-          sh ${{secrets.REPO_START_FILE}}
+          LOG_FILE_NAME=${{secrets.SOURCE_DIR_PATH}} + "/server.log"
+          echo "Starting server ..."
+          node ${{secrets.REPO_START_FILE}} > "${LOG_FILE_NAME}" 2>&1 &
+          BACKGROUND_ID = $!
+           echo "Server started with PID: ${BACKGROUND_PID}"
