@@ -41,8 +41,8 @@ jobs:
           cd ${{secrets.SOURCE_DIR_PATH}}
           if [ -f "server.log" ]; then
               ROLLOVER_LOG_FILE_NAME=server-$(date +"%Y-%m-%dT%H:%M:%S").log
-              mv server.log $ROLLOVER_LOG_FILE_NAME
-              echo "Server log rolled over to $ROLLOVER_LOG_FILE_NAME"
+              mv server.log ${ROLLOVER_LOG_FILE_NAME}
+              echo "Server log rolled over to ${ROLLOVER_LOG_FILE_NAME}"
           fi
 
       - name: Start Server
@@ -50,6 +50,6 @@ jobs:
           cd ${{secrets.SOURCE_DIR_PATH}}
           LOG_FILE_NAME=server.log
           echo "Starting server ..."
-          node server.js > $LOG_FILE_NAME 2>&1 &
+          node server.js > "${LOG_FILE_NAME}" 2>&1 &
           BACKGROUND_PID=$!
-          echo "Server started with PID: $BACKGROUND_PID"
+          echo "Server started with PID: ${BACKGROUND_PID}"
