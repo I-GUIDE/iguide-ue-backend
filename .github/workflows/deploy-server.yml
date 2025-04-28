@@ -14,10 +14,12 @@ jobs:
     runs-on: self-hosted  # Runs on self-hosted runner
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch }}  # Checkout specified branch
+      - name: Checkout latest code
+        run: |  # Checkout specified branch
+          cd ${{secrets.SOURCE_DIR_PATH}}
+          git fetch origin
+          git checkout ${{ github.event.inputs.branch }}
+          git pull origin ${{ github.event.inputs.branch }}
 
       - name: Stop Existing Server (if running)
         run: |
