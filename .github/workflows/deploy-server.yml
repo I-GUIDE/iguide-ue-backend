@@ -23,6 +23,7 @@ jobs:
 
       - name: Stop Existing Server (if running)
         run: |
+          cd ${{secrets.SOURCE_DIR_PATH}}
           if [ -f "server.log" ]; then
               sh stop.sh
               echo "Existing server stopped."
@@ -30,8 +31,14 @@ jobs:
               echo "No existing server found."
           fi
 
+      - name: Install dependencies
+        run: |
+          cd ${{secrets.SOURCE_DIR_PATH}}
+          npm install
+
       - name: Roll Over Server Log
         run: |
+          cd ${{secrets.SOURCE_DIR_PATH}}
           if [ -f "server.log" ]; then
               ROLLOVER_LOG_FILE_NAME=server-$(date +"%Y-%m-%dT%H:%M:%S").log
               mv server.log $ROLLOVER_LOG_FILE_NAME
@@ -40,6 +47,7 @@ jobs:
 
       - name: Start Server
         run: |
+          cd ${{secrets.SOURCE_DIR_PATH}}
           LOG_FILE_NAME=server.log
           echo "Starting server ..."
           node server.js > $LOG_FILE_NAME 2>&1 &
