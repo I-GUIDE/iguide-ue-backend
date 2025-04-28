@@ -48,4 +48,4 @@ jobs:
       - name: Start Server
         run: |
           cd ${{secrets.SOURCE_DIR_PATH}}
-          sh start.sh
+          sh ${{secrets.REPO_START_FILE}}
