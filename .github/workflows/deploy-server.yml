@@ -48,8 +48,4 @@ jobs:
       - name: Start Server
         run: |
           cd ${{secrets.SOURCE_DIR_PATH}}
-          LOG_FILE_NAME=server.log
-          echo "Starting server ..."
-          node server.js > "${LOG_FILE_NAME}" 2>&1 &
-          BACKGROUND_PID=$!
-          echo "Server started with PID: ${BACKGROUND_PID}"
+          sh start.sh
