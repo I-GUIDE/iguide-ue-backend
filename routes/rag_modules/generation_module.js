@@ -75,7 +75,7 @@ When you answer:
       }else{
         console.log("Using Llama model for generation");
         const payload = createQueryPayload(
-          "llama3:instruct",
+          "qwen2.5:7b-instruct",
           systemPrompt,
           userPrompt
         );
