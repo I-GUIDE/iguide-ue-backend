@@ -838,12 +838,15 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 			'thumbnail-image': updates['thumbnail-image']['original'],
 			// Spatial-temporal properties
 			'spatial-coverage': updates['spatial-coverage'],
-			'spatial-geometry': geo_spatial_updates['spatial-geometry'],
-			'spatial-bounding-box': geo_spatial_updates['spatial-bounding-box'],
-			'spatial-centroid': geo_spatial_updates['spatial-centroid'],
+			'spatial-geometry': updates['spatial-geometry'],
+			'spatial-geometry-geojson': geo_spatial_updates['spatial-geometry-geojson'],
+			'spatial-bounding-box': updates['spatial-bounding-box'],
+			'spatial-bounding-box-geojson': geo_spatial_updates['spatial-bounding-box-geojson'],
+			'spatial-centroid': updates['spatial-centroid'],
+			'spatial-centroid-geojson': geo_spatial_updates['spatial-centroid-geojson'],
 			'spatial-georeferenced': updates['spatial-georeferenced'],
 			'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
-			'spatial-index-year': updates['spatial-index-year']
+			'spatial-index-year': updates['spatial-index-year'],
 			// Type and contributor should never be updated
 		}
 		switch (visibility_action) {
