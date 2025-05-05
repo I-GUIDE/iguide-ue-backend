@@ -112,26 +112,50 @@ function parseLineString(line_string_str) {
  */
 function parsePolygon(polygon_str) {
   const sanitized = polygon_str
-    .replace(/^POLYGON\s*/i, '')
-    .replace(/(\()|(\)$)/g, '')
-    .trim();
+      .replace(/^POLYGON\s*\(\(/i, '')
+      .replace(/\)\)$/, '')
+      .trim();
 
-  const coord_pairs = sanitized.split(/,\s*/).map(pair => {
-    const coords = pair.trim().split(/\s+/).map(parseFloat);
-    if (coords.length !== 2 || coords.some(isNaN)) {
-      throw new Error(`Invalid polygon coordinate pair: ${pair}`);
-    }
-    return coords;
-  });
+  const rings = [];
+  let current_ring = [];
 
-  // Close the polygon if not already closed
-  if (coord_pairs.length > 0 && JSON.stringify(coord_pairs[0]) !== JSON.stringify(coord_pairs[coord_pairs.length - 1])) {
-    coord_pairs.push([...coord_pairs[0]]);
+  let tokens = sanitized.split(",");
+
+  for (let i = 0; i < tokens.length; i++) {
+      const pair = tokens[i].trim();
+
+      //check for ring boundary
+      if (pair.includes('(')) {
+          //start a new ring
+          if (current_ring?.length > 0) {
+              rings.push(current_ring);
+          }
+          current_ring = [];
+      }
+
+      const coords = pair.replace(/[()]/g, '').trim().split(/\s+/).map(parseFloat);
+      if (coords?.length !== 2 || coords.some(isNaN)) {
+          throw new Error(`Invalid Coordinates: ${pair}`);
+      }
+      current_ring.push([coords[0], coords[1]]);
+  }
+
+  //Push the last ring
+  if (current_ring?.length > 0) {
+      rings.push(current_ring);
+  }
+
+  for (let ring of rings) {
+      const first_coord = ring[0];
+      const last_coord = ring[ring?.length - 1];
+      if (first_coord[0] !== last_coord[0] || first_coord[1] !== last_coord[1]) {
+          ring.push([...first_coord]);
+      }
   }
 
   return {
     type: 'Polygon',
-    coordinates: [coord_pairs]
+    coordinates: rings
   };
 }
 
@@ -143,16 +167,33 @@ function parsePolygon(polygon_str) {
 function parseMultiPoint(multi_point_str) {
     let sanitized = multi_point_str
         .replace(/^MULTIPOINT\s*/i, '')
-        .replace(/[()]/g, "")         // remove all parentheses
         .trim();                      // trim whitespace
+    // Detect if the format is nested (e.g., ((x y), (x y)))
+    const isNested = sanitized.startsWith('(') && sanitized.includes('(') && sanitized.includes(')');
 
-    const coords = sanitized.split(",").map(coord_pair => {
-        const [x, y] = coord_pair.trim().split(/\s+/).map(parseFloat);
-        if (isNaN(x) || isNaN(y)) {
-            throw new Error(`Invalid coordinate pair: ${coord_pair}`);
-        }
-        return [x,y];
-    });
+    let coords = [];
+    if (isNested) {
+        // Strip outer parens
+        sanitized = sanitized.replace(/^\(\s*/, '').replace(/\s*\)$/, '');
+
+        // Split into point strings
+        const pointStrings = sanitized.split(/\)\s*,\s*\(/);
+        coords = pointStrings.map(pt => {
+            const pair = pt.replace(/[()]/g, '').trim().split(/\s+/).map(parseFloat);
+            if (pair.length !== 2 || pair.some(isNaN)) {
+                throw new Error(`Invalid coordinate pair: ${pt}`);
+            }
+            return pair;
+        });
+    } else {
+         const coords = sanitized.split(",").map(coord_pair => {
+            const [x, y] = coord_pair.trim().split(/\s+/).map(parseFloat);
+            if (isNaN(x) || isNaN(y)) {
+                throw new Error(`Invalid coordinate pair: ${coord_pair}`);
+            }
+            return [x,y];
+        });
+    }
 
     return {
         type: 'MultiPoint',
@@ -198,40 +239,50 @@ function parseMultiPolygon(multi_polygon_str) {
   // Sanitize input
   const sanitized = multi_polygon_str
     .replace(/^MULTIPOLYGON\s*/i, '')
-    .replace(/\)\s*,\s*\(/g, '|||') // Temporary separator
-    .replace(/[()]/g, '')
     .trim();
 
-  // Split into individual polygons
-  const polygons = sanitized.split('|||').filter(p => p);
-  const coordinates = [];
+  const polygons = [];
+  let current = '';
+  let depth = 0;
 
-  for (const poly_str of polygons) {
-    // Split into rings (outer and potential holes)
-    const rings = poly_str.split(/\),\s*\(/).map(ring => {
-      const coord_pairs = ring.split(/,\s*/).map(pair => {
-        const [lon, lat] = pair.trim().split(/\s+/);
-        const lonNum = parseFloat(lon);
-        const latNum = parseFloat(lat);
-
-        if (isNaN(lonNum) || isNaN(latNum)) {
-          throw new Error(`Invalid coordinate pair: ${pair}`);
-        }
-        return [lonNum, latNum];
-      });
-
-      // Close the ring if not closed
-      if (coord_pairs.length > 0 &&
-          !(coord_pairs[0][0] === coord_pairs[coord_pairs.length-1][0] &&
-            coord_pairs[0][1] === coord_pairs[coord_pairs.length-1][1])) {
-        coord_pairs.push([...coord_pairs[0]]);
+  for (let i = 0; i < sanitized.length; i++) {
+      const char = sanitized[i]
+      if (char === '(') {
+          depth++;
+      } else if (char === ')') {
+          depth--;
       }
+      current = current + char;
 
-      return coord_pairs;
-    });
-
-    coordinates.push(rings);
+      if (depth === 0 && current.trim()) {
+          polygons.push(current.trim());
+          current = '';
+      }
   }
+
+  const coordinates = polygons.map(polygon_str => {
+      const cleaned = polygon_str.replace(/^\(\(+/, '').replace(/\)+$/, '').trim();
+
+      //split into rings
+      const rings = cleaned.split(/\),\s*\(/).map(ring_str => {
+          const coord_pairs = ring_str.split(',').map(pair => {
+              const [lon, lat] = pair.trim().split(/\s+/).map(parseFloat);
+              if (isNaN(lon) || isNaN(lat)) {
+                  throw new Error(`Invalid coordinate pair: ${pair}`);
+              }
+              return [lon, lat];
+          });
+
+          //ensure ring is closed
+          const first_coord = coord_pairs[0];
+          const last_coord = coord_pairs[coord_pairs?.length - 1];
+          if (first_coord[0] !== last_coord[0] || first_coord[1] !== last_coord[1]) {
+              coord_pairs.push([...first_coord]);
+          }
+          return coord_pairs;
+      });
+      return rings;
+  });
 
   return {
     type: 'MultiPolygon',
