@@ -18,7 +18,7 @@ class Neo4jInstance:
             return result
 
 def initialize_environment():
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 3:
         print("Not enough arguments to run the script.")
         sys.exit(1)
 
@@ -96,5 +96,8 @@ if __name__ == '__main__':
     OPENSEARCH_INDEX = os.getenv("OPENSEARCH_INDEX", "neo4j-elements-dev")
     private_deleted_ids = fetch_existing_ids(os_client, OPENSEARCH_INDEX, private_element_ids)
     print("private element ids to be deleted: ", private_deleted_ids)
-    remove_ids_from_os(os_client, private_deleted_ids)
-    print("OpenSearch Client process completed!")
+    if sys.argv[2] == "delete":
+        remove_ids_from_os(os_client, private_deleted_ids)
+        print("OpenSearch Client process completed!")
+    else:
+        print("Process completed!")
