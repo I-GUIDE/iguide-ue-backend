@@ -33,6 +33,7 @@ const options = {
       , './routes/documentation.js'
       , './routes/elements.js'
       , './routes/spatial_search_routes.js'
+      , './routes/pipeline_routes.js'
   ], // Path to the API docs
 };
 

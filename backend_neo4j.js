@@ -837,10 +837,16 @@ export async function checkDuplicatesForField(field_name, value){
     var query_str = "";
     var query_params = {};
     if (field_name === 'doi') {
-	query_str = "MATCH(p:Publication{external_link:$doi}) RETURN p.id";
-	query_params['doi'] = value;
-    } else {
-	throw Error('Server Neo4j: Field `$field_name` not implemented for duplucate checking');
+		query_str = "MATCH(p:Publication{external_link:$doi}) RETURN p.id";
+		query_params['doi'] = value;
+    } else if (field_name === 'dataset-link') {
+		query_str = "MATCH(d:Dataset{external_link:$dataset_link}) RETURN d.id";
+		query_params['dataset_link'] = value;
+	} else if (field_name === 'github-repo-link') {
+		query_str = "MATCH(c:Code{github_repo_link:$github_repo_link}) RETURN c.id";
+		query_params['github_repo_link'] = value;
+	} else {
+		throw Error('Server Neo4j: Field `$field_name` not implemented for duplicate checking');
     }
 
     try {
@@ -1108,6 +1114,22 @@ export async function deleteElementByID(id){
     return false;
 }
 
+export async function deleteUserById(id){
+    const query_str = "MATCH (c:Contributor{id:$id_param}) " +
+	  "DETACH DELETE c";
+    try {
+	const {_, summary} =
+	      await driver.executeQuery(query_str,
+					{id_param: id},
+					{database: process.env.NEO4J_DB});
+	if (summary.counters.updates()['nodesDeleted'] == 1){
+	    return true;
+	}
+    } catch(err){console.log('deleteUserByOpenId() - Error in query: '+ err);}
+    // something went wrong
+    return false;
+}
+
 /**
  * Set visibility for an element/resource given ID
  * @param {string} id
@@ -1175,9 +1197,11 @@ export async function registerContributor(contributor){
 
     // (2) assign roles for new contributor
     contributor['role'] = (() => {
-		let contributor_domain = contributor['email'] && contributor['email'].substring(contributor['email'].lastIndexOf("@"));
+		let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
+            .substring(contributor['email'].toLowerCase().lastIndexOf("@"));
 		if ((contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
-	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university'))
+	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
+            contributor['email'].toLowerCase().includes('.org')
 	   	) {
 	    	return neo4j.int(utils.Role.TRUSTED_USER);
 		}
@@ -1305,18 +1329,73 @@ export async function getContributorByID(id){
 }
 
 /**
- * Get all Contributors with all information
+ * Get all Contributors with all information based on a pagination criteria
+ * from and size are optional parameters by default set to return 1st 100 records
  * @returns {Object} Map of objects with serial Ids. If no users found returns empty
  */
-export async function getAllContributors(){
-	const query_str = "MATCH (c:Contributor) return c{.*}";
+export async function getAllContributors(
+		from=0,
+		size=100,
+		sort_by=utils.SortBy.FIRST_NAME,
+		sort_order="asc",
+		filter_key='none',
+		filter_value=''){
+	let query_str = "MATCH (c:Contributor)";
+	let query_params = {};
+	/**
+	 * Set the filter by value if required
+	 */
+	switch (filter_key) {
+		case "role-no":
+			filter_key = "role"
+			filter_value = neo4j.int(filter_value)
+			query_str += " WHERE c." + filter_key + ' = $filter_val'
+			query_params['filter_val'] = filter_value
+			break
+		case "affiliation":
+			filter_key = "affiliation"
+			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
+			break
+		case "first-name":
+			filter_key = "first_name"
+			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
+			break
+		case "last-name":
+			filter_key = "last_name"
+			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
+			break
+		default:
+			filter_key = "none"
+	}
+	/**
+	 * Set the return parameter
+	 */
+	let count_query_str = query_str + " return COUNT(c) AS count"
+	query_str += " RETURN c{.*}"
+	/**
+	 * Set the default value for sort_by parameter
+	 */
+	sort_by = utils.parseSortBy(sort_by)
+	if (sort_by && sort_by !== "") {
+		query_str += " ORDER BY c." + sort_by + " " + sort_order
+	}
+	/**
+	 * Set the pagination condition
+	 */
+	let pagination_str = " SKIP $from LIMIT $size";
+	query_str += pagination_str;
+	query_params['from'] = neo4j.int(from);
+	query_params['size'] = neo4j.int(size);
 	try {
-		const {records, summary} =
-			await driver.executeQuery(query_str,
-				{},
-				{routing: 'READ', database: process.env.NEO4J_DB})
+		let records, summary;
+		({records, summary} = await driver.executeQuery(query_str,
+			query_params,
+			{routing: 'READ', database: process.env.NEO4J_DB}));
 		if (records?.length <= 0) {
-			return {};
+			return {"total-users":-1, "users": []};
 		}
 		let contributor_list = [];
 		records?.map((contributor) => {
@@ -1326,12 +1405,18 @@ export async function getAllContributors(){
 				contributor_list.push(temp_contributor);
 			}
 		});
-		return makeFrontendCompatible(contributor_list)
+		({records, summary} = await driver.executeQuery(
+				count_query_str,
+				query_params,
+				{routing: 'READ', database: process.env.NEO4J_DB}));
+		let total_count = utils.parse64BitNumber(records[0].get('count'));
+		let contributor_final_list = Object.values(makeFrontendCompatible(contributor_list));
+		return {"total-users": total_count, "users": contributor_final_list}
 
 	} catch (err) {
 		console.log('getAllContributors() - Error in query: ' + err);
 	}
-	return {};
+	return {"total-users": -1, "users": []};
 }
 
 /**

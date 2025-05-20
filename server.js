@@ -110,7 +110,7 @@ const SSLOptions = {
  */
 app.options('/api/refresh-token', jwtCorsMiddleware);
 app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
-	
+
 	// updated refresh token to use env variable
     const refreshToken = req.cookies[process.env.JWT_REFRESH_TOKEN_NAME];
     //console.log("Refresh token", refreshToken);
@@ -162,10 +162,16 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 
 app.options('/api/check-tokens', jwtCorsMiddleware);
 app.get('/api/check-tokens', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
-	res.json({
-		id: req.user.id,
-		role: req.user.role
-  });});
+	try {
+		res.json({
+			id: req.user.id,
+			role: req.user.role
+  		});
+	} catch (error) {
+		console.error("Error performing check user: ", error)
+		res.status(500).json({message: 'Error checking user details'});
+	}
+});
 
 /****************************************************************************
  * General Helper Functions
@@ -302,9 +308,15 @@ app.get('/api/url-title', cors(), async (req, res) => {
 console.log(`${process.env.SERV_TAG} server is up`);
 
 const HTTP_PORT = parseInt(process.env.PORT, 10)+1; //3501;
-app.listen(HTTP_PORT, () => {
-    console.log(`HTTP server is running on port ${HTTP_PORT}`);
-});
+/**
+ * Changes to handle JEST Testing module this if statement will run only when running the server
+ * and not run when jest is operating to avoid dual execution of the same and stop the process form JEST side
+ */
+if (import.meta.url === `file://${process.argv[1]}`) {
+	app.listen(HTTP_PORT, () => {
+		console.log(`HTTP server is running on port ${HTTP_PORT}`);
+	});
+}
 
 https.createServer(SSLOptions, app).listen(process.env.PORT, () => {
     console.log(`HTTPS server is running on port ${process.env.PORT}`);
@@ -313,3 +325,7 @@ https.createServer(SSLOptions, app).listen(process.env.PORT, () => {
 // Serve Swagger docs
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 console.log(`Swagger UI started at http://${process.env.DOMAIN}:${HTTP_PORT}/api-docs`);
+/**
+ * Exporting the default app to be imported for Testing
+ */
+export default app;

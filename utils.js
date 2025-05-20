@@ -28,6 +28,8 @@ export const SortBy = Object.freeze({
     CLICK_COUNT: "click_count",
     CREATION_TIME: "created_at",
     TITLE: "title",
+    FIRST_NAME: "first_name",
+    LAST_NAME: "last_name",
 });
 
 /*
@@ -124,6 +126,10 @@ export function parseSortBy(sort_by){
     case "creation_time":
 	return SortBy.CREATION_TIME;
     case SortBy.TITLE: return SortBy.TITLE;
+    case SortBy.FIRST_NAME:
+    case SortBy.FIRST_NAME.toLowerCase(): return SortBy.FIRST_NAME;
+    case SortBy.LAST_NAME:
+    case SortBy.LAST_NAME.toLowerCase(): return SortBy.LAST_NAME;
     default:
 	throw Error('Server Neo4j: SortBy ('+ sort_by  +') not implemented');
     }
@@ -314,4 +320,34 @@ export async function userCanViewElement(element_id, user_id, user_role) {
 	return true;
     }
     return false;
+}
+
+/**
+ * Get the Update action to be performed for OpenSearch based on the visibility parameter
+ * @param old_visibility
+ * @param new_visibility
+ * @returns {string}
+ */
+export function updateOSBasedtOnVisibility(old_visibility, new_visibility) {
+    /**
+     * If the element's visibility has not changed
+     *      and is an PUBLIC element then we need to update OS with new entries => TRUE (Update)
+     *      or is an PRIVATE element no insertion/update required as no entry would be present in OS => FALSE
+     * If the element's visibility has changed
+     *      and the new visibility is PUBLIC then we need to insert into OS with a new entry of the element => TRUE (Insert)
+     *      or the new visibility is PRIVATE then we need to delete the current OS entry for the element => FALSE (special case)
+     */
+    if (old_visibility === new_visibility) {
+        if (old_visibility === Visibility.PUBLIC) {
+            return "UPDATE";
+        } else {
+            return "NONE";
+        }
+    } else {
+        if (new_visibility === Visibility.PUBLIC) {
+            return "INSERT";
+        } else {
+            return "DELETE";
+        }
+    }
 }
