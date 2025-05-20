@@ -35,6 +35,11 @@ import private_elements from './routes/private_elements.js';
 import users from './routes/users.js';
 import documentation from './routes/documentation.js';
 import elements from './routes/elements.js';
+import {
+	checkUniversityDomain,
+	generateOptimizedDomainList,
+	provideDomainUniversityInfo
+} from "./routes/domain_utils.js";
 
 const app = express();
 
@@ -215,6 +220,12 @@ app.use((err, req, res, next) => {
     // Forward to next middleware if no errors
     next();
 });
+/****************************************************************************
+ * Importing Domain List
+ ****************************************************************************/
+console.log("Importing domain list from JSON into Object...");
+generateOptimizedDomainList();
+console.log("Domain list import complete!");
 
 /****************************************************************************
  * Misc. Endpoints
