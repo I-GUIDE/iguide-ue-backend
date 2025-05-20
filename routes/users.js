@@ -697,6 +697,14 @@ router.delete('/api/users/:id',
 				return;
 			}
 			/**
+			 * Get user details to check SUPER_ADMIN Privlieges
+			 */
+			const user_details = await n4j.getContributorByID(id);
+			if (user_details['role'] === 1) {
+				res.status(403).json({message: 'Cannot delete Super Admin User'});
+				return;
+			}
+			/**
 			 * Delete the user from neo4J
 			 */
 			const del_resp = await n4j.deleteUserById(id)
