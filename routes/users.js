@@ -490,7 +490,12 @@ router.options('/api/users/:id', (req, res) => {
         res.header('Access-Control-Allow-Origin', '*');
         res.header('Access-Control-Allow-Methods', 'GET');
         res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
-    }
+    } else if (method === 'DELETE') {
+		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+        res.header('Access-Control-Allow-Methods', 'DELETE');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+        res.header('Access-Control-Allow-Credentials', 'true');
+	}
     res.sendStatus(204); // No content
 });
 router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
