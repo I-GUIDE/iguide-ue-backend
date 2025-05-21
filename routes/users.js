@@ -719,4 +719,50 @@ router.delete('/api/users/:id',
 		}
 	});
 
+/**
+ * Create the 4 dummy new apis
+ *
+ * 	1. Retrieve User:
+ * 		Request:
+ * 			GET
+ * 			/api/v2/user/:id
+ * 		Response:
+ * 			{
+ * 				user_object_details...,
+ * 				aliases: [
+ * 				 {open_id, email, affiliation},
+ * 				 ...
+ * 				 ...
+ * 				],
+ * 			}
+ * 	2. Add User Alias:
+ * 		Request:
+ * 			PUT
+ * 			/api/v2/user/alias
+ * 			Body: {user_id, open_id, email, affiliation}
+ * 		Response:
+ * 			200 -> Success
+ * 			403 -> Denied as already alias present
+ * 			500 -> Error
+ * 	3. Remove User Alias:
+ * 		Request:
+ * 			DELETE
+ * 			/api/v2/user/alias
+ * 			Body: {user_id, open_id}
+ * 		Response:
+ * 			200 -> Success
+ * 			403 -> Denied, as current alias is Primary
+ * 			500 -> Error
+ * 	4. Set Primary Email:
+ * 		Request:
+ * 			POST
+ * 			/api/v2/user/alias
+ * 			Body: {user_id, open_id}
+ * 		Response:
+ * 			200 -> Success
+ * 			403 -> Already a primary email, Denied
+ * 			500 -> Error
+ */
+
+
 export default router;
