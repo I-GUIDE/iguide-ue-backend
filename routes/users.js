@@ -702,7 +702,7 @@ router.delete('/api/users/:id',
 			 */
 			let private_elements_cnt_resp = await n4j.getElementsCountByContributor(id, true);
 			if (public_elements_cnt_resp + private_elements_cnt_resp > 0) {
-				res.status(403).json({message: 'Cannot delete user as it has elements associated'});
+				res.status(409).json({message: 'Failed to delete user. User has public or private contributions.'});
 				return;
 			}
 			/**
@@ -710,7 +710,7 @@ router.delete('/api/users/:id',
 			 */
 			const user_details = await n4j.getContributorByID(id);
 			if (user_details['role'] === 1) {
-				res.status(409).json({message: 'Cannot delete Super Admin User'});
+				res.status(409).json({message: 'Failed to delete user. User cannot delete a Super Admin User'});
 				return;
 			}
 			/**
