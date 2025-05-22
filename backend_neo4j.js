@@ -1329,6 +1329,215 @@ export async function getContributorByID(id){
 }
 
 /**
+ * Updated getContributorByID logic to include Aliases
+ * @param id
+ * @returns {Promise<{}|{[p: string]: null|{}|undefined}>}
+ */
+export async function getContributorByIDv2(id) {
+	const query_str = "MATCH (a:Alias)-[:ALIAS_OF]->(c:Contributor{id: $user_id}) " +
+		"RETURN c{.*} AS contributor, collect(a{.*}) AS aliases";
+	try {
+		const {records, summary} =
+			await driver.executeQuery(query_str,
+				{user_id: id},
+				{routing: 'READ', database: process.env.NEO4J_DB});
+
+		if (records.length <= 0) {
+			return {};
+		} else if (records.length > 1) {
+			throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID:" + id);
+		}
+		console.log(records);
+		console.log(summary);
+		let response = {
+			Contributor: records[0]['_fields'][0],
+			Aliases: records[0]['_fields'][1]
+		};
+		let primary_alias = {}
+		if (response?.Aliases) {
+			response?.Aliases.map((alias) => {
+				if (alias?.is_primary === true) {
+					primary_alias = alias;
+				}
+			});
+		}
+		let contributor = response?.Contributor;
+		contributor["openid"] = primary_alias["openid"];
+		contributor["email"] = primary_alias["email"];
+		contributor["affiliation"] = primary_alias["affiliation"];
+		contributor["aliases"] = response?.Aliases;
+		return makeFrontendCompatible(contributor)
+	} catch (error) {
+		console.log("getContributorByIDv2 - Error in query: " + error);
+	}
+	return {};
+}
+
+/**
+ * Function to create an alias with is_primary as false (default) for a given user_id and open_id, email, affiliation
+ * @param id
+ * @param open_id
+ * @param email
+ * @param affiliation
+ * @param is_primary
+ * @returns {Promise<{}|*>}
+ */
+export async function createAliasById(id, open_id, email, affiliation, is_primary) {
+	const query_str = "MATCH (c:Contributor{id: $user_id})" +
+		"CREATE (a:Alias{openid: $open_id, email: $email, affiliation: $affiliation, is_primary: $is_primary})" +
+		"CREATE (a)-[:ALIAS_OF]->(c)" +
+		"RETURN a{.*}";
+	try {
+		const params = {
+			user_id: id,
+			open_id: open_id,
+			email: email,
+			affiliation: affiliation,
+			is_primary: is_primary
+		};
+		const {records, summary} =
+			await driver.executeQuery(query_str, params, {routing: 'WRITE', database: process.env.NEO4J_DB});
+
+		console.log(records);
+		console.log(summary);
+
+		return records[0]['_fields'][0]
+
+	} catch (error) {
+		console.log("createAliasById() - Error in query: " + error);
+	}
+	return {};
+}
+
+/**
+ * Function to delete the open_id alias for a given user id
+ * @param id
+ * @param open_id
+ * @returns {Promise<boolean>}
+ */
+export async function deleteAliasByOpenId(id, open_id) {
+	const query_str = "MATCH (a:Alias{openid: $open_id})-[:ALIAS_OF]->(c:Contributor{id: $user_id}) DETACH DELETE a";
+	try {
+		const params = {user_id: id, open_id: open_id}
+		const {records, summary} =
+			await driver.executeQuery(query_str, params, {routing: 'WRITE', database: process.env.NEO4J_DB});
+		return true;
+	} catch (error) {
+		console.log("deleteAliasByOpenId() - Error in query: " + error);
+		return false;
+	}
+}
+
+/**
+ * Function to get alias details for the given user's id and provided open_id
+ * @param id
+ * @param open_id
+ * @returns {Promise<*|null>}
+ */
+export async function getAliasByOpenId(id, open_id) {
+	const query_str = "MATCH (a:Alias{openid: $open_id})-[:ALIAS_OF]->(c:Contributor{id: $user_id}) return a{.*}";
+	try {
+		const params = {user_id: id, open_id: open_id};
+		const {records, summary} =
+			await driver.executeQuery(query_str, params, {routing: 'READ', database: process.env.NEO4J_DB});
+		if (records.length > 0) {
+			return records[0]['_fields'][0];
+		}
+		return null;
+	} catch (error) {
+		console.log("getAliasByOpenId() - Error in query: " + error);
+		return null;
+	}
+}
+
+/**
+ * Function check if the given open_id is the primary alias for the user id
+ * @param id
+ * @param open_id
+ * @returns {Promise<*|boolean>}
+ */
+export async function checkAliasIsPrimary(id, open_id){
+	try {
+		const alias_detail = await getAliasByOpenId(id, open_id);
+		if (alias_detail !== null) {
+			return alias_detail['is_primary']
+		}
+	} catch (error) {
+		console.log("checkAliasIsPrimary() - Error in query: " + error);
+	}
+	return false;
+}
+
+/**
+ * Function to get the primary alias for the given user id
+ * @param id
+ * @returns {Promise<*|null>}
+ */
+export async function getPrimaryAliasById(id) {
+	const query_str = "MATCH (a:Alias{is_primary: true})-[:ALIAS_OF]->(c:Contributor{id: $user_id}) return a{.*}";
+	try {
+		const params = {user_id: id};
+		const {records, summary} =
+			await driver.executeQuery(query_str, params, {routing: 'READ', database: process.env.NEO4J_DB});
+		if (records.length > 0) {
+			return records[0]['_fields'][0];
+		}
+		return null;
+	} catch (error) {
+		console.log("getPrimaryAliasById() - Error in Query: " + error);
+		return null;
+	}
+}
+
+/**
+ * Function to update the primary alias for id with open_id and replace curr_alias_open_id
+ * @param id
+ * @param curr_alias_open_id
+ * @param open_id
+ * @returns {Promise<null|{[p: string]: null|{}|undefined}>}
+ */
+export async function setAliasAsPrimary(id, curr_alias_open_id, open_id) {
+	const query_str = "MATCH (a1:Alias{openid: $curr_openid})-[:ALIAS_OF]->(c:Contributor{id: $user_id})<-[:ALIAS_OF]-(a2:Alias{openid: $new_openid}) " +
+		"SET a1.is_primary = false, a2.is_primary = true " +
+		"RETURN a2";
+	try {
+		const params = {user_id: id, curr_openid: curr_alias_open_id, new_openid: open_id}
+		const {records, summary} =
+			await driver.executeQuery(query_str, params, {routing: 'WRITE', database: process.env.NEO4J_DB});
+		if (records.length > 0) {
+			 let response = records[0]['_fields'][0]['properties'];
+			 if (response !== null) {
+				 return makeFrontendCompatible(response);
+			 } else {
+				 return null;
+			 }
+		}
+		return null;
+	} catch (error) {
+		console.log("setAliasAsPrimary() - Error in query: " + error);
+		return null;
+	}
+}
+
+/**
+ * Check if for the given id, the provided open_id exists as an alias
+ * @param id
+ * @param open_id
+ * @returns {Promise<boolean>}
+ */
+export async function checkIfAliasExists(id, open_id) {
+	try {
+		const alias_detail = await getAliasByOpenId(id, open_id)
+		if (alias_detail !== null) {
+			return true;
+		}
+	} catch (error) {
+		console.log("checkAliasIsPrimary() - Error in query: " + error);
+	}
+	return false;
+}
+
+/**
  * Get all Contributors with all information based on a pagination criteria
  * from and size are optional parameters by default set to return 1st 100 records
  * @returns {Object} Map of objects with serial Ids. If no users found returns empty
