@@ -1308,21 +1308,29 @@ export async function getContributorByID(id){
     const query_str = contributorMatchQuery(id)+" " +
 	  "RETURN c{.*} ";
     try {
-	const {records, summary} =
-	      await driver.executeQuery(query_str,
-					{contrib_id: id},
-					{routing: 'READ', database: process.env.NEO4J_DB});
-	if (records.length <= 0){
-	    // Query returned no match for given ID
-	    return {};
-	} else if (records.length > 1){
-	    // should never reach here since ID is unique
-	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID:" + id);
-	}
-	const contributor = records[0]['_fields'][0];
-	contributor['role'] = utils.parse64BitNumber(contributor['role']);
-
-	return makeFrontendCompatible(contributor);
+		const {records, summary} =
+			  await driver.executeQuery(query_str,
+						{contrib_id: id},
+						{routing: 'READ', database: process.env.NEO4J_DB});
+		if (records.length <= 0){
+			// Query returned no match for given ID
+			return {};
+		} else if (records.length > 1){
+			// should never reach here since ID is unique
+			throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID:" + id);
+		}
+		const contributor = records[0]['_fields'][0];
+		contributor['role'] = utils.parse64BitNumber(contributor['role']);
+		/**
+		 * In future if API is used and there is no openid by default then we fetch the primary alias and attach the same
+		 */
+		if (contributor['openid'] === undefined) {
+			const primary_alias = await getPrimaryAliasById(id);
+			contributor['openid'] = primary_alias['openid']
+			contributor['email'] = primary_alias['email']
+			contributor['affiliation'] = primary_alias['affiliation']
+		}
+		return makeFrontendCompatible(contributor);
     } catch(err){console.log('getContributorByID() - Error in query: '+ err);}
     // something went wrong
     return {};
