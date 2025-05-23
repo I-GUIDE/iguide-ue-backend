@@ -559,11 +559,11 @@ router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) =
  *         description: Internal server error
  */
 router.options('/api/v2/users',
-	// jwtCorsMiddleware
+	jwtCorsMiddleware
 );
 router.post('/api/v2/users',
-	// jwtCorsMiddleware,
-	// authenticateJWT,
+	jwtCorsMiddleware,
+	authenticateJWT,
 	async (req, res) => {
 
     const user = req.body;
