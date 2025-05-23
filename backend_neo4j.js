@@ -1224,6 +1224,57 @@ export async function registerContributor(contributor){
     // something went wrong
     return false;
 }
+
+export async function registerContributorV2(contributor){
+
+    // (1) generate id (UUID).
+    contributor['id'] = uuidv4();
+
+    // (2) assign roles for new contributor
+    contributor['role'] = (() => {
+		let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
+            .substring(contributor['email'].toLowerCase().lastIndexOf("@"));
+		if ((contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
+	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
+            contributor['email'].toLowerCase().includes('.org')
+	   	) {
+	    	return neo4j.int(utils.Role.TRUSTED_USER);
+		}
+		// default role
+		return neo4j.int(utils.Role.UNTRUSTED_USER);
+    })();
+    // (3) get avatar URL
+    //contributor['avatar_url'] = contributor['avatar_url']['original'];
+    const query_str = "CREATE (c: Contributor $contr_param) " +
+		"CREATE (a:Alias $alias_param) " +
+		"CREATE (a)-[:ALIAS_OF]->(c) " +
+		"RETURN c{.*} as contributor, a{.*} as alias";
+    try{
+		let alias_param = {
+			openid: contributor["openid"],
+			email: contributor["email"],
+			affiliation: contributor["affiliation"],
+			is_primary: true
+		};
+		let contr_param = {
+			id: contributor['id'],
+			first_name: contributor["first_name"],
+			last_name: contributor["last_name"],
+			bio: contributor["bio"],
+			role: contributor["role"],
+		};
+		const {_, summary} =
+	      	await driver.executeQuery(query_str,
+					{contr_param: contr_param, alias_param: alias_param},
+					{routing: 'WRITE', database: process.env.NEO4J_DB});
+		if (summary.counters.updates()['nodesCreated'] == 2){
+	    	return true;
+		}
+    } catch(err){
+		console.log('registerContributor() - Error in query: '+ err);
+	}
+    return false;
+}
 /**
  * Update existing contributor
  * @param {string} id Contributor id

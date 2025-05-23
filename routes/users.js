@@ -535,6 +535,67 @@ router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) =
 
 /**
  * @swagger
+ * /api/v2/users:
+ *   post:
+ *     summary: Add a new user document version 2 with Alias
+ *     tags: ['users']
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: User added successfully
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/api/v2/users',
+	// jwtCorsMiddleware
+);
+router.post('/api/v2/users',
+	// jwtCorsMiddleware,
+	// authenticateJWT,
+	async (req, res) => {
+
+    const user = req.body;
+    console.log('Adding new user');
+    //console.log(user);
+
+    try {
+		const id = user['id'];
+		const response = await n4j.registerContributorV2(user);
+		if (response){
+	    	res.status(201).json({ message: 'User added successfully', id: id });
+		} else {
+	    	res.status(201).json({ message: 'User already exists', id: id });
+	    	console.log('User already exists with id: ' + id);
+		}
+		// [ToDo] Add contributor name to OpenSearch
+
+		// const response = await os.client.index({
+		//     index: 'users',
+		//     id: user.openid,
+		//     body: user,
+		//     refresh:'wait-for'
+		// });
+		//res.status(201).json({ message: 'User added successfully', id: response.body._id });
+    } catch (error) {
+		console.error('Error adding user:', error);
+		res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+/**
+ * @swagger
  * /api/users/{id}:
  *   put:
  *     summary: Update the user document
