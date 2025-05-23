@@ -12,7 +12,7 @@ import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
-import {Role} from "../utils.js";
+import {performUserCheck, Role} from "../utils.js";
 import {
 	checkAliasIsPrimary,
 	checkIfAliasExists,
@@ -287,6 +287,47 @@ router.get('/api/users/:id/role', cors(), async (req, res) => {
 
 /**
  * @swagger
+ * /api/v2/users/{id}/role:
+ *   get:
+ *     summary: Return the user role given the id
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the user
+ *     responses:
+ *       200:
+ *         description: The user role i.e. admin, user
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Error fetching the user
+ */
+router.options('/api/v2/users/:id/role', cors());
+router.get('/api/v2/users/:id/role', cors(), async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
+	if (performUserCheck(req, id)) {
+		res.status(403).json({message: 'User is not permitted to perform this action.'});
+		return;
+	}
+    try {
+		const response = await n4j.getContributorByIDv2(id);
+		if (response?.size){
+	    	return res.status(404).json({ message: 'User not found' });
+		}
+		let ret = {'role' : response['role']};
+		res.json(ret);
+    } catch (error) {
+		console.error('Error fetching user:', error);
+		res.status(500).json({ message: 'Error fetching the user' });
+    }
+});
+
+/**
+ * @swagger
  * /api/users/{id}/valid:
  *   get:
  *     summary: Check if a user exists given the id
@@ -316,6 +357,39 @@ router.get('/api/users/:id/valid', cors(), async (req, res) => {
     } catch (error) {
 	console.error('Error checking user:', error);
 	res.status(500).json({ message: 'Error checking the user' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/v2/users/{id}/valid:
+ *   get:
+ *     summary: Check if a user exists given the id/openId
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the user
+ *     responses:
+ *       200:
+ *         description: True if user exists, false otherwise
+ *       500:
+ *         description: Error checking the user
+ */
+router.options('/api/v2/users/:id/valid', cors());
+router.get('/api/v2/users/:id/valid', cors(), async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
+
+    console.log('Check user ...' + id);
+    try {
+		const response = await n4j.checkContributorByIDV2(id);
+		res.status(200).json(response);
+    } catch (error) {
+		console.error('Error checking user:', error);
+		res.status(500).json({ message: 'Error checking the user' });
     }
 });
 
@@ -830,6 +904,10 @@ router.put('/api/v2/users/alias/:id',
 		async (req, res) => {
 	try {
 		const user_id = decodeURIComponent(req.params.id);
+		if (performUserCheck(req, user_id)) {
+			res.status(403).json({message: 'User is not permitted to perform this action.'});
+			return;
+		}
     	const alias_body = req.body;
 		const response = await n4j.createAliasById(user_id, alias_body.open_id, alias_body.email, alias_body.affiliation, false);
 		res.status(200).json(response);
@@ -841,7 +919,49 @@ router.put('/api/v2/users/alias/:id',
 
 /**
  * @swagger
- * /api/v2/users/alias/{userId}:
+ * /api/v2/users/alias/{userId}/primary:
+ *   get:
+ *     summary: get user's primary alias for the given user_id
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The userId of the user
+ *     responses:
+ *       200:
+ *         description: User's primary alias successfully retrieved.
+ *       500:
+ *         description: Internal server error in updating primary alias
+ */
+router.options('/api/v2/users/alias/:id/primary', (req, res) => {
+	res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+    res.header('Access-Control-Allow-Methods', jwtCorsOptions.methods);
+	res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+	res.header('Access-Control-Allow-Credentials', 'true');
+    res.sendStatus(204); // No content
+});
+router.get('/api/v2/users/alias/:id/primary', cors(),
+		async (req, res) => {
+	try {
+		const user_id = decodeURIComponent(req.params.id);
+		if (performUserCheck(req, user_id)) {
+			res.status(403).json({message: 'User is not permitted to perform this action.'});
+			return;
+		}
+		const curr_alias = await getPrimaryAliasById(user_id);
+		res.status(200).json(curr_alias);
+	} catch (error) {
+		console.error('Error in updating user role: ', error);
+		res.status(500).json({message: 'Error in updating user primary alias'});
+	}
+});
+
+/**
+ * @swagger
+ * /api/v2/users/alias/{userId}/primary:
  *   post:
  *     summary: Update user's primary alias for the given openId
  *     tags: ['users']
@@ -873,12 +993,16 @@ router.put('/api/v2/users/alias/:id',
  *       500:
  *         description: Internal server error in updating primary alias
  */
-router.post('/api/v2/users/alias/:id',
+router.post('/api/v2/users/alias/:id/primary',
 		jwtCorsMiddleware,
 		authenticateJWT,
 		async (req, res) => {
 	try {
 		const user_id = decodeURIComponent(req.params.id);
+		if (performUserCheck(req, user_id)) {
+			res.status(403).json({message: 'User is not permitted to perform this action.'});
+			return;
+		}
     	const alias_body = req.body;
 		const alias_exists = await checkIfAliasExists(user_id, alias_body.openid);
 		if (!alias_exists) {
@@ -940,6 +1064,10 @@ router.delete('/api/v2/users/alias/:id',
 		async (req, res) => {
 	try {
 		const user_id = decodeURIComponent(req.params.id);
+		if (performUserCheck(req, user_id)) {
+			res.status(403).json({message: 'User is not permitted to perform this action.'});
+			return;
+		}
     	const alias_body = req.body;
 		const is_primary = await checkAliasIsPrimary(user_id, alias_body.openid)
 		if (is_primary) {

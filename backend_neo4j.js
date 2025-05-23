@@ -1116,7 +1116,8 @@ export async function deleteElementByID(id){
 
 export async function deleteUserById(id){
     const query_str = "MATCH (c:Contributor{id:$id_param}) " +
-	  "DETACH DELETE c";
+		"OPTIONAL MATCH (a:Alias)-[:ALIAS_OF]->(c) " +
+	  	"DETACH DELETE a,c";
     try {
 	const {_, summary} =
 	      await driver.executeQuery(query_str,
@@ -1342,12 +1343,17 @@ export async function getContributorByID(id){
  * @returns {Promise<{}|{[p: string]: null|{}|undefined}>}
  */
 export async function getContributorByIDv2(id) {
-	const query_str = "MATCH (a:Alias)-[:ALIAS_OF]->(c:Contributor{id: $user_id}) " +
-		"RETURN c{.*} AS contributor, collect(a{.*}) AS aliases";
+	let query_str = "";
+	if (String(id).startsWith("http")) {
+		query_str = "MATCH (a1:Alias{openid: $id})-[:ALIAS_OF]->(c:Contributor) MATCH (a:Alias)-[:ALIAS_OF]->(c)"
+	} else {
+		query_str = "MATCH (a:Alias)-[:ALIAS_OF]->(c:Contributor{id: $id})"
+	}
+	query_str = query_str + " RETURN c{.*} AS contributor, collect(a{.*}) AS aliases";
 	try {
 		const {records, summary} =
 			await driver.executeQuery(query_str,
-				{user_id: id},
+				{id: id},
 				{routing: 'READ', database: process.env.NEO4J_DB});
 
 		if (records.length <= 0) {
@@ -1683,6 +1689,31 @@ export async function checkContributorByID(id){
     return false;
 }
 
+export async function checkContributorByIDV2(id) {
+	let query_str = "OPTIONAL "
+    if (String(id).startsWith("http")) {
+        /**
+         * Provided id is an OpenID hence check aliases
+         */
+        query_str = query_str + "MATCH (a:Alias{openid: $id})-[:ALIAS_OF]->(c:Contributor)";
+    } else {
+        /**
+         * Provided id is a user-id hence check contributor
+         */
+        query_str = query_str + "MATCH (c:Contributor{id: $id})";
+    }
+	query_str = query_str + " RETURN c IS NOT NULL AS Predicate";
+	try {
+		const {records, _} =
+			await driver.executeQuery(query_str,
+				{id: id},
+				{routing: 'READ', database: process.env.NEO4J_DB});
+		return records[0]['_fields'][0];
+	} catch (error) {
+		console.log('checkContributorByIDV2() - Error in query: ' + error);
+		return false;
+	}
+}
 /**
  * Get contrib ID for the element
  * @param {string} e_id Element ID
