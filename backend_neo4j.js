@@ -1201,7 +1201,7 @@ export async function registerContributor(contributor){
             .substring(contributor['email'].toLowerCase().lastIndexOf("@"));
 		if ((contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
 	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
-            contributor['email'].toLowerCase().includes('.org')
+			(contributor['email'] && contributor['email'].toLowerCase().includes('.org'))
 	   	) {
 	    	return neo4j.int(utils.Role.TRUSTED_USER);
 		}
