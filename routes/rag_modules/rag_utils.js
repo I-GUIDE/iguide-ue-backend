@@ -63,7 +63,7 @@ export function formatDocsXML(docs, k = docs.length) {
   return docs
     .slice(0, k)                              // keep only the first k hits  :contentReference[oaicite:0]{index=0}
     .map((doc, idx) => `
-<doc id="${idx + 1}">
+<doc id="${doc._id}">
   <title>${(doc._source.title)}</title>
   <element_type>${(doc._source["resource-type"])}</element_type>
   <contributor>${(doc._source.contributor)}</contributor>
