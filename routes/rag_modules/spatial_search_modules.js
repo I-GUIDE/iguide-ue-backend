@@ -9,7 +9,7 @@ const router = express.Router();
 
 // Initialize OpenSearch client (same as before)
 const client = new Client({
-    node: 'https://149.165.169.165:9200' || process.env.OPENSEARCH_NODE,
+    node: process.env.OPENSEARCH_NODE,
     auth: {
         username: process.env.OPENSEARCH_USERNAME,
         password: process.env.OPENSEARCH_PASSWORD,
@@ -122,7 +122,7 @@ export async function getSpatialSearchResults(userQuery, memoryId) {
         //console.log('Final Query:', JSON.stringify(searchBody, null, 2));
 
         const searchResponse = await client.search({
-            index: 'neo4j-elements-vspatial-v2',  // Hardcoded for safety
+            index: process.env.OPENSEARCH_INDEX,  // Hardcoded for safety
             body: searchBody
         });
 

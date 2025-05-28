@@ -4,3 +4,5 @@
 **/*.log
 backend_scripts/neo4j.env
 routes/#private_elements.js#
+legacy_search_stats_v1.csv
+legacy_search_stats.csv

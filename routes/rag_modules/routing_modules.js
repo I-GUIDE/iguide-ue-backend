@@ -35,7 +35,7 @@ async function generateRoutingPrompt(userQuery, searchMethods) {
     prompt += `- ${method.functionName}: ${method.description}\n`;
   });
 
-  prompt += `\nBased on the query, suggest which retrieval methods should be used (select one or more). 
+  prompt += `\nBased on the query, suggest one or more retrieval methods should be used. 
   Order them according to their relevance to the query. 
   Respond with the method names only, separated by commas. 
   Select spatial search methods if the query is related to geospatial knowledge like "Chicago" or "Florida".
@@ -48,11 +48,11 @@ async function generateRoutingPrompt(userQuery, searchMethods) {
   Q: What are the most viewed datasets?
 → getNeo4jSearchResults
 
-Q: Recommend related publications to this notebook.
-→ getNeo4jSearchResults
+Q: What is the challenge in computational Agent-Based Models?
+→ getSemanticSearchResults, getKeywordSearchResults
 
 Q: What is the flood map for Chicago?
-→ getSemanticSearchResults
+→ getSemanticSearchResults, getSpatialSearchResults
 
 Q: Climate change datasets
 → getKeywordSearchResults
@@ -78,7 +78,7 @@ async function routeUserQuery(userQuery) {
     console.log("Routing user query:", userQuery);
     // 1. Keyword-based routing overrides
     const uq = userQuery.toLowerCase();
-    if (/(most viewed|top clicked|most popular|related)/.test(uq)) {
+    if (/(most viewed|top clicked|most popular)/.test(uq)) {
       console.log("Routing to Neo4j for query:", userQuery);
       return getNeo4jSearchResults(userQuery);
     }
