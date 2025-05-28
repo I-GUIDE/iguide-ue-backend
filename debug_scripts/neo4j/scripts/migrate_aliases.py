@@ -21,6 +21,13 @@ class AliasMigrator:
             else:
                 print(f"⚠️  No valid fields found or migration skipped for user_id: {user_id}")
 
+    def migrate_all_users(self):
+        with self.driver.session() as session:
+            result = session.run("MATCH (c:Contributor) WHERE c.openid IS NOT NULL RETURN c{.*} AS contributor")
+            contributors = [record["contributor"] for record in result]
+            for contributor in contributors:
+                self.migrate_contributor_alias(contributor["id"])
+
     @staticmethod
     def _migrate_alias_transaction(tx, user_id):
         # Fetch contributor data
@@ -57,7 +64,7 @@ class AliasMigrator:
 
 
 def initialize_environment():
-    if len(sys.argv) != 2:
+    if len(sys.argv) < 3:
         print("Not enough arguments to run the script.")
         sys.exit(1)
 
@@ -79,5 +86,8 @@ if __name__ == "__main__":
     NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 
     migrator = AliasMigrator(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
-    migrator.migrate_contributor_alias("60b54804-980c-4774-974a-ec27bf7954f2")  # Replace with actual user_id
+    if sys.argv[2] == "migrate_one":
+        migrator.migrate_contributor_alias(sys.argv[3])
+    elif sys.argv[2] == "migrate_all":
+        migrator.migrate_all_users()
     migrator.close()

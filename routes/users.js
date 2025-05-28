@@ -157,6 +157,86 @@ router.get('/api/users',
     }
 });
 
+
+/**
+ * @swagger
+ * /api/v2/users:
+ *   get:
+ *     summary: Return all users
+ *     tags: ['users']
+ *     parameters:
+ *       - in: query
+ *         name: from
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The offset value for pagination
+ *       - in: query
+ *         name: size
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: The limit value for pagination
+ *       - in: query
+ *         name: sort-by
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [first_name, last_name]
+ *           default: first_name
+ *         description: Sorting order for the values
+ *       - in: query
+ *         name: sort-order
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: asc
+ *         description: Sorting order for the values
+ *       - in: query
+ *         name: filter-name
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [none, role-no, affiliation, first-name, last-name]
+ *           default: none
+ *         description: Filter attribute for the values
+ *       - in: query
+ *         name: filter-value
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Filter attribute value for the values
+ *     responses:
+ *       200:
+ *         description: All user documents found
+ *       500:
+ *         description: Error fetching the user list
+ */
+router.options('/api/v2/users', cors());
+router.get('/api/v2/users',
+		// jwtCorsMiddleware,
+		// authenticateJWT,
+		// authorizeRole(Role.SUPER_ADMIN),
+		async (req, res) => {
+    try {
+		const {
+	    	'from': from,
+	    	'size': size,
+			'sort-by': sort_by,
+			'sort-order': sort_order,
+			'filter-name': filter_key,
+			'filter-value': filter_value
+		} = req.query;
+
+		const response = await n4j.getAllContributorsV2(from, size, sort_by, sort_order, filter_key, filter_value);
+		res.status(200).json(response);
+    } catch (error) {
+		console.error('Error fetching user list:', error);
+		res.status(500).json({ message: 'Error fetching the user list' });
+    }
+});
+
 /**
  * @swagger
  * /api/users/{id}/role:

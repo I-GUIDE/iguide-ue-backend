@@ -1694,6 +1694,97 @@ export async function getAllContributors(
 }
 
 /**
+ * Get all Contributors with all information based on a pagination criteria
+ * from and size are optional parameters by default set to return 1st 100 records
+ * @returns {Object} Map of objects with serial Ids. If no users found returns empty
+ */
+export async function getAllContributorsV2(
+		from=0,
+		size=100,
+		sort_by=utils.SortBy.FIRST_NAME,
+		sort_order="asc",
+		filter_key='none',
+		filter_value=''){
+	let query_str = "MATCH (a:Alias)-[:ALIAS_OF]->(c:Contributor)";
+	let query_params = {};
+	/**
+	 * Set the filter by value if required
+	 */
+	switch (filter_key) {
+		case "role-no":
+			filter_key = "role"
+			filter_value = neo4j.int(filter_value)
+			query_str += " WHERE c." + filter_key + ' = $filter_val'
+			query_params['filter_val'] = filter_value
+			break
+		case "affiliation":
+			filter_key = "affiliation"
+			query_str += " WHERE toLower(a." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
+			break
+		case "first-name":
+			filter_key = "first_name"
+			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
+			break
+		case "last-name":
+			filter_key = "last_name"
+			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
+			break
+		default:
+			filter_key = "none"
+	}
+	/**
+	 * Set the return parameter
+	 */
+	let count_query_str = query_str + " return COUNT(c) AS count"
+	query_str += " RETURN c{.*} AS contributor, collect(a{.*}) AS aliases"
+	/**
+	 * Set the default value for sort_by parameter
+	 */
+	sort_by = utils.parseSortBy(sort_by)
+	if (sort_by && sort_by !== "") {
+		query_str += " ORDER BY c." + sort_by + " " + sort_order
+	}
+	/**
+	 * Set the pagination condition
+	 */
+	let pagination_str = " SKIP $from LIMIT $size";
+	query_str += pagination_str;
+	query_params['from'] = neo4j.int(from);
+	query_params['size'] = neo4j.int(size);
+	try {
+		let records, summary;
+		({records, summary} = await driver.executeQuery(query_str,
+			query_params,
+			{routing: 'READ', database: process.env.NEO4J_DB}));
+		if (records?.length <= 0) {
+			return {"total-users":-1, "users": []};
+		}
+		let contributor_list = [];
+		records?.map((contributor) => {
+			if (contributor['_fields']?.length > 0) {
+				let temp_contributor = contributor['_fields'][0]
+				temp_contributor['role'] = utils.parse64BitNumber(temp_contributor['role']);
+				contributor_list.push(temp_contributor);
+			}
+		});
+		({records, summary} = await driver.executeQuery(
+				count_query_str,
+				query_params,
+				{routing: 'READ', database: process.env.NEO4J_DB}));
+		let total_count = utils.parse64BitNumber(records[0].get('count'));
+		let contributor_final_list = Object.values(makeFrontendCompatible(contributor_list));
+		return {"total-users": total_count, "users": contributor_final_list}
+
+	} catch (err) {
+		console.log('getAllContributors() - Error in query: ' + err);
+	}
+	return {"total-users": -1, "users": []};
+}
+
+/**
  * Update the given user id's role with the updated_role
  * @param id
  * @param updated_role
