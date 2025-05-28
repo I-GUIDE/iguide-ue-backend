@@ -214,7 +214,7 @@ export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK
     //console.log('Prompt for comprehensive chat question:', prompt);
 
     // Call the LLM to form the comprehensive user query
-    var payload = createQueryPayload("llama3.2:latest", systemPrompt, userPrompt, 0.8, 0.9)
+    var payload = createQueryPayload("qwen2.5:7b-instruct", systemPrompt, userPrompt, 0.8, 0.9)
     const llmResponse = await callLlamaModel(payload);
     //console.log("Comprehensive quesiton: ", llmResponse);
     return llmResponse || "No response from LLM.";

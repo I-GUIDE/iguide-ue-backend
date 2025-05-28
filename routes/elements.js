@@ -21,6 +21,7 @@ import {
 	performElementOpenSearchDelete,
 	performElementOpenSearchInsert, performElementOpenSearchUpdate
 } from "./elements_utils.js";
+import {convertGeoSpatialFields} from "./rag_modules/spatial_utils.js"
 
 const router = express.Router();
 
@@ -671,6 +672,7 @@ router.post('/api/elements',
 			let resource_visibility = parseVisibility(resource['visibility']);
 			//Indexing the Element only if the visibility is Public
 			if (resource_visibility === Visibility.PUBLIC) {
+				let geo_spatial_resource = convertGeoSpatialFields(resource)
 				//Create indexable part for the resource
 				let os_element = {
 					title: resource['title'],
@@ -682,8 +684,11 @@ router.post('/api/elements',
 					// spatial-temporal
 					'spatial-coverage': resource['spatial-coverage'],
 					'spatial-geometry': resource['spatial-geometry'],
+					'spatial-geometry-geojson': geo_spatial_resource['spatial-geometry-geojson'],
 					'spatial-bounding-box': resource['spatial-bounding-box'],
+					'spatial-bounding-box-geojson': geo_spatial_resource['spatial-bounding-box-geojson'],
 					'spatial-centroid': resource['spatial-centroid'],
+					'spatial-centroid-geojson': geo_spatial_resource['spatial-centroid-geojson'],
 					'spatial-georeferenced': resource['spatial-georeferenced'],
 					'spatial-temporal-coverage': resource['spatial-temporal-coverage'],
 					'spatial-index-year': resource['spatial-index-year']
@@ -822,6 +827,7 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 	    // elements should ONLY be in OpenSearch if they are public
 	    const visibility = utils.parseVisibility(updates['visibility']);
 		const visibility_action = updateOSBasedtOnVisibility(element_old_visibility, visibility);
+		const geo_spatial_updates = convertGeoSpatialFields(updates)
 		let os_doc_body = {
 			'title': updates['title'],
 			'contents': updates['contents'],
@@ -833,11 +839,14 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 			// Spatial-temporal properties
 			'spatial-coverage': updates['spatial-coverage'],
 			'spatial-geometry': updates['spatial-geometry'],
+			'spatial-geometry-geojson': geo_spatial_updates['spatial-geometry-geojson'],
 			'spatial-bounding-box': updates['spatial-bounding-box'],
+			'spatial-bounding-box-geojson': geo_spatial_updates['spatial-bounding-box-geojson'],
 			'spatial-centroid': updates['spatial-centroid'],
+			'spatial-centroid-geojson': geo_spatial_updates['spatial-centroid-geojson'],
 			'spatial-georeferenced': updates['spatial-georeferenced'],
 			'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
-			'spatial-index-year': updates['spatial-index-year']
+			'spatial-index-year': updates['spatial-index-year'],
 			// Type and contributor should never be updated
 		}
 		switch (visibility_action) {

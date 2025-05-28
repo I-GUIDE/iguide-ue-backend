@@ -490,7 +490,12 @@ router.options('/api/users/:id', (req, res) => {
         res.header('Access-Control-Allow-Origin', '*');
         res.header('Access-Control-Allow-Methods', 'GET');
         res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
-    }
+    } else if (method === 'DELETE') {
+		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+        res.header('Access-Control-Allow-Methods', 'DELETE');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+        res.header('Access-Control-Allow-Credentials', 'true');
+	}
     res.sendStatus(204); // No content
 });
 router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
@@ -673,6 +678,10 @@ router.get('/api/users/bookmark/:elementId',
 //  *     responses:
 //  *       200:
 //  *         description: User deleted successfully
+//  *       403:
+//  *         description: User cannot be deleted as user has contributions
+//  *       409:
+//  *         description: User cannot delete another Super Admin
 //  *       500:
 //  *         description: Internal server error
 //  */
@@ -693,7 +702,15 @@ router.delete('/api/users/:id',
 			 */
 			let private_elements_cnt_resp = await n4j.getElementsCountByContributor(id, true);
 			if (public_elements_cnt_resp + private_elements_cnt_resp > 0) {
-				res.status(403).json({message: 'Cannot delete user as it has elements associated'});
+				res.status(409).json({message: 'Failed to delete user. User has public or private contributions.'});
+				return;
+			}
+			/**
+			 * Get user details to check SUPER_ADMIN Privileges
+			 */
+			const user_details = await n4j.getContributorByID(id);
+			if (user_details['role'] === 1) {
+				res.status(409).json({message: 'Failed to delete user. User cannot delete a Super Admin User'});
 				return;
 			}
 			/**

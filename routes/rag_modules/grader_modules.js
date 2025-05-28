@@ -102,7 +102,7 @@ export async function gradeDocuments(documents, question) {
       result = await callGPTModel(queryPayload);
     }else{
       const queryPayload = createQueryPayload(
-        "llama3:instruct",
+        "qwen2.5:7b-instruct",
         "You are a grader assessing document relevance. Return a single JSON object with a numeric relevance_score.",
         graderPrompt,
         0.0,
@@ -329,7 +329,7 @@ export async function gradeGenerationVsDocumentsAndQuestion(state, showReason = 
     Return JSON with keys binary_score ('yes' or 'no') and explanation.
   `;
   const hallucinationRelevanceResponse = await callLlamaModel(
-    createQueryPayload("llama3.2:latest", "You are a teacher grading a student's answer for factual accuracy and relevance to the question.", graderPrompt)
+    createQueryPayload("qwen2.5:7b-instruct", "You are a teacher grading a student's answer for factual accuracy and relevance to the question.", graderPrompt)
   );
 
   if (showReason) console.log(hallucinationRelevanceResponse?.message?.content);
@@ -386,7 +386,7 @@ export async function addAndGradeDocuments(relevantDocuments, newDocuments, ques
 
     // 4) Create your query payload (adjust system prompt as needed)
     const queryPayload = createQueryPayload(
-      "llama3:instruct",
+      "qwen2.5:7b-instruct",
       "You are a grader assessing document relevance. Return a single JSON object with a numeric relevance_score.",
       graderPrompt
     );

@@ -842,7 +842,7 @@ Known facts: ${JSON.stringify(known)}
 Snippet:
 """${docs[0]._source.contents.slice(0, 400)}"""
 Return ONLY a JSON object of new facts.`;
-  const txt = await callLlamaModel(createQueryPayload("llama3:instruct", sys, user));
+  const txt = await callLlamaModel(createQueryPayload("qwen2.5:7b-instruct", sys, user));
   return safeParseLLMJson(txt);
 }
 
