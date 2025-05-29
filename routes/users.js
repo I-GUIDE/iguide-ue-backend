@@ -12,8 +12,14 @@ import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
-import {Role} from "../utils.js";
-import {getAllContributors} from "../backend_neo4j.js";
+import {performUserCheck, Role} from "../utils.js";
+import {
+	checkAliasIsPrimary,
+	checkIfAliasExists,
+	getAllContributors,
+	getContributorByIDv2,
+	getPrimaryAliasById
+} from "../backend_neo4j.js";
 
 const router = express.Router();
 
@@ -281,6 +287,47 @@ router.get('/api/users/:id/role', cors(), async (req, res) => {
 
 /**
  * @swagger
+ * /api/v2/users/{id}/role:
+ *   get:
+ *     summary: Return the user role given the id
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the user
+ *     responses:
+ *       200:
+ *         description: The user role i.e. admin, user
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Error fetching the user
+ */
+router.options('/api/v2/users/:id/role', cors());
+router.get('/api/v2/users/:id/role', cors(), async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
+	if (performUserCheck(req, id)) {
+		res.status(403).json({message: 'User is not permitted to perform this action.'});
+		return;
+	}
+    try {
+		const response = await n4j.getContributorByIDv2(id);
+		if (response?.size){
+	    	return res.status(404).json({ message: 'User not found' });
+		}
+		let ret = {'role' : response['role']};
+		res.json(ret);
+    } catch (error) {
+		console.error('Error fetching user:', error);
+		res.status(500).json({ message: 'Error fetching the user' });
+    }
+});
+
+/**
+ * @swagger
  * /api/users/{id}/valid:
  *   get:
  *     summary: Check if a user exists given the id
@@ -310,6 +357,39 @@ router.get('/api/users/:id/valid', cors(), async (req, res) => {
     } catch (error) {
 	console.error('Error checking user:', error);
 	res.status(500).json({ message: 'Error checking the user' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/v2/users/{id}/valid:
+ *   get:
+ *     summary: Check if a user exists given the id/openId
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the user
+ *     responses:
+ *       200:
+ *         description: True if user exists, false otherwise
+ *       500:
+ *         description: Error checking the user
+ */
+router.options('/api/v2/users/:id/valid', cors());
+router.get('/api/v2/users/:id/valid', cors(), async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
+
+    console.log('Check user ...' + id);
+    try {
+		const response = await n4j.checkContributorByIDV2(id);
+		res.status(200).json(response);
+    } catch (error) {
+		console.error('Error checking user:', error);
+		res.status(500).json({ message: 'Error checking the user' });
     }
 });
 
@@ -450,6 +530,67 @@ router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) =
     } catch (error) {
 	console.error('Error adding user:', error);
 	res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/v2/users:
+ *   post:
+ *     summary: Add a new user document version 2 with Alias
+ *     tags: ['users']
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: User added successfully
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/api/v2/users',
+	jwtCorsMiddleware
+);
+router.post('/api/v2/users',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
+
+    const user = req.body;
+    console.log('Adding new user');
+    //console.log(user);
+
+    try {
+		const id = user['id'];
+		const response = await n4j.registerContributorV2(user);
+		if (response){
+	    	res.status(201).json({ message: 'User added successfully', id: id });
+		} else {
+	    	res.status(201).json({ message: 'User already exists', id: id });
+	    	console.log('User already exists with id: ' + id);
+		}
+		// [ToDo] Add contributor name to OpenSearch
+
+		// const response = await os.client.index({
+		//     index: 'users',
+		//     id: user.openid,
+		//     body: user,
+		//     refresh:'wait-for'
+		// });
+		//res.status(201).json({ message: 'User added successfully', id: response.body._id });
+    } catch (error) {
+		console.error('Error adding user:', error);
+		res.status(500).json({ message: 'Internal server error' });
     }
 });
 
@@ -727,5 +868,280 @@ router.delete('/api/users/:id',
 			res.status(500).json({message: 'Internal server error'});
 		}
 	});
+
+/**
+ * @swagger
+ * /api/v2/users/{userId}:
+ *   get:
+ *     summary: Get user information with aliases
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The userId of the user
+ *     responses:
+ *       200:
+ *         description: Return the user document with all aliases
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
+router.options('api/v2/users/:id', cors());
+router.get('/api/v2/users/:id', cors(), async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
+    try {
+		const response = await n4j.getContributorByIDv2(id);
+		if (response.size === 0){
+	    	return res.status(404).json({ message: 'User not found' });
+		}
+		// remove role attribute
+		delete response['role'];
+		res.status(200).json(response);
+    } catch (error) {
+		console.error('Error fetching user:', error);
+		res.status(500).json({ message: 'Error fetching the user' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/v2/users/alias/{userId}:
+ *   put:
+ *     summary: Add a new alias for the given userId
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The userId of the user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - openid
+ *               - email
+ *               - affiliation
+ *             properties:
+ *               openid:
+ *                 type: string
+ *                 description: The OpenID for the alias
+ *                 example: "http://cilogon.org/serverTest/users/22364"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: The email associated with the alias
+ *                 example: "iguide.test@example.com"
+ *               affiliation:
+ *                 type: string
+ *                 description: Affiliation of the user for this alias
+ *                 example: "University of Illinois at Urbana-Champaign"
+ *     responses:
+ *       200:
+ *         description: User alias successfully added with the alias document
+ *       500:
+ *         description: Internal server error in adding alias
+ */
+
+
+router.options('/api/v2/users/alias/:id', (req, res) => {
+	res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+    res.header('Access-Control-Allow-Methods', jwtCorsOptions.methods);
+	res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+	res.header('Access-Control-Allow-Credentials', 'true');
+    res.sendStatus(204); // No content
+});
+router.put('/api/v2/users/alias/:id',
+		jwtCorsMiddleware,
+		authenticateJWT,
+		async (req, res) => {
+	try {
+		const user_id = decodeURIComponent(req.params.id);
+		if (performUserCheck(req, user_id)) {
+			res.status(403).json({message: 'User is not permitted to perform this action.'});
+			return;
+		}
+    	const alias_body = req.body;
+		const response = await n4j.createAliasById(user_id, alias_body.open_id, alias_body.email, alias_body.affiliation, false);
+		res.status(200).json(response);
+	} catch (error) {
+		console.error('Error in creating user alias: ', error);
+		res.status(500).json({message: 'Error in adding user alias.'});
+	}
+});
+
+/**
+ * @swagger
+ * /api/v2/users/alias/{userId}/primary:
+ *   get:
+ *     summary: get user's primary alias for the given user_id
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The userId of the user
+ *     responses:
+ *       200:
+ *         description: User's primary alias successfully retrieved.
+ *       500:
+ *         description: Internal server error in updating primary alias
+ */
+router.options('/api/v2/users/alias/:id/primary', (req, res) => {
+	res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+    res.header('Access-Control-Allow-Methods', jwtCorsOptions.methods);
+	res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+	res.header('Access-Control-Allow-Credentials', 'true');
+    res.sendStatus(204); // No content
+});
+router.get('/api/v2/users/alias/:id/primary', cors(),
+		async (req, res) => {
+	try {
+		const user_id = decodeURIComponent(req.params.id);
+		if (performUserCheck(req, user_id)) {
+			res.status(403).json({message: 'User is not permitted to perform this action.'});
+			return;
+		}
+		const curr_alias = await getPrimaryAliasById(user_id);
+		res.status(200).json(curr_alias);
+	} catch (error) {
+		console.error('Error in updating user role: ', error);
+		res.status(500).json({message: 'Error in updating user primary alias'});
+	}
+});
+
+/**
+ * @swagger
+ * /api/v2/users/alias/{userId}/primary:
+ *   post:
+ *     summary: Update user's primary alias for the given openId
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The userId of the user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               openid:
+ *                 type: string
+ *                 description: The OpenID to set as primary
+ *                 example: "http://cilogon.org/serverTest/users/22364"
+ *     responses:
+ *       200:
+ *         description: User's primary alias successfully updated.
+ *       404:
+ *         description: Given OpenId does not exist for the user.
+ *       409:
+ *         description: Given OpenId is already a primary alias for the user.
+ *       500:
+ *         description: Internal server error in updating primary alias
+ */
+router.post('/api/v2/users/alias/:id/primary',
+		jwtCorsMiddleware,
+		authenticateJWT,
+		async (req, res) => {
+	try {
+		const user_id = decodeURIComponent(req.params.id);
+		if (performUserCheck(req, user_id)) {
+			res.status(403).json({message: 'User is not permitted to perform this action.'});
+			return;
+		}
+    	const alias_body = req.body;
+		const alias_exists = await checkIfAliasExists(user_id, alias_body.openid);
+		if (!alias_exists) {
+			res.status(404).json({message: "Given OpenId does not exist."});
+			return;
+		}
+		const curr_alias = await getPrimaryAliasById(user_id);
+		if (curr_alias?.openid && curr_alias?.openid === alias_body.openid) {
+			res.status(409).json({message: 'Given OpenId is already the primary alias.'});
+			return;
+		}
+		const response = await n4j.setAliasAsPrimary(user_id, curr_alias.openid, alias_body.openid);
+		if (response === null) {
+			res.status(500).json({message: 'Error in updating user primary alias.'})
+		} else {
+			res.status(200).json(response);
+		}
+	} catch (error) {
+		console.error('Error in updating user role: ', error);
+		res.status(500).json({message: 'Error in updating user primary alias'});
+	}
+});
+
+/**
+ * @swagger
+ * /api/v2/users/alias/{userId}:
+ *   delete:
+ *     summary: Delete a user's alias
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The userId of the user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               openid:
+ *                 type: string
+ *                 description: The OpenID alias to delete
+ *                 example: "http://cilogon.org/serverTest/users/22364"
+ *     responses:
+ *       200:
+ *         description: Given alias for user is successfully deleted.
+ *       409:
+ *         description: Given OpenId is a primary alias for the user. Hence, cannot be deleted.
+ *       500:
+ *         description: Internal server error in removing alias
+ */
+router.delete('/api/v2/users/alias/:id',
+		jwtCorsMiddleware,
+		authenticateJWT,
+		async (req, res) => {
+	try {
+		const user_id = decodeURIComponent(req.params.id);
+		if (performUserCheck(req, user_id)) {
+			res.status(403).json({message: 'User is not permitted to perform this action.'});
+			return;
+		}
+    	const alias_body = req.body;
+		const is_primary = await checkAliasIsPrimary(user_id, alias_body.openid)
+		if (is_primary) {
+			console.log("Cannot delete alias which is primary");
+			res.status(409).json({message: 'Cannot delete alias as it is primary email'});
+			return;
+		}
+		const response = await n4j.deleteAliasByOpenId(user_id, alias_body.open_id)
+		res.status(200).json(response);
+	} catch (error) {
+		console.error('Error in updating user role: ', error);
+		res.status(500).json({message: 'Error in updating user role'});
+	}
+});
 
 export default router;
