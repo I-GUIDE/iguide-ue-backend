@@ -123,7 +123,7 @@ Contributor information must be retrieved via an OPTIONAL MATCH: (c:Contributor)
     const userPrompt = `User question: ${question}`;
   
     const payload = createQueryPayload(
-        "llama3.3:70b",
+        "qwen2.5:7b-instruct",
         systemPrompt,
         userPrompt
       );

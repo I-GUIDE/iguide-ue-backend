@@ -202,7 +202,11 @@ export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK
 
     Previous: Chicago datasets
     New: Show climate data
-    Output: Climate data`.trim();
+    Output: Climate data
+    
+    Previous: Chicago datasets
+    New: What is telecoupling?
+    Output: What is telecoupling?`.trim();
     const userPrompt = `
     Previous Questions (most recent first):
     ${recentChatHistory.length > 0 
