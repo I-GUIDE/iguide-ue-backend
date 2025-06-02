@@ -1320,6 +1320,82 @@ export async function registerContributorAuth(contributor){
 }
 
 /**
+ * Register new contributor for AUTH purposes V2
+ * @param {Object} contributor Map with new contributor attributes (refer to schema)
+ * @return {Object} user object for successful creation. empty object in case it fails
+ */
+export async function registerContributorAuthV2(contributor){
+
+	// (1) generate id (UUID).
+    contributor['id'] = uuidv4();
+
+    // (2) assign roles for new contributor
+    contributor['role'] = (() => {
+		let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
+            .substring(contributor['email'].toLowerCase().lastIndexOf("@"));
+		if ((contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
+	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
+            contributor['email'].toLowerCase().includes('.org')
+	   	) {
+	    	return neo4j.int(utils.Role.TRUSTED_USER);
+		}
+		// default role
+		return neo4j.int(utils.Role.UNTRUSTED_USER);
+    })();
+    // (3) get avatar URL
+    //contributor['avatar_url'] = contributor['avatar_url']['original'];
+    const query_str = "CREATE (c: Contributor $contr_param) " +
+		"CREATE (a:Alias $alias_param) " +
+		"CREATE (a)-[:ALIAS_OF]->(c) " +
+		"RETURN c{.*} as contributor, a{.*} as alias";
+    try{
+		let alias_param = {
+			openid: contributor["openid"],
+			email: contributor["email"],
+			affiliation: contributor["affiliation"],
+			is_primary: true
+		};
+		let contr_param = {
+			id: contributor['id'],
+			first_name: contributor["first_name"],
+			last_name: contributor["last_name"],
+			bio: contributor["bio"],
+			role: contributor["role"],
+		};
+		const {records, summary} =
+	      	await driver.executeQuery(query_str,
+					{contr_param: contr_param, alias_param: alias_param},
+					{routing: 'WRITE', database: process.env.NEO4J_DB});
+		if (summary.counters.updates()['nodesCreated'] == 2){
+	    	let response = {
+				Contributor: records[0]['_fields'][0],
+				Aliases: records[0]['_fields'][1]
+			};
+			let primary_alias = {}
+			if (response?.Aliases) {
+				response?.Aliases.map((alias) => {
+					if (alias?.is_primary === true) {
+						primary_alias = alias;
+					}
+				});
+			}
+			let contributor = response?.Contributor;
+			contributor["openid"] = primary_alias["openid"];
+			contributor["email"] = primary_alias["email"];
+			contributor["affiliation"] = primary_alias["affiliation"];
+			contributor["aliases"] = response?.Aliases;
+			return makeFrontendCompatible(contributor);
+		}
+    } catch(err){
+		console.log('registerContributor() - Error in query: '+ err);
+	}
+
+	// something went wrong
+    return {};
+
+}
+
+/**
  * Update existing contributor
  * @param {string} id Contributor id
  * @param {Object} contributor Map with new contributor attributes (refer to schema)
@@ -1456,8 +1532,6 @@ export async function getContributorByIDv2(id) {
 		} else if (records.length > 1) {
 			throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID:" + id);
 		}
-		console.log(records);
-		console.log(summary);
 		let response = {
 			Contributor: records[0]['_fields'][0],
 			Aliases: records[0]['_fields'][1]

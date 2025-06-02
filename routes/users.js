@@ -19,7 +19,7 @@ import {
 	getAllContributors,
 	getContributorByIDv2,
 	getPrimaryAliasById,
-    registerContributorAuth
+	registerContributorAuth, registerContributorAuthV2
 } from "../backend_neo4j.js";
 
 const router = express.Router();
@@ -656,6 +656,61 @@ router.post('/api/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, 
 			res.status(200).json({ message: 'User already exists', user: {id: existing_user.id, role: existing_user.role} });
 		} else {
 			const response = await n4j.registerContributorAuth(user);
+
+			if (response['id'] !== undefined) {
+				res.status(200).json({message: 'User created successfully', user: {id: response.id, role: response.role}});
+			} else {
+				res.status(500).json({message: 'Error in creating user'});
+			}
+		}
+
+    } catch (error) {
+		console.error('Error adding user:', error);
+		res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/v2/auth/users:
+ *   post:
+ *     summary: Add a new user document for authorized server
+ *     tags: ['users']
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: User added successfully or already presented user provided
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/api/v2/auth/users', jwtCorsMiddleware);
+router.post('/api/v2/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, res) => {
+
+	const user = req.body;
+    console.log('Adding new user');
+
+    try {
+		const id = user['id'];
+		let existing_user = {}
+		if (id !== undefined) {
+			existing_user = await n4j.getContributorByIDv2(id);
+		}
+		if (existing_user !== {} && existing_user['id'] !== undefined) {
+			res.status(200).json({ message: 'User already exists', user: {id: existing_user.id, role: existing_user.role} });
+		} else {
+			const response = await n4j.registerContributorAuthV2(user);
 
 			if (response['id'] !== undefined) {
 				res.status(200).json({message: 'User created successfully', user: {id: response.id, role: response.role}});
