@@ -194,6 +194,7 @@ export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK
     3. Keep augmented queries concise (under 12 words)
     4. Respond ONLY with the final query - no explanations
     5. Do not include the terms that are not related to the context
+    6. If the new query is unrelated to the previous questions, return it as is.
 
     Examples:
     Previous: Chicago datasets
@@ -202,7 +203,15 @@ export async function formComprehensiveUserQuery(memoryId, newUserQuery, recentK
 
     Previous: Chicago datasets
     New: Show climate data
-    Output: Climate data`.trim();
+    Output: Climate data
+    
+    Previous: Chicago datasets
+    New: What is telecoupling?
+    Output: What is telecoupling?
+    
+    Previous:
+    New: Who is the contributor of "Chicago Communitites" and recommend some other work from the contributor
+    Output: Who is the contributor of "Chicago Communitites" and recommend some other work from the contributor`.trim();
     const userPrompt = `
     Previous Questions (most recent first):
     ${recentChatHistory.length > 0 

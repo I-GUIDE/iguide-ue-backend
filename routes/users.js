@@ -11,14 +11,15 @@ import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
-import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
+import {authenticateAuth, authenticateJWT, authorizeRole, generateAccessToken} from '../jwtUtils.js';
 import {performUserCheck, Role} from "../utils.js";
 import {
 	checkAliasIsPrimary,
 	checkIfAliasExists,
 	getAllContributors,
 	getContributorByIDv2,
-	getPrimaryAliasById
+	getPrimaryAliasById,
+    registerContributorAuth
 } from "../backend_neo4j.js";
 
 const router = express.Router();
@@ -610,6 +611,62 @@ router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) =
     } catch (error) {
 	console.error('Error adding user:', error);
 	res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+
+/**
+ * @swagger
+ * /api/auth/users:
+ *   post:
+ *     summary: Add a new user document for authorized server
+ *     tags: ['users']
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: User added successfully or already presented user provided
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/api/auth/users', jwtCorsMiddleware);
+router.post('/api/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, res) => {
+
+	const user = req.body;
+    console.log('Adding new user');
+
+    try {
+		const id = user['id'];
+		let existing_user = {}
+		if (id !== undefined) {
+			existing_user = await n4j.getContributorByID(id);
+		}
+		if (existing_user !== {} && existing_user['id'] !== undefined) {
+			res.status(200).json({ message: 'User already exists', user: {id: existing_user.id, role: existing_user.role} });
+		} else {
+			const response = await n4j.registerContributorAuth(user);
+
+			if (response['id'] !== undefined) {
+				res.status(200).json({message: 'User created successfully', user: {id: response.id, role: response.role}});
+			} else {
+				res.status(500).json({message: 'Error in creating user'});
+			}
+		}
+
+    } catch (error) {
+		console.error('Error adding user:', error);
+		res.status(500).json({ message: 'Internal server error' });
     }
 });
 

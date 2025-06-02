@@ -146,7 +146,8 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 			}
 			const newAccessToken = generateAccessToken({ id: user.id, role: response['role'] });
 			res.cookie(process.env.JWT_ACCESS_TOKEN_NAME, newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
-			res.json({ accessToken: newAccessToken });
+			// res.json({ accessToken: newAccessToken });
+			res.json({id: user.id, role: response['role']});
 			} catch (error) {
 				console.error('Error fetching user:', error);
 				res.status(500).json({ message: 'Error fetching the user' });

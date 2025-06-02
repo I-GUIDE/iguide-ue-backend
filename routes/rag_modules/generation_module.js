@@ -59,7 +59,7 @@ When you answer:
   Pay attention to the context. Answer the question as if this knowledge and the supporting Information is inherent to you. Avoid saying "Based on the context" or "According to the given information". 
   `.trim();
   
-      console.log("User Prompt:\n", userPrompt);
+      //console.log("User Prompt:\n", userPrompt);
   
       // Create the payload - incorporate temperature and top_p if your createQueryPayload supports them
       let llmResponse;
