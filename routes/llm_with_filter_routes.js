@@ -4,6 +4,8 @@ import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import rateLimit from 'express-rate-limit';
+import {authenticateJWT, authorizeRole} from "../jwtUtils.js";
+import {Role} from "../utils.js";
 
 const router = express.Router();
 
@@ -149,7 +151,10 @@ Respond with a JSON array containing only the relevant elements.
  *         description: Error creating memory
  */
 router.options('/llm/memory-id', cors());
-router.post('/llm/memory-id', cors(), async (req, res) => {
+router.post('/llm/memory-id', cors(),
+    authenticateJWT,
+    authorizeRole(Role.TRUSTED_USER),
+    async (req, res) => {
     const conversationName = `conversation-${uuidv4()}`; // Generate random conversation name
 
     try {
@@ -232,7 +237,10 @@ router.post('/llm/memory-id', cors(), async (req, res) => {
  */
 
 router.options('/llm/search', cors());
-router.post('/llm/search', cors(), async (req, res) => {
+router.post('/llm/search', cors(),
+    authenticateJWT,
+    authorizeRole(Role.TRUSTED_USER),
+    async (req, res) => {
     const { userQuery, memoryId } = req.body;
 
     try {
