@@ -1223,6 +1223,50 @@ export async function registerContributor(contributor){
     // something went wrong
     return false;
 }
+
+/**
+ * Register new contributor
+ * @param {Object} contributor Map with new contributor attributes (refer to schema)
+ * @return {Object} user object for successful creation. empty object in case it fails
+ */
+export async function registerContributorAuth(contributor){
+
+    // (1) generate id (UUID).
+    contributor['id'] = uuidv4();
+
+    // (2) assign roles for new contributor
+    contributor['role'] = (() => {
+		let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
+            .substring(contributor['email'].toLowerCase().lastIndexOf("@"));
+		if ((contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
+	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
+			(contributor['email'] && contributor['email'].toLowerCase().includes('.org'))
+	   	) {
+	    	return neo4j.int(utils.Role.TRUSTED_USER);
+		}
+		// default role
+		return neo4j.int(utils.Role.UNTRUSTED_USER);
+    })();
+    // (3) get avatar URL
+    //contributor['avatar_url'] = contributor['avatar_url']['original'];
+    const query_str = "CREATE (c: Contributor $contr_param) return c{.*}";
+    try{
+		const {records, summary} =
+	      	await driver.executeQuery(query_str,
+					{contr_param: contributor},
+					{database: process.env.NEO4J_DB});
+		if (summary.counters.updates()['nodesCreated'] == 1){
+			let temp_contributor = records[0]['_fields'][0]
+			temp_contributor['role'] = utils.parse64BitNumber(contributor['role']);
+	    	return makeFrontendCompatible(temp_contributor);
+		}
+    } catch(err){
+		console.log('registerContributor() - Error in query: '+ err);
+	}
+    // something went wrong
+    return {};
+}
+
 /**
  * Update existing contributor
  * @param {string} id Contributor id
@@ -1323,7 +1367,10 @@ export async function getContributorByID(id){
 	contributor['role'] = utils.parse64BitNumber(contributor['role']);
 
 	return makeFrontendCompatible(contributor);
-    } catch(err){console.log('getContributorByID() - Error in query: '+ err);}
+    } catch(err){
+		console.log('getContributorByID() - Error in query: '+ err);
+
+	}
     // something went wrong
     return {};
 }
