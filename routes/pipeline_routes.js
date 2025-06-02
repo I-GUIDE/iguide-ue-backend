@@ -15,7 +15,7 @@ import { generateAnswer } from './rag_modules/generation_module.js';
 import { restrictToUIUC } from '../ip_policy.js';
 import {createQueryPayload} from './rag_modules/llm_modules.js';
 const router = express.Router();
-
+const checkGenerationQuality = process.env.CHECK_GENERATION_QUALITY === 'true' || false; // Default to false if not set
 const MAX_SEARCHES_PER_HOUR =process.env.MAX_SEARCHES_PER_HOUR || 10; // Set a default value if not provided
 
 const searchRateLimiter = makeSearchRateLimiter(MAX_SEARCHES_PER_HOUR);
@@ -597,7 +597,7 @@ router.post('/llm/legacy-search', cors(), async (req, res) => {
     }
 
     // Update the chat history
-    await updateMemory(finalMemoryId, userQuery, response.message_id, response);
+    await updateMemory(finalMemoryId, userQuery, response.message_id, response.answer, response.elements);
     res.status(200).json(response);
   } catch (error) {
     console.error("Error performing conversational search:", error);
@@ -788,11 +788,11 @@ router.post('/llm/search', searchRateLimiter, async (req, res) => {
     if(process.env.MULTIHOP_RAG=="true"){
       sendEvent('status', { status: 'Iterative retrieval' });
       console.log("Iterative retrieval for", comprehensiveQuery);
-      response = await handleIterativeQuery(userQuery, comprehensiveQuery, false, (progress) => {
+      response = await handleIterativeQuery(userQuery, comprehensiveQuery, checkGenerationQuality, (progress) => {
         sendEvent('status', { status: progress });
       });
     }else{
-      response = await handleUserQueryWithProgress(userQuery, comprehensiveQuery, false, (progress) => {
+      response = await handleUserQueryWithProgress(userQuery, comprehensiveQuery, checkGenerationQuality, (progress) => {
         sendEvent('status', { status: progress });
       });
     }
@@ -898,28 +898,34 @@ export async function handleIterativeQuery(
 You are a multi‑step retrieval‑and‑reasoning agent.
 
 ### Contract
-Return valid JSON only:
-  {"action":"search","search_query":"…","new_facts":{…}}
-  or
-  {"action":"answer","content":"…","new_facts":{…}}
+Return the scratchpad, then output valid JSON with one of the actions:
+  /*** Scratch‑pad**************************************************************
+   * Write your chain‑of‑thought here. DO NOT include braces in the scratch‑pad *
+   *****************************************************************************/
+  
+  REMINDER: After the scratch‑pad output ONLY one JSON object:
+    { "action":"search", "search_query":"…", "new_facts":{…} }
+    or
+    { "action":"answer", "content":"…",     "new_facts":{…} }
 
 ### Rules
-1. Think in a hidden Scratch‑pad (never shown to user).
+1. Think in the Scratch‑pad about whether the questions asked in the previous steps are sufficient for answering the user query. Focus on the questions asked instead of the documents as the documents maybe related but it is always better to ask another subquestion.
 2. If you learn any concrete value (name, %, id, date…), add it to "new_facts".
 3. When facts exist, use them in the next search instead of vague phrases.
-4. Stop searching when the question is fully answered and supported by ≥1 doc.
-5. Keep answers ≤1–2 sentences.
-6. Every key *and* every string value **MUST** be wrapped in double quotes.
+4. Stop searching when the question is fully answered by the sub-questions in each step and supported by ≥1 doc.
+5. If you need to find out more facts, do the search.
+6. Keep answers ≤1–2 sentences.
+7. Every key *and* every string value **MUST** be wrapped in double quotes.
    Example: { "name": "Finn Roberts" }   NOT  { "name": Finn Roberts }.
-7. Avoid doing new searches that are just rephrased versions of previous ones. For example, if the previous search is "Works from Alice" then you should avoid searching for "Alice's works" or "Alice's publications". Instead, you should go for a follow-up search if there is unknown facts or choose to answer.
+8. Avoid doing new searches that are just rephrased versions of previous steps. For example, if the previous step searched "Works from Alice" then you should avoid searching for "Alice's works" or "Alice's publications". Instead, you should go for a follow-up search if there is other unknown facts or stop and choose to answer.
 `;
 
     const raw = process.env.USE_GPT === true
       ? await callGPTModel(createQueryPayload("gpt-4o", systemPrompt, iterationPrompt))
       : await callLlamaModel(createQueryPayload("llama3:instruct", systemPrompt, iterationPrompt));
 
-    console.log("LLM Iteration Response:", raw);
-
+    //console.log("LLM Iteration Response:", raw);
+    console.log(`LLM Iteration Response for iterative query: ${raw}`);
     let act;
     try { act = safeParseLLMJson(raw); }
     catch (e) { console.warn("Bad JSON:", e); finalAnswerContent = raw; break; }
@@ -931,7 +937,7 @@ Return valid JSON only:
       let nextQ = await resolveReferences(act.search_query || "", state.knowledge);
       progressCallback(`Searching: "${nextQ}"`);
       const newResults = await routeUserQuery(nextQ);
-      const newlyRelevant = await gradeDocuments(newResults, userQuery);
+      const newlyRelevant = await gradeDocuments(newResults, nextQ);
 
       // auto‑extract facts (fail‑safe)
       const extracted = await autoExtractFacts(userQuery, newlyRelevant, state.knowledge);
@@ -964,9 +970,23 @@ Return valid JSON only:
 
   /* ------------ optional quality check (unchanged) ------------------------- */
   if (checkGenerationQuality) {
+    progressCallback("Validating answer relevance and hallucination");
     let verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
     let retry = 0;
     while (verdict !== "useful" && retry < 3) {
+      if (verdict === "not useful") {
+        progressCallback(`Regenerating answer (attempt ${retry + 1})`);
+      } else if (verdict === "max retries") {
+        progressCallback("Maximum retries reached - using best available answer");
+        console.log("Unable to get a satisfactory answer.");
+        return {
+          answer: "I'm sorry, I couldn't generate a satisfactory answer at the moment. Please try rephrasing your question.",
+          message_id: uuidv4(),
+          elements: [],
+          count: 0,
+          retrievalSteps
+        };
+      }
       retry++;
       generationState.generation = (await generateAnswer(generationState)).generation;
       verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
@@ -1027,14 +1047,6 @@ Return valid JSON only:
   Current documents:
   ${docTxt || "(none)"}
   
-  /*** Scratch‑pad (hidden from user) ******************************************
-   * Write your chain‑of‑thought here. DO NOT include braces in the scratch‑pad *
-   *****************************************************************************/
-  
-  REMINDER: After the scratch‑pad output ONLY one JSON object:
-    { "action":"search", "search_query":"…", "new_facts":{…} }
-    or
-    { "action":"answer", "content":"…",     "new_facts":{…} }
   `.trim();
   }
 /**
