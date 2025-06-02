@@ -1857,7 +1857,7 @@ export async function getAllContributorsV2(
 	 * Set the return parameter
 	 */
 	let count_query_str = query_str + " return COUNT(c) AS count"
-	query_str += " RETURN c{.*} AS contributor, collect(a{.*}) AS aliases"
+	query_str += " WITH c, collect(a{.*}) AS aliases"
 	/**
 	 * Set the default value for sort_by parameter
 	 */
@@ -1872,6 +1872,9 @@ export async function getAllContributorsV2(
 	query_str += pagination_str;
 	query_params['from'] = neo4j.int(from);
 	query_params['size'] = neo4j.int(size);
+
+	query_str += " RETURN c{.*} AS contributor, aliases";
+
 	try {
 		let records, summary;
 		({records, summary} = await driver.executeQuery(query_str,
@@ -1883,8 +1886,21 @@ export async function getAllContributorsV2(
 		let contributor_list = [];
 		records?.map((contributor) => {
 			if (contributor['_fields']?.length > 0) {
-				let temp_contributor = contributor['_fields'][0]
-				temp_contributor['role'] = utils.parse64BitNumber(temp_contributor['role']);
+				let temp_contributor = contributor['_fields'][0];
+				let aliases = contributor['_fields'][1];
+				let primary_alias = {}
+				if (aliases?.length > 0) {
+					aliases.map((alias) => {
+						if (alias?.is_primary) {
+							primary_alias = alias;
+						}
+					});
+					temp_contributor['openid'] = primary_alias['openid'];
+					temp_contributor['email'] = primary_alias['email'];
+					temp_contributor['affiliation'] = primary_alias['affiliation'];
+					temp_contributor['aliases'] = aliases;
+				}
+				//temp_contributor['role'] = utils.parse64BitNumber(temp_contributor['role']);
 				contributor_list.push(temp_contributor);
 			}
 		});
