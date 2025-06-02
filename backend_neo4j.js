@@ -1225,7 +1225,7 @@ export async function registerContributor(contributor){
 }
 
 /**
- * Register new contributor
+ * Register new contributor for AUTH purposes
  * @param {Object} contributor Map with new contributor attributes (refer to schema)
  * @return {Object} user object for successful creation. empty object in case it fails
  */
@@ -1367,10 +1367,7 @@ export async function getContributorByID(id){
 	contributor['role'] = utils.parse64BitNumber(contributor['role']);
 
 	return makeFrontendCompatible(contributor);
-    } catch(err){
-		console.log('getContributorByID() - Error in query: '+ err);
-
-	}
+    } catch(err){console.log('getContributorByID() - Error in query: '+ err);}
     // something went wrong
     return {};
 }
