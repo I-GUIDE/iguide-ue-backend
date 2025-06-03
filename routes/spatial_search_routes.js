@@ -1,6 +1,7 @@
 import express from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
+import * as utils from '../utils.js';
 
 const router = express.Router();
 
@@ -165,7 +166,7 @@ router.get('/search/spatial', cors(), async (req, res) => {
 
         // Infer the GeoJSON shape
         const shape = inferShapeFromCoords(coordsArray);
-
+        console.log('Inferred shape:', shape, 'for coordinates:', coordsArray);
         // Build the query
         const boolQuery = {
             bool: {
@@ -183,7 +184,7 @@ router.get('/search/spatial', cors(), async (req, res) => {
                 filter: [
                     {
                         geo_shape: {
-                            bounding_box: {
+                            'spatial-bounding-box-geojson': {
                                 shape,
                                 relation: relation.toUpperCase(),
                             },
@@ -203,36 +204,23 @@ router.get('/search/spatial', cors(), async (req, res) => {
         let results;
         if (limit !== 'unlimited' && !isNaN(limit)) {
             const size = parseInt(limit, 10);
-            const responseOS = await client.search({ index: process.env.OPENSEARCH_INDEX_MAP, body: { ...searchBody, size } });
+            const responseOS = await client.search({ index: process.env.OPENSEARCH_INDEX, body: { ...searchBody, size } });
             results = responseOS.body?.hits?.hits || [];
         } else {
-            results = await scrollAllDocuments(searchBody, process.env.OPENSEARCH_INDEX_MAP);
+            results = await scrollAllDocuments(searchBody, process.env.OPENSEARCH_INDEX);
         }
 
         // Format response with required fields
         const formattedResults = results.map((hit) => ({
-            //id: hit._id,
-            id: 'c3f284fa-54c3-4939-a68d-a3f2d26efec1',
+            id: hit._id,
+            //id: 'c3f284fa-54c3-4939-a68d-a3f2d26efec1',
             authors: hit._source.authors || 'Unknown',
             title: hit._source.title || 'Untitled',
-            'resource-type': hit._source['resource-type'] || 'map',
-            contents: hit._source.description || 'No description available',
-            contributor: {
-                id: 'fadd645b-457c-4a9b-9e91-ec844e34d922',
-                'avatar-url': {
-                    original: 'https://backend-dev.i-guide.io:3500/user-uploads/avatars/1722626010560-______2.png',
-                    low: 'https://backend-dev.i-guide.io:3500/user-uploads/avatars/1722626010560-______2-150px.png',
-                    high: 'https://backend-dev.i-guide.io:3500/user-uploads/avatars/1722626010560-______2-765px.png',
-                },
-                name: 'Yunfan Kang',
-            },
-            'thumbnail-image': {
-                original: 'https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/nb5.png',
-                low: 'https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/nb5-300px.png',
-                medium: 'https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/nb5-765px.png',
-                high: 'https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/nb5-1024px.png',
-            },
-            'bounding-box': hit._source['bounding_box'] || null,
+            'resource-type': hit._source['resource-type'],
+            contents: hit._source.contents || 'No description available',
+            contributor: hit._source.contributor || 'Unknown',
+            'thumbnail-image': utils.generateMultipleResolutionImagesFor(hit._source['thumbnail-image']),
+            'bounding-box': hit._source['spatial-bounding-box-geojson'] || null,
         }));
 
         return res.json({elements: formattedResults });
