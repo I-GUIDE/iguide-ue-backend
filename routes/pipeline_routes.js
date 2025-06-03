@@ -922,7 +922,8 @@ Return the scratchpad, then output valid JSON with one of the actions:
 7. Every key *and* every string value **MUST** be wrapped in double quotes.
    Example: { "name": "Finn Roberts" }   NOT  { "name": Finn Roberts }.
 8. Avoid doing new searches that are just rephrased versions of previous steps. For example, if the previous step searched "Works from Alice" then you should avoid searching for "Alice's works" or "Alice's publications". Instead, you should go for a follow-up search if there is other unknown facts or stop and choose to answer.
-`;
+9. Avoid repharsing the user query in the next search. Instead, you should go for a follow-up search if there is other unknown facts or stop and choose to answer.
+10. If the user query is a set of keywords, keep it as is in the next search. For example, if the user query is "Chicago Dataset" then just search for "Chicago Dataset" in the next search.`;
 
     const raw = process.env.USE_GPT === true
       ? await callGPTModel(createQueryPayload("gpt-4o", systemPrompt, iterationPrompt))
