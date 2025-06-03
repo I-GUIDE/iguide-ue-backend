@@ -221,7 +221,7 @@ router.get('/search/spatial', cors(), async (req, res) => {
             contributor: hit._source.contributor || 'Unknown',
             'thumbnail-image': utils.generateMultipleResolutionImagesFor(hit._source['thumbnail-image']),
             'bounding-box': hit._source['spatial-bounding-box-geojson'] || null,
-            'centroid': hit._source['spatial-centroid'].replace(/[^\d .-]/g,'').trim().split(/\s+/) || null,
+            'centroid': hit._source['spatial-centroid'].replace(/[^\d .-]/g,'').trim().split(/\s+/).map(Number) || null,
         }));
 
         return res.json({elements: formattedResults });
