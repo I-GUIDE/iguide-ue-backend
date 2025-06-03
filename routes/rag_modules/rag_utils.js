@@ -14,10 +14,10 @@ export function makeSearchRateLimiter(maxPerHour = 10) {
     keyGenerator: req => req.user?.id || req.ip,
     handler: (req, res) => {
       applyRateLimiterCorsHeaders(req, res);   
-      res.status(429);
-      res.write('event: error\n');
+      res.status(200);
+      res.write('event: event\n');
       res.write(
-        `data: {"error":"Rate limit exceeded – ${maxPerHour} searches per hour allowed."}\n\n`
+        `data: {"event":"Sorry you have reached ${maxPerHour} searches per hour allowed, please try again later."}\n\n`
       );
       res.end();
     },
