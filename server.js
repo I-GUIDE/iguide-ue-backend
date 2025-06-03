@@ -36,9 +36,7 @@ import users from './routes/users.js';
 import documentation from './routes/documentation.js';
 import elements from './routes/elements.js';
 import {
-	checkUniversityDomain,
 	generateOptimizedDomainList,
-	provideDomainUniversityInfo
 } from "./routes/domain_utils.js";
 
 const app = express();
