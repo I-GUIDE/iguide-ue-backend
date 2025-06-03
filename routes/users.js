@@ -11,9 +11,9 @@ import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
-import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
+import {authenticateAuth, authenticateJWT, authorizeRole, generateAccessToken} from '../jwtUtils.js';
 import {Role} from "../utils.js";
-import {getAllContributors} from "../backend_neo4j.js";
+import {getAllContributors, registerContributorAuth} from "../backend_neo4j.js";
 
 const router = express.Router();
 
@@ -453,6 +453,62 @@ router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) =
     }
 });
 
+
+/**
+ * @swagger
+ * /api/auth/users:
+ *   post:
+ *     summary: Add a new user document for authorized server
+ *     tags: ['users']
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: User added successfully or already presented user provided
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/api/auth/users', jwtCorsMiddleware);
+router.post('/api/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, res) => {
+
+	const user = req.body;
+    console.log('Adding new user');
+
+    try {
+		const id = user['id'];
+		let existing_user = {}
+		if (id !== undefined) {
+			existing_user = await n4j.getContributorByID(id);
+		}
+		if (existing_user !== {} && existing_user['id'] !== undefined) {
+			res.status(200).json({ message: 'User already exists', user: {id: existing_user.id, role: existing_user.role} });
+		} else {
+			const response = await n4j.registerContributorAuth(user);
+
+			if (response['id'] !== undefined) {
+				res.status(200).json({message: 'User created successfully', user: {id: response.id, role: response.role}});
+			} else {
+				res.status(500).json({message: 'Error in creating user'});
+			}
+		}
+
+    } catch (error) {
+		console.error('Error adding user:', error);
+		res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 /**
  * @swagger
  * /api/users/{id}:
@@ -490,7 +546,12 @@ router.options('/api/users/:id', (req, res) => {
         res.header('Access-Control-Allow-Origin', '*');
         res.header('Access-Control-Allow-Methods', 'GET');
         res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
-    }
+    } else if (method === 'DELETE') {
+		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+        res.header('Access-Control-Allow-Methods', 'DELETE');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+        res.header('Access-Control-Allow-Credentials', 'true');
+	}
     res.sendStatus(204); // No content
 });
 router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
@@ -673,6 +734,10 @@ router.get('/api/users/bookmark/:elementId',
 //  *     responses:
 //  *       200:
 //  *         description: User deleted successfully
+//  *       403:
+//  *         description: User cannot be deleted as user has contributions
+//  *       409:
+//  *         description: User cannot delete another Super Admin
 //  *       500:
 //  *         description: Internal server error
 //  */
@@ -693,7 +758,15 @@ router.delete('/api/users/:id',
 			 */
 			let private_elements_cnt_resp = await n4j.getElementsCountByContributor(id, true);
 			if (public_elements_cnt_resp + private_elements_cnt_resp > 0) {
-				res.status(403).json({message: 'Cannot delete user as it has elements associated'});
+				res.status(409).json({message: 'Failed to delete user. User has public or private contributions.'});
+				return;
+			}
+			/**
+			 * Get user details to check SUPER_ADMIN Privileges
+			 */
+			const user_details = await n4j.getContributorByID(id);
+			if (user_details['role'] === 1) {
+				res.status(409).json({message: 'Failed to delete user. User cannot delete a Super Admin User'});
 				return;
 			}
 			/**

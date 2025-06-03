@@ -35,6 +35,9 @@ import private_elements from './routes/private_elements.js';
 import users from './routes/users.js';
 import documentation from './routes/documentation.js';
 import elements from './routes/elements.js';
+import {
+	generateOptimizedDomainList,
+} from "./routes/domain_utils.js";
 
 const app = express();
 
@@ -141,7 +144,8 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 			}
 			const newAccessToken = generateAccessToken({ id: user.id, role: response['role'] });
 			res.cookie(process.env.JWT_ACCESS_TOKEN_NAME, newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
-			res.json({ accessToken: newAccessToken });
+			// res.json({ accessToken: newAccessToken });
+			res.json({id: user.id, role: response['role']});
 			} catch (error) {
 				console.error('Error fetching user:', error);
 				res.status(500).json({ message: 'Error fetching the user' });
@@ -215,6 +219,12 @@ app.use((err, req, res, next) => {
     // Forward to next middleware if no errors
     next();
 });
+/****************************************************************************
+ * Importing Domain List
+ ****************************************************************************/
+console.log("Importing domain list from JSON into Object...");
+generateOptimizedDomainList();
+console.log("Domain list import complete!");
 
 /****************************************************************************
  * Misc. Endpoints

@@ -2,7 +2,7 @@ import { Client } from '@opensearch-project/opensearch';
 import { getComprehensiveSchema, agentSearchWithLLM } from './neo4j_agent.js';
 
 const client = new Client({
-  node: 'https://10.0.147.253:9200' || process.env.OPENSEARCH_NODE,
+  node:  process.env.OPENSEARCH_NODE,
   auth: {
     username: process.env.OPENSEARCH_USERNAME,
     password: process.env.OPENSEARCH_PASSWORD,
@@ -15,7 +15,7 @@ const client = new Client({
 export async function getKeywordSearchResults(userQuery) {
   try {
     const response = await client.search({
-      index: 'neo4j-elements-knn' || process.env.OPENSEARCH_INDEX,
+      index: process.env.OPENSEARCH_INDEX,
       size: 12,
       body: {
         query: { match: { contents: userQuery } },
@@ -49,7 +49,7 @@ export async function getSemanticSearchResults(userQuery) {
   if (!embedding) return [];
   try {
     const response = await client.search({
-      index: 'neo4j-elements-knn' || process.env.OPENSEARCH_INDEX,
+      index: process.env.OPENSEARCH_INDEX,
       body: {
         size: 12,
         query: {

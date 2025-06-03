@@ -41,6 +41,21 @@ export const authenticateJWT = (req, res, next) => {
   }
 };
 
+/**
+ * Authentication parameter to check if the request is coming from authorized backend
+ * @param req
+ * @param res
+ * @param next
+ * @returns {*}
+ */
+export const authenticateAuth = (req, res, next) => {
+  // Special case to handle JWT APIs
+  if (checkAuthTokenBypass(req)) {
+    next();
+  } else {
+    return res.status(403).json({ message: 'Token not available' });
+  }
+};
 
 // Middleware to check if the user has the required role
 export const authorizeRole = (requiredRole) => (req, res, next) => {
@@ -90,6 +105,25 @@ export const checkJWTTokenBypass = (req) => {
     return false;
   }
 }
+
+/**
+ * This function bypasses JWT Token check for AUTH Processes
+ * @param req
+ * @returns {boolean}
+ */
+export const checkAuthTokenBypass = (req) => {
+  const api_key = process.env.AUTH_API_KEY_VALUE ? process.env.AUTH_API_KEY_VALUE : "";
+  if (api_key === "") {
+    return false;
+  }
+  const header_key = process.env.AUTH_API_KEY ? req.header(process.env.AUTH_API_KEY) : "";
+  if (api_key === header_key) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
 // Generate an access token
 export const generateAccessToken = (user) => {
   return jwt.sign(user, process.env.JWT_ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
