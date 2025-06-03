@@ -7,22 +7,64 @@ import JSON5 from 'json5';
  */
 export function makeSearchRateLimiter(maxPerHour = 10) {
   return rateLimit({
-    windowMs: 60 * 60 * 1000,          // 1 hour
-    max: maxPerHour,                   // ← runtime parameter
+    windowMs: 60 * 60 * 1000,
+    max: maxPerHour,
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: req => req.user?.id || req.ip,
+
     handler: (req, res) => {
-      applyRateLimiterCorsHeaders(req, res);   
-      res.status(200);
-      res.write('event: event\n');
-      res.write(
-        `data: {"event":"Sorry you have reached ${maxPerHour} searches per hour allowed, please try again later."}\n\n`
-      );
+      const allowedOrigins = process.env.ALLOWED_DOMAIN_LIST
+        ? JSON.parse(process.env.ALLOWED_DOMAIN_LIST)
+        : [process.env.FRONTEND_DOMAIN];
+      const origin = req.headers.origin;
+
+      res.setHeader('Access-Control-Allow-Origin', allowedOrigins.includes(origin) ? origin : allowedOrigins[0]);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders || 'Content-Type, Authorization');
+
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+      res.write('event: rate_limit\n');
+      res.write(`data: {"message":"You have reached your hourly search limit of ${maxPerHour}."}\n\n`);
       res.end();
     },
   });
 }
+export const sseSearchRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 1,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req => req.user?.id || req.ip,
+
+  handler: (req, res) => {
+    const allowedOrigins = process.env.ALLOWED_DOMAIN_LIST
+      ? JSON.parse(process.env.ALLOWED_DOMAIN_LIST)
+      : [process.env.FRONTEND_DOMAIN];
+    const origin = req.headers.origin;
+
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigins.includes(origin) ? origin : allowedOrigins[0]);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders || 'Content-Type, Authorization');
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+    res.write('event: rate_limit\n');
+    res.write(`data: {"message":"You have reached your hourly search limit of 10."}\n\n`);
+    res.end();
+  },
+});
 export function applyRateLimiterCorsHeaders(req, res) {
   const allowedOrigins = process.env.ALLOWED_DOMAIN_LIST ? JSON.parse(process.env.ALLOWED_DOMAIN_LIST) : [`${process.env.FRONTEND_DOMAIN}`]
   res.header('Access-Control-Allow-Credentials', true);

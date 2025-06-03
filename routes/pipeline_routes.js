@@ -877,7 +877,7 @@ export async function handleIterativeQuery(
   console.log("Starting iterative retrieval for", comprehensiveUserQuery);
 
   const retrievalSteps = [];
-  const MAX_ITERATIONS = 5;
+  const MAX_ITERATIONS = 3;
 
   // State object with working memory
   const state = {
