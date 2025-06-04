@@ -276,7 +276,7 @@ export async function gradeDocuments(documents, question) {
 
 
 // Function: Grade generation against documents and question
-export async function gradeGenerationVsDocumentsAndQuestion(state, showReason = false) {
+export async function gradeGenerationVsDocumentsAndQuestion(state, showReason = true) {
   console.log("---CHECK HALLUCINATIONS---");
   const { question, documents, generation, loop_step = 0 } = state;
   const maxRetries = state.max_retries || 3;
@@ -324,15 +324,38 @@ export async function gradeGenerationVsDocumentsAndQuestion(state, showReason = 
   console.log("---DECISION: MAX RETRIES REACHED---");
   return "max retries";*/
   const graderPrompt = `
-    QUESTION: \n\n ${question} \n\n FACTS: \n\n ${formatDocsString(documents)} \n\n STUDENT ANSWER: ${generation}.
-    Ensure the answer is grounded in the facts and does not contain hallucinated information. Ensure the answer is relevant to the question.
-    Return JSON with keys binary_score ('yes' or 'no') and explanation.
-  `;
+You are an exacting examiner.  
+Read the QUESTION, the FACTS (your **only** source of truth), and the student ANSWER.
+
+RULES
+1. **No outside knowledge** — every claim in the ANSWER must be *explicitly* supported by the FACTS section.  
+2. If the FACTS section is empty, or any claim is unsupported/contradicted, the answer is hallucinated ⇒ score "no".  
+3. The ANSWER must directly address the QUESTION; otherwise score "no".  
+4. Ignore style or grammar; grade only factual grounding and relevance.
+
+OUTPUT (JSON only)
+{
+  "binary_score": "yes" | "no",    // "yes" = completely fact-grounded **and** relevant
+  "explanation": "<1-2 concise sentences justifying the score>"
+}
+
+Return exactly this JSON object and nothing else.
+QUESTION:
+
+${question}
+
+FACTS:
+${formatDocsString(documents)}
+
+ANSWER:
+${generation}
+`;
+
   const hallucinationRelevanceResponse = await callLlamaModel(
     createQueryPayload("qwen2.5:7b-instruct", "You are a teacher grading a student's answer for factual accuracy and relevance to the question.", graderPrompt)
   );
-
-  if (showReason) console.log(hallucinationRelevanceResponse?.message?.content);
+  console.log("Grader prompt: ", graderPrompt);
+  if (showReason) console.log(hallucinationRelevanceResponse);
   const grade = hallucinationRelevanceResponse?.toLowerCase().includes('"binary_score": "yes"') ? "yes" : "no";
   //return grade
   if (grade === "yes") {
