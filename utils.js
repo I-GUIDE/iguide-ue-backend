@@ -121,10 +121,10 @@ export function parseSortBy(sort_by){
     switch (sort_by){
     case SortBy.CLICK_COUNT:
     case SortBy.CLICK_COUNT.toLowerCase():
-	return SortBy.CLICK_COUNT;
+	    return SortBy.CLICK_COUNT;
     case SortBy.CREATION_TIME:
-    case "creation_time":
-	return SortBy.CREATION_TIME;
+    case SortBy.CREATION_TIME.toLowerCase():
+	    return SortBy.CREATION_TIME;
     case SortBy.TITLE: return SortBy.TITLE;
     case SortBy.FIRST_NAME:
     case SortBy.FIRST_NAME.toLowerCase(): return SortBy.FIRST_NAME;

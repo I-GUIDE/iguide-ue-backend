@@ -11,6 +11,7 @@ import * as utils from './utils.js';
 // For deployment on JetStream VM
 import dotenv from 'dotenv';
 import {checkUniversityDomain} from "./routes/domain_utils.js";
+import {SortBy} from "./utils.js";
 dotenv.config();
 console.log(process.env.NEO4J_CONNECTION_STRING);
 
@@ -60,6 +61,8 @@ function makeFrontendCompatible(element) {
 	    } else if (k1 === 'click_count') {
 		return [k1.replaceAll("_","-"), utils.parse64BitNumber(v1)];
 	    } else if (k1 === 'updated_at') {
+		return [k1.replaceAll("_","-"), utils.parseDate(v1)];
+	    } else if (k1 === SortBy.CREATION_TIME) {
 		return [k1.replaceAll("_","-"), utils.parseDate(v1)];
 	    }
 

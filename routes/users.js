@@ -97,7 +97,7 @@ router.get('/api/users/:id', cors(), async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *           enum: [first_name, last_name]
+ *           enum: [first_name, last_name, created_at]
  *           default: first_name
  *         description: Sorting order for the values
  *       - in: query
