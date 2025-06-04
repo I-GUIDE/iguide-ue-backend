@@ -124,6 +124,7 @@ export function parseSortBy(sort_by){
 	    return SortBy.CLICK_COUNT;
     case SortBy.CREATION_TIME:
     case SortBy.CREATION_TIME.toLowerCase():
+    case "creation-time":
 	    return SortBy.CREATION_TIME;
     case SortBy.TITLE: return SortBy.TITLE;
     case SortBy.FIRST_NAME:
