@@ -78,6 +78,10 @@ router.get('/api/users/:id', cors(), async (req, res) => {
  * /api/users:
  *   get:
  *     summary: Return all users
+ *     description: >
+ *       Requires a valid JWT token. Accessible only to users with `SUPER_ADMIN` permission.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['users']
  *     parameters:
  *       - in: query
@@ -151,11 +155,16 @@ router.get('/api/users',
     }
 });
 
+// Handle OPTIONS requests for both methods
 /**
  * @swagger
  * /api/users/{id}/role:
  *   put:
  *     summary: Update the user's role
+ *     description: >
+ *       Requires a valid JWT token. Accessible only to users with `SUPER_ADMIN` permission.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -180,7 +189,6 @@ router.get('/api/users',
  *       500:
  *         description: Error in updating user role
  */
-// Handle OPTIONS requests for both methods
 router.options('/api/users/:id/role', (req, res) => {
     const method = req.header('Access-Control-Request-Method');
     if (method === 'PUT') {
@@ -318,6 +326,10 @@ router.get('/api/users/:id/valid', cors(), async (req, res) => {
  * /api/users/avatar:
  *   post:
  *     summary: Upload/update an avatar image for the user profile
+ *     description: >
+ *       Requires a valid JWT token.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['users']
  *     consumes:
  *       - multipart/form-data
@@ -403,6 +415,10 @@ router.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvata
  * /api/users:
  *   post:
  *     summary: Add a new user document
+ *     description: >
+ *       Requires a valid JWT token.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['users']
  *     requestBody:
  *       required: true
@@ -459,6 +475,8 @@ router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) =
  * /api/auth/users:
  *   post:
  *     summary: Add a new user document for authorized server
+ *     security:
+ *       - authenticateAuth: []
  *     tags: ['users']
  *     requestBody:
  *       required: true
@@ -514,6 +532,10 @@ router.post('/api/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, 
  * /api/users/{id}:
  *   put:
  *     summary: Update the user document
+ *     description: >
+ *       Requires a valid JWT token.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -579,6 +601,10 @@ router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res
  * /api/users/bookmark/{elementId}:
  *   put:
  *     summary: Toggle element bookmark by logged-in user
+ *     description: >
+ *       Requires a valid JWT token.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -659,6 +685,10 @@ router.put('/api/users/bookmark/:elementId',
  * /api/users/bookmark/{elementId}:
  *   get:
  *     summary: Get whether element is bookmarked by the user or not
+ *     description: >
+ *       Requires a valid JWT token.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['users']
  *     parameters:
  *       - in: path

@@ -12,6 +12,10 @@ const router = express.Router();
  * /api/elements/private/{elementId}:
  *   get:
  *     summary: Retrieve ONE private element using id.
+ *     description: >
+ *       Requires a valid JWT token. Accessible only to users whose element the elementId belongs to.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['private-elements']
  *     parameters:
  *       - in: path
@@ -69,6 +73,10 @@ router.get('/elements/private/:elementId', jwtCorsMiddleware, authenticateJWT, a
  * /api/elements/private:
  *   get:
  *     summary: Retrieve private elements for given user ID
+ *     description: >
+ *       Requires a valid JWT token.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['private-elements']
  *     parameters:
  *       - in: query

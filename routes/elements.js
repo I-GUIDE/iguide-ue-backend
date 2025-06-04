@@ -108,6 +108,10 @@ async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
  * /api/elements/bookmark:
  *   get:
  *     summary: Get all bookmarked elements by user with userId
+ *     description: >
+ *       Requires a valid JWT token.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['elements']
  *     parameters:
  *       - in: query
@@ -592,6 +596,10 @@ router.get('/api/elements', cors(), async (req, res) => {
  * /api/elements:
  *   post:
  *     summary: Register an element
+ *     description: >
+ *       Requires a valid JWT token. Accessible only to users with minimum `TRUSTED_USER` permission.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['elements']
  *     requestBody:
  *       required: true
@@ -736,6 +744,10 @@ router.post('/api/elements',
  * /api/elements/{id}:
  *   delete:
  *     summary: Delete a resource by ID
+ *     description: >
+ *       Requires a valid JWT token. Accessible only to users whose elementId it belongs to.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['elements']
  *     parameters:
  *       - in: path
@@ -775,6 +787,10 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
  * /api/elements/{id}:
  *   put:
  *     summary: Update the element with given ID
+ *     description: >
+ *       Requires a valid JWT token. Accessible only to users whose element it belongs to or user with minimum `CONTENT_MODERATOR` permission
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['elements']
  *     parameters:
  *       - in: path
@@ -890,6 +906,10 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
  * /api/elements/{id}/visibility:
  *   put:
  *     summary: Set visibility for the element with given ID
+ *     description: >
+ *       Requires a valid JWT token. Accessible only to users whose element it belongs to or user with minimum `CONTENT_MODERATOR` permission
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['elements']
  *     parameters:
  *       - in: path
@@ -969,6 +989,10 @@ router.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, authentica
  * /api/elements/thumbnail:
  *   post:
  *     summary: Upload a thumbnail image
+ *     description: >
+ *       Requires a valid JWT token.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['elements']
  *     consumes:
  *       - multipart/form-data
@@ -1019,6 +1043,10 @@ router.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single
  * /api/elements/{id}/neighbors:
  *   get:
  *     summary: Return neighbor elements of element with given ID
+ *     description: >
+ *       Requires a valid JWT token.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['elements']
  *     parameters:
  *       - in: path

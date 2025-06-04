@@ -465,7 +465,11 @@ async function handleUserQueryWithProgress(
  * /beta/llm/memory-id:
  *   post:
  *     summary: Create a new memory ID for LLM searches
- *     description: Generates a random memory ID with a conversation name for tracking search memory.
+ *     description: >
+ *       Generates a random memory ID with a conversation name for tracking search memory.
+ *       Requires a valid JWT token. Accessible only to users with minimum `TRUSTED_USER` permission
+ *     security:
+ *       - cookieAuth: []
  *     tags:
  *       - Conversational Search
  *     responses:
@@ -615,6 +619,9 @@ router.post('/llm/legacy-search', cors(),
  *     description: |
  *       Accepts a user query and an optional memory ID to perform a comprehensive LLM-driven search.
  *       The response is streamed using Server-Sent Events (SSE), sending progress updates and the final result.
+ *       Requires a valid JWT token. Accessible only to users with minimum `TRUSTED_USER` permission
+ *     security:
+ *       - cookieAuth: []
  *     consumes:
  *       - application/json
  *     produces:
@@ -1061,6 +1068,9 @@ Return the scratchpad, then output valid JSON with one of the actions:
  *     description: |
  *       Store six Likert (1‑5) ratings on retrieval & answer quality for the
  *       chat turn identified by `messageId` inside the conversation `memoryId`.
+ *       Requires a valid JWT token. Accessible only to users  with minimum `TRUSTED_USER` permission
+ *     security:
+ *       - cookieAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -1132,6 +1142,9 @@ router.post('/llm/advanced-rating', jwtCorsMiddleware, authenticateJWT, authoriz
  *     tags: [Conversational Search]
  *     description: |
  *       Store a thumbs up (1) or thumbs down (0) rating for the chat turn identified by `messageId` inside the conversation `memoryId`.
+ *       Requires a valid JWT token. Accessible only to users  with minimum `TRUSTED_USER` permission
+ *     security:
+ *       - cookieAuth: []
  *     requestBody:
  *       required: true
  *       content:

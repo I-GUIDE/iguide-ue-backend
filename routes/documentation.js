@@ -130,6 +130,10 @@ router.get('/documentation', cors(), async (req, res) => {
  * /api/documentation:
  *   post:
  *     summary: Add a new documentation item
+ *     description: >
+ *       Requires a valid JWT token. Accessible only to users with `ADMIN` permission.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['documentation']
  *     requestBody:
  *       required: true
@@ -175,6 +179,10 @@ router.post('/documentation',
  * /api/documentation/{id}:
  *   put:
  *     summary: Update the user document
+ *     description: >
+ *       Requires a valid JWT token. Accessible only to users with `ADMIN` permission.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['documentation']
  *     parameters:
  *       - in: path
@@ -229,6 +237,10 @@ router.put('/documentation/:id',
  * /api/documentation/{id}:
  *   delete:
  *     summary: Delete a documentation by ID
+ *     description: >
+ *       Requires a valid JWT token. Accessible only to users with `ADMIN` permission.
+ *     security:
+ *       - cookieAuth: []
  *     tags: ['documentation']
  *     parameters:
  *       - in: path
