@@ -570,8 +570,6 @@ router.post('/llm/memory-id', jwtCorsMiddleware, authenticateJWT, authorizeRole(
  */
 router.options('/llm/legacy-search', cors());
 router.post('/llm/legacy-search', cors(),
-    authenticateJWT,
-    authorizeRole(Role.TRUSTED_USER),
     async (req, res) => {
   const { userQuery, memoryId } = req.body;
   //var memoryId = "fakeid12345";
