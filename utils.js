@@ -124,6 +124,7 @@ export function parseSortBy(sort_by){
 	    return SortBy.CLICK_COUNT;
     case SortBy.CREATION_TIME:
     case SortBy.CREATION_TIME.toLowerCase():
+    case "creation_time":
 	    return SortBy.CREATION_TIME;
     case SortBy.TITLE: return SortBy.TITLE;
     case SortBy.FIRST_NAME:
@@ -152,7 +153,10 @@ export function parse64BitNumber(num_64){
  */
 export function parseDate(neo4jDateTime){
     const { year, month, day, hour, minute, second, nanosecond } = neo4jDateTime;
-
+    if (year === undefined || day === undefined || month === undefined ||
+        hour === undefined || minute === undefined || second === undefined || nanosecond === undefined) {
+        return neo4jDateTime;
+    }
     const date = new Date(
 	year.toInt(),
 	month.toInt() - 1, // neo4j dates start at 1, js dates start at 0
