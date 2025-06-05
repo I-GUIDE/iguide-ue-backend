@@ -82,7 +82,7 @@ function makeFrontendCompatible(element) {
     }
     let elem_wo_underscores = replaceUnderscores(element);
     // convert all instances of spatial properties from WKT to GeoJSON
-    let ret = spatialUtils.convertGeoSpatialFields(elem_wo_underscores, append_geojson=false);
+    let ret = spatialUtils.convertGeoSpatialFields(elem_wo_underscores, false);
 
     // handle 64-bit numbers returned from neo4j
     // if (ret['visibility'])
