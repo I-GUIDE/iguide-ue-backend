@@ -2,6 +2,7 @@ import express from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import * as utils from '../utils.js';
+import * as spatialUtils from './rag_modules/spatial_utils.js';
 
 const router = express.Router();
 
@@ -85,10 +86,10 @@ async function scrollAllDocuments(searchQuery, index, scrollDuration = '30s') {
  *         required: true
  *         schema:
  *           type: string
- *         description: JSON array of [lon, lat] pairs. 
- *           - **1 pair** => Point  
- *           - **2 pairs** => Envelope  
- *           - **3+ pairs** => Polygon  
+ *         description: JSON array of [lon, lat] pairs.
+ *           - **1 pair** => Point
+ *           - **2 pairs** => Envelope
+ *           - **3+ pairs** => Polygon
  *         example: '[[-87.634938, 24.396308], [-80.031362, 24.396308], [-80.031362, 31.000968], [-87.634938, 31.000968], [-87.634938, 24.396308]]'
  *       - in: query
  *         name: keyword
@@ -221,7 +222,8 @@ router.get('/search/spatial', cors(), async (req, res) => {
             contributor: hit._source.contributor || 'Unknown',
             'thumbnail-image': utils.generateMultipleResolutionImagesFor(hit._source['thumbnail-image']),
             'bounding-box': hit._source['spatial-bounding-box-geojson'] || null,
-            'centroid': hit._source['spatial-centroid'].replace(/[^\d .-]/g,'').trim().split(/\s+/).map(Number) || null,
+	    'centroid': spatialUtils.convertWktToGeoJson(hit._source['spatial-centroid']) || null,
+            //'centroid': hit._source['spatial-centroid'].replace(/[^\d .-]/g,'').trim().split(/\s+/).map(Number) || null,
         }));
 
         return res.json({elements: formattedResults });

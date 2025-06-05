@@ -302,7 +302,7 @@ function parseMultiPolygon(multi_polygon_str) {
  * @param wkt_string
  * @returns {{coordinates: *[], type: string}|{coordinates: *[][][], type: string}|{coordinates: *, type: string}|null}
  */
-function convertWktToGeoJson(wkt_string) {
+export function convertWktToGeoJson(wkt_string) {
   try {
     const upper_wkt_str = wkt_string.toUpperCase().trim();
 
@@ -339,9 +339,10 @@ function convertWktToGeoJson(wkt_string) {
 /**
  *  Wrapper function used to convert the resource and include geo-json fields
  * @param resource
+ * @param append_geojson
  * @returns {*}
  */
-export function convertGeoSpatialFields(resource) {
+export function convertGeoSpatialFields(resource, append_geojson=true) {
     const temp_resource = {...resource}
     // Get the geospatial fields and do a sanity check first
     const geo_spatial_fields = [...WKT_GEOSHAPE_FIELDS, ...WKT_GEOPOINT_FIELDS];
@@ -357,7 +358,10 @@ export function convertGeoSpatialFields(resource) {
                         geo_json_value = convertWktToGeoJson(resource_value)
                     }
                     if (geo_json_value) {
-                        temp_resource[spatial_field+"-geojson"] = geo_json_value
+			if (append_geojson)
+                            temp_resource[spatial_field+"-geojson"] = geo_json_value
+			else
+			    temp_resource[spatial_field] = geo_json_value
                     }
                 } catch (err) {
                     console.log("spatial_utils.js - convertGeoSpatialFields ", spatial_field," - error: ", err)
