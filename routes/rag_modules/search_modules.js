@@ -14,6 +14,7 @@ const client = new Client({
 
 export async function getKeywordSearchResults(userQuery) {
   try {
+    console.log("Querying database index: ", process.env.OPENSEARCH_INDEX);
     const response = await client.search({
       index: process.env.OPENSEARCH_INDEX,
       size: 12,
