@@ -68,7 +68,8 @@ export async function gradeDocuments(documents, question) {
       authors: docWithoutEmbedding.authors || [],
       tags: docWithoutEmbedding.tags || [],
       contributor: docWithoutEmbedding.contributor || "",
-      contents: docWithoutEmbedding.contents || ""
+      contents: docWithoutEmbedding.contents || "",
+      count: docWithoutEmbedding.click_count || 0, // example additional field
       // Add or remove fields as needed
     };
 

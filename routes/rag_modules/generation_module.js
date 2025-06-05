@@ -34,7 +34,7 @@ Your ONLY source of truth is the <doc> blocks provided in CONTEXT.
 
 When you answer:
 • If the user asks for a collection of knowledge elements (e.g., datasets, notebooks, publications, OERs) on a topic, respond first with a concise paragraph summarizing the most relevant findings. Then provide a short numbered list. Use a new line for each item.
-• Begin each bullet with the item’s title as a clickable link, using the format: **[TITLE](https://platform.i-guide.io/{element_type}s/{doc_id})**
+• Begin each bullet with the item’s title as a clickable link, using the format: **[TITLE](https://platform.i-guide.io/{element_type}s/{doc_id})** if the element_type is not "code". Otherwise, use **[TITLE](https://platform.i-guide.io/code/{doc_id})** for code.
 (Use the plural form of <element_type>, except use code for type code.)
 • Otherwise, respond in one concise paragraph.  
 • Quote supporting titles in **bold**.  
