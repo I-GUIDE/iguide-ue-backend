@@ -571,72 +571,41 @@ router.post('/llm/memory-id', jwtCorsMiddleware, authenticateJWT, authorizeRole(
 router.options('/llm/legacy-search', cors());
 router.post('/llm/legacy-search', cors(),
     async (req, res) => {
-  const { user_id, user_role } = (() => {
-    if (!req.user || req.user == null || typeof req.user === 'undefined') {
-      return { user_id: null, user_role: null };
-    }
-    return { user_id: req.user.id, user_role: req.user.role };
-  })();
-
-  if (!(user_role <= utils.Role.TRUSTED_USER)) {
-    console.log(user_id, " blocked from accessing I-GUIDE AI");
-    return res.status(403).json({ message: 'Forbidden: You do not have permission to access I-GUIDE AI.' });
+  const { userQuery, memoryId } = req.body;
+  //var memoryId = "fakeid12345";
+  if (!userQuery) {
+    return res.status(400).json({ error: "Missing userQuery in request body." });
   }
 
   try {
-    const { userQuery, memoryId } = req.body;
-
-    if (!userQuery) {
-      return res.status(400).json({ error: 'Missing userQuery in request body.' });
-    }
-
     let finalMemoryId = memoryId;
 
+    // If no memoryId is provided, create a new memory
     if (!finalMemoryId) {
       console.log("No memoryId provided, creating a new memory...");
       const conversationName = `conversation-${userQuery}-${uuidv4()}`;
       finalMemoryId = await createMemory(conversationName);
     }
 
-    const comprehensiveQuery = await formComprehensiveUserQuery(finalMemoryId, userQuery);
+    // Form a comprehensive user query
+    const comprehensiveUserQuery = await formComprehensiveUserQuery(finalMemoryId, userQuery);
 
-    if (!comprehensiveQuery) {
-      return res.status(400).json({ error: 'Error: No memory found for the session!' });
+    console.log(`Searching "${comprehensiveUserQuery}" with memoryID: ${finalMemoryId}`);
+
+    // Perform the search with the comprehensive user query and memory ID
+    const response = await handleUserQuery(userQuery, comprehensiveUserQuery, true);
+    if (response.error) {
+      return res.status(500).json({ error: response.error });
     }
 
-    let response = null;
-    if (process.env.MULTIHOP_RAG === "true") {
-      console.log("Iterative retrieval for", comprehensiveQuery);
-      response = await handleIterativeQuery(userQuery, comprehensiveQuery, checkGenerationQuality);
-    } else {
-      response = await handleUserQueryWithProgress(userQuery, comprehensiveQuery, checkGenerationQuality);
-    }
-
-    if (Array.isArray(response.elements)) {
-      response.elements = response.elements.map((el) => {
-        const newEl = { ...el };
-        if (newEl._source && newEl._source["contents-embedding"]) {
-          delete newEl._source["contents-embedding"];
-        }
-        return newEl;
-      });
-    }
-
-    try {
-      await updateMemory(finalMemoryId, userQuery, response.message_id, response.answer, response.elements);
-      console.log("Updated memory with id", finalMemoryId);
-    } catch (err) {
-      console.error("Error while updating memory: ", err);
-      return res.status(500).json({ error: 'Error while updating memory' });
-    }
-
-    return res.json(response);
-  } catch (err) {
-    console.error("Error performing conversational search:", err);
-    return res.status(500).json({ error: err.message });
+    // Update the chat history
+    await updateMemory(finalMemoryId, userQuery, response.message_id, response.answer, response.elements);
+    res.status(200).json(response);
+  } catch (error) {
+    console.error("Error performing conversational search:", error);
+    res.status(500).json({ error: "Error performing conversational search." });
   }
 });
-
 /**
  * @swagger
  * /beta/llm/search:

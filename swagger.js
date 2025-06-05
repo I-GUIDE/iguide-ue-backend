@@ -3,8 +3,8 @@ import swaggerUi from 'swagger-ui-express';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const HOST = "149.165.152.164";
-const PORT = 3500;
+const HOST = process.env.DOMAIN;
+const PORT = process.env.PORT;
 const HTTP_PORT = parseInt(PORT, 10)+1;
 
 const options = {
