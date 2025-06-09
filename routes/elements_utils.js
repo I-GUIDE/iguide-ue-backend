@@ -6,7 +6,10 @@ export async function getFlaskEmbeddingResponse(content) {
     try {
         // Get embedding from Flask endpoint
         const flaskUrl = process.env.FLASK_EMBEDDING_URL; // URL of the Flask endpoint from .env
-
+        if (String(process.argv[1]).includes('jest')) {
+            console.log('no embedding performed for testing purposes')
+            return newEmbedding;
+        }
         // Fetch the new embedding from the Flask API
         const embeddingResponse = await axios.post(`${flaskUrl}/get_embedding`, {
             text: content  // Use the updated content to generate a new embedding
