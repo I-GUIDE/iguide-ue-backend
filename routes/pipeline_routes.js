@@ -77,65 +77,74 @@ const client = new Client({
 
 // Function: Handle a user query
 async function handleUserQuery(userQuery, comprehensiveUserQuery, checkGenerationQuality) {
-  console.log("Fetching search results");
-  const searchResults = await routeUserQuery(comprehensiveUserQuery);
+  try {
+    console.log("Fetching search results");
+    const searchResults = await getSemanticSearchResults(comprehensiveUserQuery, client);
+    let relevantDocuments = searchResults;
 
-  let relevantDocuments = [];
-  if (searchResults && searchResults.length > 0) {
-    console.log("Grading " + searchResults.length + " documents");
-    relevantDocuments = await gradeDocuments(searchResults, userQuery);
-  }
+    if (relevantDocuments.length === 0) {
+      console.log("No relevant documents found.");
+      return {
+        answer: "Sorry, I couldn't find any relevant documents for your query.",
+        message_id: uuidv4(),
+        elements: [],
+        count: 0,
+      };
+    }
 
-  if (relevantDocuments.length === 0) {
-    console.log("No relevant documents found.");
+    let state = { question: userQuery, documents: relevantDocuments };
+    let generationState = await generateAnswer(state);
+
+    console.log("\nGenerated Answer:", generationState.generation);
+
+    if (false) { // Toggle or remove this block if not in use
+      let verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
+      while (verdict !== "useful") {
+        if (verdict === "not useful") {
+          generationState = await generateAnswer(generationState);
+          verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
+        } else if (verdict === "max retries") {
+          console.log("Unable to get a satisfactory answer.");
+          return {
+            answer: "I'm sorry, I couldn't generate a satisfactory answer at the moment. Please try rephrasing your question.",
+            message_id: uuidv4(),
+            elements: [],
+            count: 0,
+          };
+        }
+      }
+    }
+
+    //console.log(relevantDocuments);
     return {
-      answer: "Sorry, I couldn't find any relevant documents for your query.",
+      answer: generationState.generation || "I'm sorry, I couldn't generate a satisfactory answer at the moment.",
+      message_id: uuidv4(),
+      elements: relevantDocuments.map(doc => ({
+        _id: doc._id,
+        _score: doc._score,
+        contributor: doc._source?.contributor,
+        contents: doc._source?.contents,
+        "resource-type": doc._source?.["resource-type"],
+        title: doc._source?.title,
+        authors: doc._source?.authors || [],
+        tags: doc._source?.tags || [],
+        "thumbnail-image": doc._source?.["thumbnail-image"],
+      })),
+      count: relevantDocuments.length,
+    };
+
+  } catch (error) {
+    console.error("Error in handleUserQuery:", error);
+    return {
+      answer: "An error occurred while processing your query. Please try again later.",
       message_id: uuidv4(),
       elements: [],
       count: 0,
+      error: error.message || "Unknown error"
     };
   }
-
-  let state = { question: userQuery, documents: relevantDocuments };
-  let generationState = await generateAnswer(state);
-
-  console.log("\nGenerated Answer:", generationState.generation);
-
-  if (checkGenerationQuality) {
-    let verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
-    while (verdict !== "useful") {
-      if (verdict === "not useful") {
-        generationState = await generateAnswer(generationState);
-        verdict = await gradeGenerationVsDocumentsAndQuestion(generationState);
-      } else if (verdict === "max retries") {
-        console.log("Unable to get a satisfactory answer.");
-        return {
-          answer: "I'm sorry, I couldn't generate a satisfactory answer at the moment. Please try rephrasing your question.",
-          message_id: uuidv4(),
-          elements: [],
-          count: 0,
-        };
-      }
-    }
-  }
-
-  return {
-    answer: generationState.generation || "I'm sorry, I couldn't generate a satisfactory answer at the moment.",
-    message_id: uuidv4(),
-    elements: relevantDocuments.map(doc => ({
-      _id: doc._id,
-      _score: doc._score,
-      contributor: doc._source.contributor,
-      contents: doc._source.contents,
-      "resource-type": doc._source["resource-type"],
-      title: doc._source.title,
-      authors: doc._source.authors || [],
-      tags: doc._source.tags || [],
-      "thumbnail-image": doc._source["thumbnail-image"],
-    })),
-    count: relevantDocuments.length,
-  };
 }
+
 /*export async function handleIterativeQuery(
   userQuery,
   comprehensiveUserQuery,
@@ -571,41 +580,82 @@ router.post('/llm/memory-id', jwtCorsMiddleware, authenticateJWT, authorizeRole(
 router.options('/llm/legacy-search', cors());
 router.post('/llm/legacy-search', cors(),
     async (req, res) => {
-  const { userQuery, memoryId } = req.body;
-  //var memoryId = "fakeid12345";
-  if (!userQuery) {
-    return res.status(400).json({ error: "Missing userQuery in request body." });
+  const { user_id, user_role } = (() => {
+    if (!req.user || req.user == null || typeof req.user === 'undefined') {
+      return { user_id: null, user_role: null };
+    }
+    return { user_id: req.user.id, user_role: req.user.role };
+  })();
+
+  if (!(user_role <= utils.Role.TRUSTED_USER)) {
+    console.log(user_id, " blocked from accessing I-GUIDE AI");
+    return res.status(403).json({ message: 'Forbidden: You do not have permission to access I-GUIDE AI.' });
   }
 
   try {
+    const { userQuery, memoryId } = req.body;
+
+    if (!userQuery) {
+      return res.status(400).json({ error: 'Missing userQuery in request body.' });
+    }
+
     let finalMemoryId = memoryId;
 
-    // If no memoryId is provided, create a new memory
     if (!finalMemoryId) {
       console.log("No memoryId provided, creating a new memory...");
       const conversationName = `conversation-${userQuery}-${uuidv4()}`;
       finalMemoryId = await createMemory(conversationName);
     }
 
-    // Form a comprehensive user query
-    const comprehensiveUserQuery = await formComprehensiveUserQuery(finalMemoryId, userQuery);
+    const comprehensiveQuery = await formComprehensiveUserQuery(finalMemoryId, userQuery);
 
-    console.log(`Searching "${comprehensiveUserQuery}" with memoryID: ${finalMemoryId}`);
-
-    // Perform the search with the comprehensive user query and memory ID
-    const response = await handleUserQuery(userQuery, comprehensiveUserQuery, true);
-    if (response.error) {
-      return res.status(500).json({ error: response.error });
+    if (!comprehensiveQuery) {
+      return res.status(400).json({ error: 'Error: No memory found for the session!' });
     }
 
-    // Update the chat history
-    await updateMemory(finalMemoryId, userQuery, response.message_id, response.answer, response.elements);
-    res.status(200).json(response);
-  } catch (error) {
-    console.error("Error performing conversational search:", error);
-    res.status(500).json({ error: "Error performing conversational search." });
+    let response = null;
+    if(process.env.SIMPLE_PIPELINE === 'true') {
+      console.log("Simple pipeline enabled, handling user query directly");
+      response = await handleUserQuery(userQuery, comprehensiveQuery, checkGenerationQuality);
+      //console.log("Response from simple pipeline:", response);
+    }else{
+      //console.log("Comprehensive pipeline enabled, handling user query with progress updates");
+      if (process.env.MULTIHOP_RAG === "true") {
+        console.log("Multi-hop RAG enabled, using iterative retrieval");
+        console.log("Iterative retrieval for", comprehensiveQuery);
+        response = await handleIterativeQuery(userQuery, comprehensiveQuery, checkGenerationQuality);
+      } else {
+        console.log("Single-hop RAG enabled, using direct search");
+        response = await handleUserQueryWithProgress(userQuery, comprehensiveQuery, checkGenerationQuality);
+      }
+    }
+    
+
+    if (Array.isArray(response.elements)) {
+      response.elements = response.elements.map((el) => {
+        const newEl = { ...el };
+        if (newEl._source && newEl._source["contents-embedding"]) {
+          delete newEl._source["contents-embedding"];
+        }
+        return newEl;
+      });
+    }
+
+    try {
+      await updateMemory(finalMemoryId, userQuery, response.message_id, response.answer, response.elements);
+      console.log("Updated memory with id", finalMemoryId);
+    } catch (err) {
+      console.error("Error while updating memory: ", err);
+      return res.status(500).json({ error: 'Error while updating memory' });
+    }
+
+    return res.json(response);
+  } catch (err) {
+    console.error("Error performing conversational search:", err);
+    return res.status(500).json({ error: err.message });
   }
 });
+
 /**
  * @swagger
  * /beta/llm/search:
