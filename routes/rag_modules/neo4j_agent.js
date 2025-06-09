@@ -104,18 +104,25 @@ export async function generateCypherQueryFromSchema(question, schema) {
   If the question cannot be answered with this schema, return: "/* Insufficient information to generate Cypher query */"
   Only return Cypher queries that return results in the format:
 
+MATCH (n)
+WHERE NOT n:Contributor
+WITH n
+ORDER BY coalesce(n.click_count, 0) DESC
+LIMIT 10
+OPTIONAL MATCH (c:Contributor)-[:CONTRIBUTED]-(n)
 RETURN {
   _id: n.id,
   _score: 1.0,
-  click_count: n.click_count,
+  click_count: coalesce(n.click_count, 0),
   contributor: c { .id, name: c.first_name + ' ' + c.last_name, .avatar_url },
   contents: n.contents,
-  \`resource-type\`: TOLOWER(LABELS(n)[0]),
+  \`resource-type\`: toLower(labels(n)[0]),
   title: n.title,
   authors: n.authors,
   tags: n.tags,
   \`thumbnail-image\`: n.thumbnail_image
 } AS doc
+
  Only return Cypher. Do NOT use id(n), ID(n), or n.click_count as _id.
 Contributor information must be retrieved via an OPTIONAL MATCH: (c:Contributor)-[:CONTRIBUTED]-(n)
   `.trim();
@@ -154,7 +161,7 @@ Contributor information must be retrieved via an OPTIONAL MATCH: (c:Contributor)
           _id: doc._id,
           _score: doc._score,
           click_count: doc.click_count,
-          contributor: doc.contributor,
+          contributor: doc.contributor.name,
           contents: doc.contents,
           "resource-type": doc["resource-type"],
           title: doc.title,

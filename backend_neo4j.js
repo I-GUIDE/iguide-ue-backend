@@ -7,6 +7,7 @@ import neo4j from 'neo4j-driver';
 import { v4 as uuidv4 } from 'uuid';
 // local imports
 import * as utils from './utils.js';
+import * as spatialUtils from './routes/rag_modules/spatial_utils.js';
 
 // For deployment on JetStream VM
 import dotenv from 'dotenv';
@@ -79,7 +80,9 @@ function makeFrontendCompatible(element) {
 	});
 	return Object.fromEntries(keyValues);
     }
-    let ret = replaceUnderscores(element);
+    let elem_wo_underscores = replaceUnderscores(element);
+    // convert all instances of spatial properties from WKT to GeoJSON
+    let ret = spatialUtils.convertGeoSpatialFields(elem_wo_underscores, false);
 
     // handle 64-bit numbers returned from neo4j
     // if (ret['visibility'])

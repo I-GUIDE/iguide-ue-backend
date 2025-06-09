@@ -63,18 +63,19 @@ export async function gradeDocuments(documents, question) {
     // 2) Build a simpler, consistent schema for the grader
     //    (you can rename or reorder fields as you wish)
     const docForGrading = {
+      count: docWithoutEmbedding.click_count?.low ?? -1, // when the document is from Neo4j
       title: docWithoutEmbedding.title || "",
       resourceType: docWithoutEmbedding["resource-type"] || "",
       authors: docWithoutEmbedding.authors || [],
       tags: docWithoutEmbedding.tags || [],
       contributor: docWithoutEmbedding.contributor || "",
-      contents: docWithoutEmbedding.contents || ""
+      contents: docWithoutEmbedding.contents || "",
       // Add or remove fields as needed
     };
 
     // Convert the simplified doc to JSON or a string for the prompt
     const docString = JSON.stringify(docForGrading, null, 2);
-
+    console.log("Doc for grading:", docForGrading.count);
     // 3) Build your grader prompt with the simplified doc
     const graderPrompt = `
       You are a grader assessing the relevance of the following knowledge element to a user question.
@@ -83,13 +84,12 @@ export async function gradeDocuments(documents, question) {
       ${docString}
 
       The user question is: ${question}
-
       Please return a JSON object with a single key: "relevance_score".
       The value must be an integer from 0 to 10, where 0 = completely irrelevant, 10 = highly relevant.
       If the user asked for a specific knowledge element type, such as "notebook", "dataset", give the knowledge element a score of 0.
       For example:
       {"relevance_score": 7}
-    `;
+`;
 
     // 4) Create your query payload (adjust system prompt as needed)
     let result
@@ -115,8 +115,12 @@ export async function gradeDocuments(documents, question) {
     // 6) Parse LLM response as JSON
     try {
       const parsed = extractJsonFromLLMReturn(result.trim());
-      const relevanceScore = parsed?.relevance_score;
-
+      var relevanceScore;
+      if(docForGrading.count > 0){
+          relevanceScore = docForGrading.count;
+      }else{
+          relevanceScore = parsed?.relevance_score;
+      }
       if (typeof relevanceScore === 'number') {
         console.log(`---GRADE: Document scored ${relevanceScore}---`);
         doc._score = relevanceScore;
