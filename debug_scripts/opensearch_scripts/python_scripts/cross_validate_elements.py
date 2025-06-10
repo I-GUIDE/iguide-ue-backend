@@ -181,8 +181,8 @@ if __name__ == '__main__':
         pass
 
     for e_type in element_types:
-        if os_element_counts[e_type] > neo4j_element_counts[e_type]:
-            print(f'Inconsistencies found for Element Type: {e_type}')
+        if True: #os_element_counts[e_type] > neo4j_element_counts[e_type]:
+            #print(f'Inconsistencies found for Element Type: {e_type}')
 
             neo4j_element_ids = db.get_element_ids_for(e_type)
             os_element_ids = os_instance.get_element_ids_for(e_type)
@@ -200,6 +200,7 @@ if __name__ == '__main__':
             os_elements_not_in_neo4j = list(os_set - neo4j_set)
 
             if len(os_elements_not_in_neo4j) > 0:
+                print(f'Inconsistencies found for Element Type: {e_type}')
                 proceed = input(f'Delete {len(os_elements_not_in_neo4j)} {e_type} elements from OpenSearch? (yes/NO): ').lower()
                 if proceed in ['yes', 'y']:
                     # remove extra elements from OpenSearch
