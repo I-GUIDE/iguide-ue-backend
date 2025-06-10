@@ -572,15 +572,22 @@ router.put('/api/users/:id',
 		}
 		return {user_id:req.user.id, user_role:req.user.role}
     })();
-
+	let check_user = true
 	let current_user_details = await n4j.getContributorByID(id);
-	console.log("user detail from cookie: ", user_id, " detail from db: ", current_user_details['id']);
 
-	if (user_id !== current_user_details['id']) {
+	if (String(user_id).startsWith("http")) {
+		if (user_id !== current_user_details['openid']) {
+			check_user = false;
+		}
+	} else {
+		if (user_id !== current_user_details['id']) {
+			check_user = false;
+		}
+	}
+	if (!check_user) {
 		res.status(403).json({message: 'Failed to edit user. User does not have permission.', result: false});
 		return;
 	}
-
 	let reindex_os = false;
 	let total_public_elements = 0
 	/**
