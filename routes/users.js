@@ -574,7 +574,7 @@ router.put('/api/users/:id',
     })();
 	let check_user = true
 	let current_user_details = await n4j.getContributorByID(id);
-
+	console.log("user detail from cookie: ", user_id, " detail from db: ", current_user_details['id']);
 	if (String(user_id).startsWith("http")) {
 		if (user_id !== current_user_details['openid']) {
 			check_user = false;
