@@ -12,7 +12,7 @@ import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import {authenticateAuth, authenticateJWT, authorizeRole, generateAccessToken} from '../jwtUtils.js';
-import {Role} from "../utils.js";
+import {checkUpdateParameters, Role} from "../utils.js";
 import {getAllContributors, registerContributorAuth} from "../backend_neo4j.js";
 
 const router = express.Router();
@@ -531,6 +531,10 @@ router.post('/api/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, 
  *     responses:
  *       200:
  *         description: User updated successfully
+ *       403:
+ *         description: Failed to edit user. User does not have permission
+ *       409:
+ *         description: Failed to edit user. Uneditable parameters present
  *       500:
  *         description: Internal server error
  */
@@ -554,12 +558,31 @@ router.options('/api/users/:id', (req, res) => {
 	}
     res.sendStatus(204); // No content
 });
-router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.put('/api/users/:id',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     const updates = req.body;
 
-    console.log('Updating user ...');
+	const {user_id, user_role} = (() => {
+		if (!req.user || typeof req.user === 'undefined'){
+	    	// return {user_id:null, user_role:null};
+			return {user_id: "60b54804-980c-4774-974a-ec27bf7954f2", user_role: 1};
+		}
+		return {user_id:req.user.id, user_role:req.user.role}
+    })();
 
+	if (user_id !== id) {
+		res.status(403).json({message: 'Failed to edit user. User does not have permission.', result: false});
+		return;
+	}
+
+    console.log('Updating user ...');
+	if (!checkUpdateParameters(updates)) {
+		res.status(409).json({message: 'Failed to edit user. Uneditable parameters present.', result: false});
+		return;
+	}
     try {
 	const response = await n4j.updateContributor(id, updates);
 	if (response) {

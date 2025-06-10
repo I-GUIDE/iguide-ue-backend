@@ -1219,7 +1219,10 @@ export async function registerContributor(contributor){
     //contributor['avatar_url'] = contributor['avatar_url']['original'];
     // Add user registration date
     contributor['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
-	
+
+	// (4) Add a display_first/last_name property when registering users
+	contributor['display_first_name'] = contributor['first_name']
+	contributor['display_last_name'] = contributor['last_name']
     const query_str = "CREATE (c: Contributor $contr_param)";
     try{
 	const {_, summary} =
@@ -1261,7 +1264,10 @@ export async function registerContributorAuth(contributor){
     //contributor['avatar_url'] = contributor['avatar_url']['original'];
     // Add user registration date
     contributor['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
-	
+
+	// (4) Add a display_first/last_name property when registering users
+	contributor['display_first_name'] = contributor['first_name']
+	contributor['display_last_name'] = contributor['last_name']
     const query_str = "CREATE (c: Contributor $contr_param) return c{.*}";
     try{
 		const {records, summary} =
