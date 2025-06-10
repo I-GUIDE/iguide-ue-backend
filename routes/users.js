@@ -574,6 +574,7 @@ router.put('/api/users/:id',
     })();
 
 	let current_user_details = await n4j.getContributorByID(id);
+	console.log("user detail from cookie: ", user_id, " detail from db: ", current_user_details['id']);
 
 	if (user_id !== current_user_details['id']) {
 		res.status(403).json({message: 'Failed to edit user. User does not have permission.', result: false});
