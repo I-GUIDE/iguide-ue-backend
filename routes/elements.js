@@ -697,8 +697,8 @@ router.post('/api/elements',
 				// Set contributor name
 				let contributor = await n4j.getContributorByID(contributor_id);
 				let contributor_name = '';
-				if ('first-name' in contributor || 'last-name' in contributor) {
-					contributor_name = `${contributor['first-name']} ${contributor['last-name']}`;
+				if ('display-first-name' in contributor || 'display-last-name' in contributor) {
+					contributor_name = `${contributor['display-first-name']} ${contributor['display-last-name']}`;
 				}
 				os_element['contributor'] = contributor_name;
 
@@ -851,6 +851,12 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 		}
 		switch (visibility_action) {
 			case 'INSERT':
+				let contributor = await n4j.getContributorByID(req.user.id);
+				let contributor_name = '';
+				if ('display-first-name' in contributor || 'display-last-name' in contributor) {
+					contributor_name = `${contributor['display-first-name']} ${contributor['display-last-name']}`;
+				}
+				os_doc_body['contributor'] = contributor_name;
 				let contentEmbeddingInsert = await getFlaskEmbeddingResponse(updates['contents']);
 				if (contentEmbeddingInsert) {
 					os_doc_body['contents-embedding'] = contentEmbeddingInsert;

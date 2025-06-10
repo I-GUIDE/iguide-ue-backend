@@ -12,8 +12,9 @@ import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import {authenticateAuth, authenticateJWT, authorizeRole, generateAccessToken} from '../jwtUtils.js';
-import {checkUpdateParameters, Role} from "../utils.js";
+import {checkUpdateParameters, EditableParameters, Role} from "../utils.js";
 import {getAllContributors, registerContributorAuth} from "../backend_neo4j.js";
+import {performReIndexElementsBasedOnUserId} from "./elements_utils.js";
 
 const router = express.Router();
 
@@ -567,8 +568,7 @@ router.put('/api/users/:id',
 
 	const {user_id, user_role} = (() => {
 		if (!req.user || typeof req.user === 'undefined'){
-	    	// return {user_id:null, user_role:null};
-			return {user_id: "60b54804-980c-4774-974a-ec27bf7954f2", user_role: 1};
+	    	return {user_id:null, user_role:null};
 		}
 		return {user_id:req.user.id, user_role:req.user.role}
     })();
@@ -578,22 +578,43 @@ router.put('/api/users/:id',
 		return;
 	}
 
+	let current_user_details = await n4j.getContributorByID(user_id);
+
+	let reindex_os = false;
+	let total_public_elements = 0
+	/**
+	 * Check if the user has contributions and has changed his display_first/last_name then perform the reindexing or else no need.
+	 */
+	if (updates[EditableParameters.DISPLAY_FIRST_NAME] !== current_user_details['display-first-name'] ||
+		updates[EditableParameters.DISPLAY_LAST_NAME] !== current_user_details['display-last-name']) {
+		total_public_elements = await n4j.getElementsCountByContributor(user_id);
+		if (total_public_elements > 0) {
+			reindex_os = true;
+		}
+	}
+
     console.log('Updating user ...');
 	if (!checkUpdateParameters(updates)) {
 		res.status(409).json({message: 'Failed to edit user. Uneditable parameters present.', result: false});
 		return;
 	}
     try {
-	const response = await n4j.updateContributor(id, updates);
-	if (response) {
-	    res.json({ message: 'User updated successfully', result: response });
-	} else {
-	    console.log('Error updating user');
-	    res.json({ message: 'Error updating user', result: response });
-	}
+		const response = await n4j.updateContributor(id, updates);
+		if (response) {
+			if (reindex_os) {
+				let reindex_response = await performReIndexElementsBasedOnUserId(user_id, total_public_elements);
+				console.log('Reindex response: ', reindex_response);
+			}
+		}
+		if (response) {
+	    	res.json({ message: 'User updated successfully', result: response });
+		} else {
+	    	console.log('Error updating user');
+	    	res.json({ message: 'Error updating user', result: response });
+		}
     } catch (error) {
-	console.error('Error updating user:', error);
-	res.status(500).json({ message: 'Internal server error' });
+		console.error('Error updating user:', error);
+		res.status(500).json({ message: 'Internal server error' });
     }
 });
 
