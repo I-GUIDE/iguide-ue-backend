@@ -58,7 +58,7 @@ export const UnEditableParameters = Object.freeze({
     EMAIL: 'email',
     OPENID: 'openid',
     AFFILIATION: 'affiliation',
-    ID: 'id',
+    // ID: 'id',
     CREATED_AT: 'created_at',
     ROLE: 'role'
 });
