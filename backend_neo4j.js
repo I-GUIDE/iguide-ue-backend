@@ -157,7 +157,7 @@ export async function getElementByID(id, user_id=null, user_role=null){
 	query_str += "WHERE r.visibility=$public_visibility ";
 
     query_str += "WITH COLLECT(r{.id, .title, .visibility, .thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) as related_elems, n, c  " +
-	"RETURN n{.*, created_at:TOSTRING(n.created_at), related_elements: related_elems, `resource-type`:TOLOWER(LABELS(n)[0]), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name)}}";
+	"RETURN n{.*, created_at:TOSTRING(n.created_at), related_elements: related_elems, `resource-type`:TOLOWER(LABELS(n)[0]), contributor: c{.id, .avatar_url, name:(c.display_first_name + ' ' + c.display_last_name)}}";
 
     // [Upadte] Query with related elements divided into separate lists for every type
     // no need to do manual related elements separation
@@ -415,7 +415,7 @@ export async function getElementsByType(type,
 	var ret = [];
 	if (!count_only) {
 	    const order_by = utils.parseSortBy(sort_by);
-	    query_str += "RETURN n{.id, .title, .contents, .tags, .thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name)}} " +
+	    query_str += "RETURN n{.id, .title, .contents, .tags, .thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, .avatar_url, name:(c.display_first_name + ' ' + c.display_last_name)}} " +
 	    "ORDER BY n." + order_by + " " + order + ", n.id " + order + " " +
 	    "SKIP $from " +
 	    "LIMIT $size";
@@ -521,7 +521,7 @@ export async function getElementsBookmarkedByContributor(id,
 	    query_params['from'] = neo4j.int(from);
 	    query_params['size'] = neo4j.int(size);
 
-	    query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name) }} AS element " +
+	    query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.display_first_name + ' ' + c.display_last_name) }} AS element " +
 		"ORDER BY r." + order_by + " " + order + " " +
 		"SKIP $from " +
 		"LIMIT $size";
@@ -601,7 +601,7 @@ export async function getElementsByContributor(id,
 	    query_params['from'] = neo4j.int(from);
 	    query_params['size'] = neo4j.int(size);
 
-	    query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name) }} AS element " +
+	    query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.display_first_name + ' ' + c.display_last_name) }} AS element " +
 		"ORDER BY r." + order_by + " " + order + " " +
 		"SKIP $from " +
 		"LIMIT $size";
@@ -661,7 +661,7 @@ export async function getElementsByTag(tag, from, size, sort_by=utils.SortBy.TIT
 	const query_str = "MATCH (n)-[:CONTRIBUTED]-(c) " +
 	      "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) ) " +
 	      "AND n.visibility=$public_visibility " +
-	      "RETURN n{.id, .title, .contents, .tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, name:(c.first_name + ' ' + c.last_name), .avatar_url} } " +
+	      "RETURN n{.id, .title, .contents, .tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, name:(c.display_first_name + ' ' + c.display_last_name), .avatar_url} } " +
 	      "ORDER BY n." + order_by + " " + order + " " +
 	      "SKIP $from " +
 	      "LIMIT $size";
@@ -1219,7 +1219,10 @@ export async function registerContributor(contributor){
     //contributor['avatar_url'] = contributor['avatar_url']['original'];
     // Add user registration date
     contributor['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
-	
+
+	// (4) Add a display_first/last_name property when registering users
+	contributor['display_first_name'] = contributor['first_name']
+	contributor['display_last_name'] = contributor['last_name']
     const query_str = "CREATE (c: Contributor $contr_param)";
     try{
 	const {_, summary} =
@@ -1261,7 +1264,10 @@ export async function registerContributorAuth(contributor){
     //contributor['avatar_url'] = contributor['avatar_url']['original'];
     // Add user registration date
     contributor['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
-	
+
+	// (4) Add a display_first/last_name property when registering users
+	contributor['display_first_name'] = contributor['first_name']
+	contributor['display_last_name'] = contributor['last_name']
     const query_str = "CREATE (c: Contributor $contr_param) return c{.*}";
     try{
 		const {records, summary} =

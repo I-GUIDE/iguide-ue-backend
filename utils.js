@@ -51,6 +51,28 @@ export const Visibility = Object.freeze({
     PRIVATE: 'private',
     PUBLIC: 'public',
 });
+
+export const UnEditableParameters = Object.freeze({
+    FIRST_NAME: 'first_name',
+    LAST_NAME: 'last_name',
+    EMAIL: 'email',
+    OPENID: 'openid',
+    AFFILIATION: 'affiliation',
+    ID: 'id',
+    CREATED_AT: 'created_at',
+    ROLE: 'role'
+});
+
+export const EditableParameters = Object.freeze({
+    AVATAR_URL: 'avatar_url',
+    GITHUB_LINK: 'gitHubLink',
+    PERSONAL_WEBSITE_LINK: 'personalWebsiteLink',
+    LINKEDIN_LINK: 'linkedInLink',
+    DISPLAY_FIRST_NAME: 'display_first_name',
+    DISPLAY_LAST_NAME: 'display_last_name',
+    GOOGLE_SCHOLAR_LINK: 'googleScholarLink',
+    BIO: 'bio'
+});
 //exports.Visibility = Visibility;
 
 /**************/
@@ -354,4 +376,14 @@ export function updateOSBasedtOnVisibility(old_visibility, new_visibility) {
             return "DELETE";
         }
     }
+}
+
+export function checkUpdateParameters(updates) {
+    let updated_check = true;
+    Object.values(UnEditableParameters).map((param) => {
+        if (updates[param] !== undefined) {
+            updated_check = false;
+        }
+    });
+    return updated_check;
 }
