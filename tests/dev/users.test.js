@@ -94,15 +94,48 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty("role", 8);
     });
-    it("5. Should allow the user to update their user information", async () => {
-        let user_open_id_encoded = encodeURIComponent(testData.trusted_user.openid);
+    it("5. Should not allow the user to update their first_name or role information", async () => {
+        let user_id = encodeURIComponent(generated_user_id);
+        let updated_generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
         let updated_user_info = {
             first_name: testData.trusted_user_updated_first_name,
+            role: 1,
+        }
+        const res = await request(app)
+            .put('/api/users/' + user_id)
+            .set('Cookie', updated_generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(updated_user_info);
+        expect(res.statusCode).toBe(409);
+        expect(res.body).toHaveProperty("message", 'Failed to edit user. Uneditable parameters present.');
+        expect(res.body).toHaveProperty("result", false);
+    });
+    it("6. Should not allow any other user to update user information", async () => {
+        let user_id = encodeURIComponent("1293012-sfase1382-ead");
+        let updated_user_info = {
+            display_first_name: testData.trusted_user_updated_first_name,
+        }
+        const res = await request(app)
+            .put('/api/users/' + user_id)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(updated_user_info);
+        expect(res.statusCode).toBe(403);
+        expect(res.body).toHaveProperty("message", 'Failed to edit user. User does not have permission.');
+        expect(res.body).toHaveProperty("result", false);
+    });
+    it("7. Should allow the user to update editable information", async () => {
+        let user_id = encodeURIComponent(generated_user_id);
+        let updated_generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let updated_user_info = {
+            display_first_name: testData.trusted_user_updated_first_name,
             bio: testData.trusted_user_updated_bio,
         }
         const res = await request(app)
-            .put('/api/users/' + user_open_id_encoded)
-            .set('Cookie', generated_auth_cookie)
+            .put('/api/users/' + user_id)
+            .set('Cookie', updated_generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
             .send(updated_user_info);
@@ -110,7 +143,7 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         expect(res.body).toHaveProperty("message", 'User updated successfully');
         expect(res.body).toHaveProperty("result", true);
     });
-    it("6. Should allow the user to fetch the updated user details", async () => {
+    it("8. Should allow the user to fetch the updated user details", async () => {
         let user_open_id_encoded = encodeURIComponent(testData.trusted_user.openid);
         const res = await request(app)
             .get('/api/users/' + user_open_id_encoded)
@@ -119,11 +152,11 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
             .set("Content-Type", "application/json");
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty("openid", testData.trusted_user.openid);
-        expect(res.body).toHaveProperty("first-name", testData.trusted_user_updated_first_name);
+        expect(res.body).toHaveProperty("display-first-name", testData.trusted_user_updated_first_name);
         expect(res.body).toHaveProperty("bio", testData.trusted_user_updated_bio);
         expect(res.body).toHaveProperty("email", testData.trusted_user.email);
     });
-    it("7. Should allow the user to update the user's avatar", async () => {
+    it("9. Should allow the user to update the user's avatar", async () => {
         const file_path = path.join(__dirname, "test_avatar_image.jpg");
         const res = await request(app)
             .post('/api/users/avatar')
@@ -149,7 +182,7 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         expect(res.body).toHaveProperty("elementId");
         generated_element_id = res.body['elementId'];
     });
-    it("8. Should allow user to bookmark their created element", async () => {
+    it("10. Should allow user to bookmark their created element", async () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
         let element_type = testData.element_details_json['resource-type']
         const res = await request(app)
@@ -160,7 +193,7 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty("message", 'Toggle element bookmark success');
     });
-    it("9. Should allow user to fetch if their created element is bookmarked", async () => {
+    it("11. Should allow user to fetch if their created element is bookmarked", async () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
         let element_type = testData.element_details_json['resource-type']
         const res = await request(app)
@@ -182,7 +215,7 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty("message", 'Resource deleted successfully');
     });
-    it("10. Should allow only SUPER_ADMIN to delete user", async () => {
+    it("12. Should allow only SUPER_ADMIN to delete user", async () => {
         const res = await request(app)
             .delete("/api/users/" + generated_user_id)
             .set('Cookie', generated_auth_super_admin_cookie)
