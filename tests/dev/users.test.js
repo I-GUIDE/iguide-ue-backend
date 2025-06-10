@@ -127,7 +127,7 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         expect(res.body).toHaveProperty("result", false);
     });
     it("7. Should allow the user to update editable information", async () => {
-        let user_id = encodeURIComponent(generated_user_id);
+        let user_id = encodeURIComponent(testData.trusted_user.openid);
         let updated_generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
         let updated_user_info = {
             display_first_name: testData.trusted_user_updated_first_name,

@@ -573,12 +573,12 @@ router.put('/api/users/:id',
 		return {user_id:req.user.id, user_role:req.user.role}
     })();
 
-	if (user_id !== id) {
+	let current_user_details = await n4j.getContributorByID(id);
+
+	if (user_id !== current_user_details['id']) {
 		res.status(403).json({message: 'Failed to edit user. User does not have permission.', result: false});
 		return;
 	}
-
-	let current_user_details = await n4j.getContributorByID(user_id);
 
 	let reindex_os = false;
 	let total_public_elements = 0
