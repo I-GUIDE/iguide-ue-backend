@@ -597,6 +597,12 @@ router.put('/api/users/:id',
 		res.status(409).json({message: 'Failed to edit user. Uneditable parameters present.', result: false});
 		return;
 	}
+	/**
+	 * To make sure it does not update the id of the contributor
+	 */
+	if (updates['id']) {
+		delete updates['id']
+	}
     try {
 		const response = await n4j.updateContributor(id, updates);
 		if (response) {
