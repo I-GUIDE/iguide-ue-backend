@@ -63,18 +63,19 @@ export async function gradeDocuments(documents, question) {
     // 2) Build a simpler, consistent schema for the grader
     //    (you can rename or reorder fields as you wish)
     const docForGrading = {
+      count: docWithoutEmbedding.click_count?.low ?? -1, // when the document is from Neo4j
       title: docWithoutEmbedding.title || "",
       resourceType: docWithoutEmbedding["resource-type"] || "",
       authors: docWithoutEmbedding.authors || [],
       tags: docWithoutEmbedding.tags || [],
       contributor: docWithoutEmbedding.contributor || "",
-      contents: docWithoutEmbedding.contents || ""
+      contents: docWithoutEmbedding.contents || "",
       // Add or remove fields as needed
     };
 
     // Convert the simplified doc to JSON or a string for the prompt
     const docString = JSON.stringify(docForGrading, null, 2);
-
+    console.log("Doc for grading:", docForGrading.count);
     // 3) Build your grader prompt with the simplified doc
     const graderPrompt = `
       You are a grader assessing the relevance of the following knowledge element to a user question.
@@ -83,13 +84,12 @@ export async function gradeDocuments(documents, question) {
       ${docString}
 
       The user question is: ${question}
-
       Please return a JSON object with a single key: "relevance_score".
       The value must be an integer from 0 to 10, where 0 = completely irrelevant, 10 = highly relevant.
       If the user asked for a specific knowledge element type, such as "notebook", "dataset", give the knowledge element a score of 0.
       For example:
       {"relevance_score": 7}
-    `;
+`;
 
     // 4) Create your query payload (adjust system prompt as needed)
     let result
@@ -115,8 +115,12 @@ export async function gradeDocuments(documents, question) {
     // 6) Parse LLM response as JSON
     try {
       const parsed = extractJsonFromLLMReturn(result.trim());
-      const relevanceScore = parsed?.relevance_score;
-
+      var relevanceScore;
+      if(docForGrading.count > 0){
+          relevanceScore = docForGrading.count;
+      }else{
+          relevanceScore = parsed?.relevance_score;
+      }
       if (typeof relevanceScore === 'number') {
         console.log(`---GRADE: Document scored ${relevanceScore}---`);
         doc._score = relevanceScore;
@@ -276,7 +280,7 @@ export async function gradeDocuments(documents, question) {
 
 
 // Function: Grade generation against documents and question
-export async function gradeGenerationVsDocumentsAndQuestion(state, showReason = false) {
+export async function gradeGenerationVsDocumentsAndQuestion(state, showReason = true) {
   console.log("---CHECK HALLUCINATIONS---");
   const { question, documents, generation, loop_step = 0 } = state;
   const maxRetries = state.max_retries || 3;
@@ -324,15 +328,38 @@ export async function gradeGenerationVsDocumentsAndQuestion(state, showReason = 
   console.log("---DECISION: MAX RETRIES REACHED---");
   return "max retries";*/
   const graderPrompt = `
-    QUESTION: \n\n ${question} \n\n FACTS: \n\n ${formatDocsString(documents)} \n\n STUDENT ANSWER: ${generation}.
-    Ensure the answer is grounded in the facts and does not contain hallucinated information. Ensure the answer is relevant to the question.
-    Return JSON with keys binary_score ('yes' or 'no') and explanation.
-  `;
+You are an exacting examiner.  
+Read the QUESTION, the FACTS (your **only** source of truth), and the student ANSWER.
+
+RULES
+1. **No outside knowledge** — every claim in the ANSWER must be *explicitly* supported by the FACTS section.  
+2. If the FACTS section is empty, or any claim is unsupported/contradicted, the answer is hallucinated ⇒ score "no".  
+3. The ANSWER must directly address the QUESTION; otherwise score "no".  
+4. Ignore style or grammar; grade only factual grounding and relevance.
+
+OUTPUT (JSON only)
+{
+  "binary_score": "yes" | "no",    // "yes" = completely fact-grounded **and** relevant
+  "explanation": "<1-2 concise sentences justifying the score>"
+}
+
+Return exactly this JSON object and nothing else.
+QUESTION:
+
+${question}
+
+FACTS:
+${formatDocsString(documents)}
+
+ANSWER:
+${generation}
+`;
+
   const hallucinationRelevanceResponse = await callLlamaModel(
     createQueryPayload("qwen2.5:7b-instruct", "You are a teacher grading a student's answer for factual accuracy and relevance to the question.", graderPrompt)
   );
-
-  if (showReason) console.log(hallucinationRelevanceResponse?.message?.content);
+  console.log("Grader prompt: ", graderPrompt);
+  if (showReason) console.log(hallucinationRelevanceResponse);
   const grade = hallucinationRelevanceResponse?.toLowerCase().includes('"binary_score": "yes"') ? "yes" : "no";
   //return grade
   if (grade === "yes") {

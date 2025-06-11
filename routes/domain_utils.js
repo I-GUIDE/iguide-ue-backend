@@ -1,6 +1,6 @@
 
 import fs from "fs";
-import rawDataJSON from "../sources/world_universities_and_domains.json" assert {type: "json"};
+import rawDataJSON from "../sources/world_universities_and_domains.json" with {type: "json"};
 const domainData = {}
 
 export function generateOptimizedDomainList() {
