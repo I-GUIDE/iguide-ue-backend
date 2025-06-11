@@ -570,8 +570,6 @@ router.post('/llm/memory-id', jwtCorsMiddleware, authenticateJWT, authorizeRole(
  */
 router.options('/llm/legacy-search', cors());
 router.post('/llm/legacy-search', cors(),
-    authenticateJWT,
-    authorizeRole(Role.TRUSTED_USER),
     async (req, res) => {
   const { userQuery, memoryId } = req.body;
   //var memoryId = "fakeid12345";
@@ -963,6 +961,17 @@ Return the scratchpad, then output valid JSON with one of the actions:
 
     // fallback: treat whatever came as final
     finalAnswerContent = raw; break;
+  }
+  //console.log("Final answer content:", finalAnswerContent, "State documents:", state.documents.length);
+  if (state.documents.length === 0) {
+    progressCallback("No relevant knowledge element found");
+    console.log("No relevant knowledge element found.");
+    return {
+      answer: "Sorry, I couldn't find any relevant knowledge elelement for your question.",
+      message_id: uuidv4(),
+      elements: [],
+      count: 0,
+    };
   }
 
   /* ----------- generate final answer (uses your existing generateAnswer) --- */
