@@ -432,6 +432,7 @@ router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) =
 
     try {
 	const id = user['id'];
+	console.log("user body while adding user: ", user);
 	const response = await n4j.registerContributor(user);
 	if (response){
 	    res.status(201).json({ message: 'User added successfully', id: id });
