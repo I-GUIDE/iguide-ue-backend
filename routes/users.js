@@ -485,8 +485,8 @@ router.options('/api/auth/users', jwtCorsMiddleware);
 router.post('/api/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, res) => {
 
 	const user = req.body;
-    console.log('Adding new user');
-
+    console.log('Adding new user through auth API');
+	console.log("user body while adding user: ", user);
     try {
 		const id = user['id'];
 		let existing_user = {}
