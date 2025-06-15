@@ -1204,7 +1204,7 @@ export async function registerContributor(contributor){
     // (2) assign roles for new contributor
     contributor['role'] = (() => {
 		let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
-            .substring(contributor['email'].toLowerCase().lastIndexOf("@"));
+            .substring(contributor['email'].toLowerCase().lastIndexOf("@")+1);
 		if ((contributor['email'] && contributor['email'].toLowerCase().includes('.edu')) ||
 			(contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
 	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
@@ -1250,8 +1250,9 @@ export async function registerContributorAuth(contributor){
     // (2) assign roles for new contributor
     contributor['role'] = (() => {
 		let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
-            .substring(contributor['email'].toLowerCase().lastIndexOf("@"));
-		if ((contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
+            .substring(contributor['email'].toLowerCase().lastIndexOf("@")+1);
+		if ((contributor['email'] && contributor['email'].toLowerCase().includes('.edu')) ||
+			(contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
 	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
 			(contributor['email'] && contributor['email'].toLowerCase().includes('.org'))
 	   	) {
