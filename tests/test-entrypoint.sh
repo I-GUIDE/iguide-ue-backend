@@ -11,7 +11,10 @@
 # Copy _.local.iguide.io/
 
 # (0.2) Install git, gpg
-apk --no-cache add git gpg
+apk --no-cache add git gpg gpg-agent
+
+# (0.3) Encrypt secrets file and put it in tests/secrets/ directory
+#gpg --symmetric --cipher-algo AES256 secrets_file.ext
 
 
 # (1) Clone repo and install required packages
