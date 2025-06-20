@@ -406,7 +406,7 @@ async function handleUserQueryWithProgress(
     progressCallback("No relevant knowledge element found");
     console.log("No relevant knowledge element found.");
     return {
-      answer: "Sorry, I couldn't find any relevant knowledge elelement for your question.",
+      answer: "Sorry, I couldn't find any relevant knowledge element for your question.",
       message_id: uuidv4(),
       elements: [],
       count: 0,
@@ -967,7 +967,7 @@ Return the scratchpad, then output valid JSON with one of the actions:
     progressCallback("No relevant knowledge element found");
     console.log("No relevant knowledge element found.");
     return {
-      answer: "Sorry, I couldn't find any relevant knowledge elelement for your question.",
+      answer: "Sorry, I couldn't find any relevant knowledge element for your question.",
       message_id: uuidv4(),
       elements: [],
       count: 0,
