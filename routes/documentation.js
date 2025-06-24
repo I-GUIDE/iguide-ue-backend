@@ -153,7 +153,7 @@ router.get('/documentation', cors(), async (req, res) => {
 router.post('/documentation',
 	    jwtCorsMiddleware,
 	    authenticateJWT,
-	    authorizeRole(utils.Role.ADMIN),
+	    authorizeRole(utils.Role.CONTENT_MODERATOR),
 	    async (req, res) => {
     const documentation = req.body;
     try {
@@ -205,7 +205,7 @@ router.post('/documentation',
 router.put('/documentation/:id',
 	   jwtCorsMiddleware,
 	   authenticateJWT,
-	   authorizeRole(utils.Role.ADMIN),
+	   authorizeRole(utils.Role.CONTENT_MODERATOR),
 	   async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     const updates = req.body;
@@ -245,7 +245,7 @@ router.put('/documentation/:id',
 router.delete('/documentation/:id',
 	      jwtCorsMiddleware,
 	      authenticateJWT,
-	      authorizeRole(utils.Role.ADMIN),
+	      authorizeRole(utils.Role.CONTENT_MODERATOR),
 	      async (req, res) => {
     const doc_id = req.params['id'];
 

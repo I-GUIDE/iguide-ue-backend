@@ -11,9 +11,10 @@ import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
-import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
-import {Role} from "../utils.js";
-import {getAllContributors} from "../backend_neo4j.js";
+import {authenticateAuth, authenticateJWT, authorizeRole, generateAccessToken} from '../jwtUtils.js';
+import {checkUpdateParameters, EditableParameters, Role} from "../utils.js";
+import {getAllContributors, registerContributorAuth} from "../backend_neo4j.js";
+import {performReIndexElementsBasedOnUserId} from "./elements_utils.js";
 
 const router = express.Router();
 
@@ -97,7 +98,7 @@ router.get('/api/users/:id', cors(), async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *           enum: [first_name, last_name]
+ *           enum: [first_name, last_name, created_at]
  *           default: first_name
  *         description: Sorting order for the values
  *       - in: query
@@ -431,6 +432,7 @@ router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) =
 
     try {
 	const id = user['id'];
+	console.log("user body while adding user: ", user);
 	const response = await n4j.registerContributor(user);
 	if (response){
 	    res.status(201).json({ message: 'User added successfully', id: id });
@@ -450,6 +452,62 @@ router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) =
     } catch (error) {
 	console.error('Error adding user:', error);
 	res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+
+/**
+ * @swagger
+ * /api/auth/users:
+ *   post:
+ *     summary: Add a new user document for authorized server
+ *     tags: ['users']
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               id:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: User added successfully or already presented user provided
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/api/auth/users', jwtCorsMiddleware);
+router.post('/api/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, res) => {
+
+	const user = req.body;
+    console.log('Adding new user through auth API');
+	console.log("user body while adding user: ", user);
+    try {
+		const id = user['id'];
+		let existing_user = {}
+		if (id !== undefined) {
+			existing_user = await n4j.getContributorByID(id);
+		}
+		if (existing_user !== {} && existing_user['id'] !== undefined) {
+			res.status(200).json({ message: 'User already exists', user: {id: existing_user.id, role: existing_user.role} });
+		} else {
+			const response = await n4j.registerContributorAuth(user);
+
+			if (response['id'] !== undefined) {
+				res.status(200).json({message: 'User created successfully', user: {id: response.id, role: response.role}});
+			} else {
+				res.status(500).json({message: 'Error in creating user'});
+			}
+		}
+
+    } catch (error) {
+		console.error('Error adding user:', error);
+		res.status(500).json({ message: 'Internal server error' });
     }
 });
 
@@ -475,6 +533,10 @@ router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) =
  *     responses:
  *       200:
  *         description: User updated successfully
+ *       403:
+ *         description: Failed to edit user. User does not have permission
+ *       409:
+ *         description: Failed to edit user. Uneditable parameters present
  *       500:
  *         description: Internal server error
  */
@@ -498,23 +560,73 @@ router.options('/api/users/:id', (req, res) => {
 	}
     res.sendStatus(204); // No content
 });
-router.put('/api/users/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.put('/api/users/:id',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     const updates = req.body;
 
-    console.log('Updating user ...');
+	const {user_id, user_role} = (() => {
+		if (!req.user || typeof req.user === 'undefined'){
+	    	return {user_id:null, user_role:null};
+		}
+		return {user_id:req.user.id, user_role:req.user.role}
+    })();
+	let current_user_details = await n4j.getContributorByID(user_id);
 
-    try {
-	const response = await n4j.updateContributor(id, updates);
-	if (response) {
-	    res.json({ message: 'User updated successfully', result: response });
+	console.log("user detail from cookie: ", user_id, " detail from db: ", current_user_details['id']);
+	let user_permission = true
+	if (String(id).startsWith("http")) {
+		user_permission = id === current_user_details['openid']
 	} else {
-	    console.log('Error updating user');
-	    res.json({ message: 'Error updating user', result: response });
+		user_permission = id === current_user_details['id']
 	}
+	if (!user_permission) {
+		res.status(403).json({message: 'Failed to edit user. User does not have permission.', result: false});
+		return;
+	}
+	let reindex_os = false;
+	let total_public_elements = 0
+	/**
+	 * Check if the user has contributions and has changed his display_first/last_name then perform the reindexing or else no need.
+	 */
+	if (updates[EditableParameters.DISPLAY_FIRST_NAME] !== current_user_details['display-first-name'] ||
+		updates[EditableParameters.DISPLAY_LAST_NAME] !== current_user_details['display-last-name']) {
+		total_public_elements = await n4j.getElementsCountByContributor(user_id);
+		if (total_public_elements > 0) {
+			reindex_os = true;
+		}
+	}
+
+    console.log('Updating user ...');
+	if (!checkUpdateParameters(updates)) {
+		res.status(409).json({message: 'Failed to edit user. Uneditable parameters present.', result: false});
+		return;
+	}
+	/**
+	 * To make sure it does not update the id of the contributor
+	 */
+	if (updates['id']) {
+		delete updates['id']
+	}
+    try {
+		const response = await n4j.updateContributor(id, updates);
+		if (response) {
+			if (reindex_os) {
+				let reindex_response = await performReIndexElementsBasedOnUserId(user_id, total_public_elements);
+				console.log('Reindex response: ', reindex_response);
+			}
+		}
+		if (response) {
+	    	res.json({ message: 'User updated successfully', result: response });
+		} else {
+	    	console.log('Error updating user');
+	    	res.json({ message: 'Error updating user', result: response });
+		}
     } catch (error) {
-	console.error('Error updating user:', error);
-	res.status(500).json({ message: 'Internal server error' });
+		console.error('Error updating user:', error);
+		res.status(500).json({ message: 'Internal server error' });
     }
 });
 
