@@ -6,6 +6,7 @@ import cors from 'cors';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import rateLimit from 'express-rate-limit';
 // local imports
 import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
@@ -790,7 +791,14 @@ router.get('/api/users/bookmark/:elementId',
 //  *       500:
 //  *         description: Internal server error
 //  */
+const deleteUserRateLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 10, // Limit each IP to 10 requests per windowMs
+    message: { message: 'Too many requests, please try again later.' }
+});
+
 router.delete('/api/users/:id',
+	deleteUserRateLimiter,
 	jwtCorsMiddleware,
 	authenticateJWT,
 	authorizeRole(utils.Role.SUPER_ADMIN),
