@@ -52,6 +52,28 @@ export const Visibility = Object.freeze({
     PRIVATE: 'private',
     PUBLIC: 'public',
 });
+
+export const UnEditableParameters = Object.freeze({
+    FIRST_NAME: 'first_name',
+    LAST_NAME: 'last_name',
+    EMAIL: 'email',
+    OPENID: 'openid',
+    AFFILIATION: 'affiliation',
+    // ID: 'id',
+    CREATED_AT: 'created_at',
+    ROLE: 'role'
+});
+
+export const EditableParameters = Object.freeze({
+    AVATAR_URL: 'avatar_url',
+    GITHUB_LINK: 'gitHubLink',
+    PERSONAL_WEBSITE_LINK: 'personalWebsiteLink',
+    LINKEDIN_LINK: 'linkedInLink',
+    DISPLAY_FIRST_NAME: 'display_first_name',
+    DISPLAY_LAST_NAME: 'display_last_name',
+    GOOGLE_SCHOLAR_LINK: 'googleScholarLink',
+    BIO: 'bio'
+});
 //exports.Visibility = Visibility;
 
 /**************/
@@ -122,10 +144,11 @@ export function parseSortBy(sort_by){
     switch (sort_by){
     case SortBy.CLICK_COUNT:
     case SortBy.CLICK_COUNT.toLowerCase():
-	return SortBy.CLICK_COUNT;
+	    return SortBy.CLICK_COUNT;
     case SortBy.CREATION_TIME:
+    case SortBy.CREATION_TIME.toLowerCase():
     case "creation_time":
-	return SortBy.CREATION_TIME;
+	    return SortBy.CREATION_TIME;
     case SortBy.TITLE: return SortBy.TITLE;
     case SortBy.FIRST_NAME:
     case SortBy.FIRST_NAME.toLowerCase(): return SortBy.FIRST_NAME;
@@ -153,7 +176,10 @@ export function parse64BitNumber(num_64){
  */
 export function parseDate(neo4jDateTime){
     const { year, month, day, hour, minute, second, nanosecond } = neo4jDateTime;
-
+    if (year === undefined || day === undefined || month === undefined ||
+        hour === undefined || minute === undefined || second === undefined || nanosecond === undefined) {
+        return neo4jDateTime;
+    }
     const date = new Date(
 	year.toInt(),
 	month.toInt() - 1, // neo4j dates start at 1, js dates start at 0
@@ -369,4 +395,14 @@ export function performUserCheck(req, user_id) {
         return true;
     }
     return false;
+}
+
+export function checkUpdateParameters(updates) {
+    let updated_check = true;
+    Object.values(UnEditableParameters).map((param) => {
+        if (updates[param] !== undefined) {
+            updated_check = false;
+        }
+    });
+    return updated_check;
 }

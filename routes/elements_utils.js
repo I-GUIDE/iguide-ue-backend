@@ -1,12 +1,16 @@
 import axios from "axios";
 import * as os from "../backend_opensearch.js";
+import * as n4j from '../backend_neo4j.js';
 
 export async function getFlaskEmbeddingResponse(content) {
     let newEmbedding;
     try {
         // Get embedding from Flask endpoint
         const flaskUrl = process.env.FLASK_EMBEDDING_URL; // URL of the Flask endpoint from .env
-
+        if (String(process.argv[1]).includes('jest')) {
+            console.log('no embedding performed for testing purposes')
+            return newEmbedding;
+        }
         // Fetch the new embedding from the Flask API
         const embeddingResponse = await axios.post(`${flaskUrl}/get_embedding`, {
             text: content  // Use the updated content to generate a new embedding
@@ -88,5 +92,55 @@ export async function performElementOpenSearchInsert(element_body, element_id) {
     } catch (error) {
         console.error("performElementOpenSearchInsert - Error: ", error);
         return "error in creating index for element_id: " + element_id
+    }
+}
+
+export async function performReIndexElementsBasedOnUserId(user_id, total_elements) {
+    try {
+        let user_elements = await n4j.getElementsByContributor(user_id, 0, total_elements);
+        let user_elements_ids = [];
+        if (user_elements['total-count'] > 0) {
+            user_elements['elements'].forEach((element) => {
+                user_elements_ids.push(element['id']);
+            });
+        }
+
+        let user_details = await n4j.getContributorByID(user_id);
+        let user_updated_name = user_details['display-first-name'] + " " + user_details['display-last-name'];
+
+        let success_updates = 0;
+        let failed_updates = 0;
+
+        // Await all update operations in parallel
+        const updateResults = await Promise.all(
+            user_elements_ids.map(async (element_id) => {
+                try {
+                    const response = await os.client.update({
+                        index: os.os_index,
+                        id: element_id,
+                        body: {
+                            doc: {
+                                contributor: user_updated_name,
+                            },
+                        },
+                        refresh: true,
+                    });
+
+                    if (response?.body?.result) {
+                        success_updates += 1;
+                    } else {
+                        failed_updates += 1;
+                    }
+                } catch (err) {
+                    console.error(`Failed to update element ${element_id}:`, err.meta?.body?.error || err.message);
+                    failed_updates += 1;
+                }
+            })
+        );
+        console.log(`Updated user OS Elements for user_id: ${user_id} - Success: ${success_updates}, Failed: ${failed_updates}`);
+        return success_updates > 0;
+    } catch (error) {
+        console.error("performReIndexElementsBasedOnUserId - Error: ", error);
+        return false;
     }
 }

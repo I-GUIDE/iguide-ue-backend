@@ -7,10 +7,12 @@ import neo4j from 'neo4j-driver';
 import { v4 as uuidv4 } from 'uuid';
 // local imports
 import * as utils from './utils.js';
+import * as spatialUtils from './routes/rag_modules/spatial_utils.js';
 
 // For deployment on JetStream VM
 import dotenv from 'dotenv';
 import {checkUniversityDomain} from "./routes/domain_utils.js";
+import {SortBy} from "./utils.js";
 dotenv.config();
 console.log(process.env.NEO4J_CONNECTION_STRING);
 
@@ -61,6 +63,8 @@ function makeFrontendCompatible(element) {
 		return [k1.replaceAll("_","-"), utils.parse64BitNumber(v1)];
 	    } else if (k1 === 'updated_at') {
 		return [k1.replaceAll("_","-"), utils.parseDate(v1)];
+	    } else if (k1 === SortBy.CREATION_TIME) {
+		return [k1.replaceAll("_","-"), utils.parseDate(v1)];
 	    }
 
 	    if (typeof v1 === 'object' && v1 !== null && !Array.isArray(v1)) {
@@ -76,7 +80,9 @@ function makeFrontendCompatible(element) {
 	});
 	return Object.fromEntries(keyValues);
     }
-    let ret = replaceUnderscores(element);
+    let elem_wo_underscores = replaceUnderscores(element);
+    // convert all instances of spatial properties from WKT to GeoJSON
+    let ret = spatialUtils.convertGeoSpatialFields(elem_wo_underscores, false);
 
     // handle 64-bit numbers returned from neo4j
     // if (ret['visibility'])
@@ -151,7 +157,7 @@ export async function getElementByID(id, user_id=null, user_role=null){
 	query_str += "WHERE r.visibility=$public_visibility ";
 
     query_str += "WITH COLLECT(r{.id, .title, .visibility, .thumbnail_image, `resource-type`:TOLOWER(LABELS(r)[0])}) as related_elems, n, c  " +
-	"RETURN n{.*, created_at:TOSTRING(n.created_at), related_elements: related_elems, `resource-type`:TOLOWER(LABELS(n)[0]), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name)}}";
+	"RETURN n{.*, created_at:TOSTRING(n.created_at), related_elements: related_elems, `resource-type`:TOLOWER(LABELS(n)[0]), contributor: c{.id, .avatar_url, name:(c.display_first_name + ' ' + c.display_last_name)}}";
 
     // [Upadte] Query with related elements divided into separate lists for every type
     // no need to do manual related elements separation
@@ -409,7 +415,7 @@ export async function getElementsByType(type,
 	var ret = [];
 	if (!count_only) {
 	    const order_by = utils.parseSortBy(sort_by);
-	    query_str += "RETURN n{.id, .title, .contents, .tags, .thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name)}} " +
+	    query_str += "RETURN n{.id, .title, .contents, .tags, .thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, .avatar_url, name:(c.display_first_name + ' ' + c.display_last_name)}} " +
 	    "ORDER BY n." + order_by + " " + order + ", n.id " + order + " " +
 	    "SKIP $from " +
 	    "LIMIT $size";
@@ -515,7 +521,7 @@ export async function getElementsBookmarkedByContributor(id,
 	    query_params['from'] = neo4j.int(from);
 	    query_params['size'] = neo4j.int(size);
 
-	    query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name) }} AS element " +
+	    query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.display_first_name + ' ' + c.display_last_name) }} AS element " +
 		"ORDER BY r." + order_by + " " + order + " " +
 		"SKIP $from " +
 		"LIMIT $size";
@@ -595,7 +601,7 @@ export async function getElementsByContributor(id,
 	    query_params['from'] = neo4j.int(from);
 	    query_params['size'] = neo4j.int(size);
 
-	    query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.first_name + ' ' + c.last_name) }} AS element " +
+	    query_str += "RETURN r{.id, .tags, .title, .contents, .authors, .click_count, .visibility, `resource-type`:TOLOWER(LABELS(r)[0]), .thumbnail_image, created_at:TOSTRING(r.created_at), contributor: c{.id, .avatar_url, name:(c.display_first_name + ' ' + c.display_last_name) }} AS element " +
 		"ORDER BY r." + order_by + " " + order + " " +
 		"SKIP $from " +
 		"LIMIT $size";
@@ -655,7 +661,7 @@ export async function getElementsByTag(tag, from, size, sort_by=utils.SortBy.TIT
 	const query_str = "MATCH (n)-[:CONTRIBUTED]-(c) " +
 	      "WHERE ANY ( tag IN n.tags WHERE toLower(tag) = toLower($tag_str) ) " +
 	      "AND n.visibility=$public_visibility " +
-	      "RETURN n{.id, .title, .contents, .tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, name:(c.first_name + ' ' + c.last_name), .avatar_url} } " +
+	      "RETURN n{.id, .title, .contents, .tags, `thumbnail-image`:n.thumbnail_image, `resource-type`:TOLOWER(LABELS(n)[0]), .authors, created_at:TOSTRING(n.created_at), .click_count, contributor: c{.id, name:(c.display_first_name + ' ' + c.display_last_name), .avatar_url} } " +
 	      "ORDER BY n." + order_by + " " + order + " " +
 	      "SKIP $from " +
 	      "LIMIT $size";
@@ -1199,8 +1205,9 @@ export async function registerContributor(contributor){
     // (2) assign roles for new contributor
     contributor['role'] = (() => {
 		let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
-            .substring(contributor['email'].toLowerCase().lastIndexOf("@"));
-		if ((contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
+            .substring(contributor['email'].toLowerCase().lastIndexOf("@")+1);
+		if ((contributor['email'] && contributor['email'].toLowerCase().includes('.edu')) ||
+			(contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
 	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
 			(contributor['email'] && contributor['email'].toLowerCase().includes('.org'))
 	   	) {
@@ -1211,6 +1218,12 @@ export async function registerContributor(contributor){
     })();
     // (3) get avatar URL
     //contributor['avatar_url'] = contributor['avatar_url']['original'];
+    // Add user registration date
+    contributor['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
+
+	// (4) Add a display_first/last_name property when registering users
+	contributor['display_first_name'] = contributor['first_name']
+	contributor['display_last_name'] = contributor['last_name']
     const query_str = "CREATE (c: Contributor $contr_param)";
     try{
 	const {_, summary} =
@@ -1289,8 +1302,9 @@ export async function registerContributorAuth(contributor){
     // (2) assign roles for new contributor
     contributor['role'] = (() => {
 		let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
-            .substring(contributor['email'].toLowerCase().lastIndexOf("@"));
-		if ((contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
+            .substring(contributor['email'].toLowerCase().lastIndexOf("@")+1);
+		if ((contributor['email'] && contributor['email'].toLowerCase().includes('.edu')) ||
+			(contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
 	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
 			(contributor['email'] && contributor['email'].toLowerCase().includes('.org'))
 	   	) {
@@ -1301,6 +1315,12 @@ export async function registerContributorAuth(contributor){
     })();
     // (3) get avatar URL
     //contributor['avatar_url'] = contributor['avatar_url']['original'];
+    // Add user registration date
+    contributor['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
+
+	// (4) Add a display_first/last_name property when registering users
+	contributor['display_first_name'] = contributor['first_name']
+	contributor['display_last_name'] = contributor['last_name']
     const query_str = "CREATE (c: Contributor $contr_param) return c{.*}";
     try{
 		const {records, summary} =

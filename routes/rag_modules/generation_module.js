@@ -2,7 +2,7 @@
 import { formatDocsString, formatDocsXML } from "./rag_utils.js";
 import { callLlamaModel, callGPTModel } from './llm_modules.js';
 import { createQueryPayload } from './llm_modules.js';
-
+const front_end = process.env.FRONTEND_DOMAIN || "https://platform.i-guide.io"
 // Function: Generate an answer using relevant documents
 export async function generateAnswer(state) {
     try {
@@ -34,8 +34,8 @@ Your ONLY source of truth is the <doc> blocks provided in CONTEXT.
 
 When you answer:
 • If the user asks for a collection of knowledge elements (e.g., datasets, notebooks, publications, OERs) on a topic, respond first with a concise paragraph summarizing the most relevant findings. Then provide a short numbered list. Use a new line for each item.
-• Begin each bullet with the item’s title as a clickable link, using the format: **[TITLE](https://platform.i-guide.io/{element_type}s/{doc_id})**
-(Use the plural form of <element_type>, except use code for type code.)
+• Begin each bullet with the item’s title as a clickable link, using the format: **[TITLE](${front_end}/{element_type}s/{doc_id})**
+(Use the plural form of <element_type>, except use "code" for type "code".)
 • Otherwise, respond in one concise paragraph.  
 • Quote supporting titles in **bold**.  
 • If the user question specifies <element_type>, only use docs with matching <element_type>.  

@@ -14,6 +14,7 @@ import { extractJsonFromLLMReturn, formatDocsJson, makeSearchRateLimiter, safePa
 import { generateAnswer } from './rag_modules/generation_module.js';
 import { restrictToUIUC } from '../ip_policy.js';
 import {createQueryPayload} from './rag_modules/llm_modules.js';
+import {Role} from "../utils.js";
 const router = express.Router();
 const checkGenerationQuality = process.env.CHECK_GENERATION_QUALITY === 'true' || false; // Default to false if not set
 const MAX_SEARCHES_PER_HOUR =process.env.MAX_SEARCHES_PER_HOUR || 10; // Set a default value if not provided
@@ -405,7 +406,7 @@ async function handleUserQueryWithProgress(
     progressCallback("No relevant knowledge element found");
     console.log("No relevant knowledge element found.");
     return {
-      answer: "Sorry, I couldn't find any relevant knowledge elelement for your question.",
+      answer: "Sorry, I couldn't find any relevant knowledge element for your question.",
       message_id: uuidv4(),
       elements: [],
       count: 0,
@@ -485,7 +486,7 @@ async function handleUserQueryWithProgress(
  *         description: Error creating memory
  */
 router.options('/llm/memory-id', jwtCorsMiddleware);
-router.post('/llm/memory-id', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.UNRESTRICTED_CONTRIBUTOR), async (req, res) => {
+router.post('/llm/memory-id', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.TRUSTED_USER), async (req, res) => {
     const conversationName = `conversation-${uuidv4()}`; // Generate random conversation name
 
     try {
@@ -568,7 +569,8 @@ router.post('/llm/memory-id', jwtCorsMiddleware, authenticateJWT, authorizeRole(
  *         description: Error performing conversational search
  */
 router.options('/llm/legacy-search', cors());
-router.post('/llm/legacy-search', cors(), async (req, res) => {
+router.post('/llm/legacy-search', cors(),
+    async (req, res) => {
   const { userQuery, memoryId } = req.body;
   //var memoryId = "fakeid12345";
   if (!userQuery) {
@@ -756,7 +758,7 @@ router.post('/llm/search', searchRateLimiter, async (req, res) => {
     }
     return {user_id:req.user.id, user_role:req.user.role}
   })();
-  if(!(user_role <= utils.Role.UNRESTRICTED_CONTRIBUTOR)) {
+  if(!(user_role <= utils.Role.TRUSTED_USER)) {
       console.log(user_id, " blocked from accessing I-GUIDE AI");
       return res.status(403).json({ message: 'Forbidden: You do not have permission to access I-GUIDE AI.' });
   }
@@ -873,7 +875,7 @@ export async function handleIterativeQuery(
   console.log("Starting iterative retrieval for", comprehensiveUserQuery);
 
   const retrievalSteps = [];
-  const MAX_ITERATIONS = 5;
+  const MAX_ITERATIONS = 3;
 
   // State object with working memory
   const state = {
@@ -918,7 +920,8 @@ Return the scratchpad, then output valid JSON with one of the actions:
 7. Every key *and* every string value **MUST** be wrapped in double quotes.
    Example: { "name": "Finn Roberts" }   NOT  { "name": Finn Roberts }.
 8. Avoid doing new searches that are just rephrased versions of previous steps. For example, if the previous step searched "Works from Alice" then you should avoid searching for "Alice's works" or "Alice's publications". Instead, you should go for a follow-up search if there is other unknown facts or stop and choose to answer.
-`;
+9. Avoid repharsing the user query in the next search. Instead, you should go for a follow-up search if there is other unknown facts or stop and choose to answer.
+10. If the user query is a set of keywords, keep it as is in the next search. For example, if the user query is "Chicago Dataset" then just search for "Chicago Dataset" in the next search.`;
 
     const raw = process.env.USE_GPT === true
       ? await callGPTModel(createQueryPayload("gpt-4o", systemPrompt, iterationPrompt))
@@ -958,6 +961,17 @@ Return the scratchpad, then output valid JSON with one of the actions:
 
     // fallback: treat whatever came as final
     finalAnswerContent = raw; break;
+  }
+  //console.log("Final answer content:", finalAnswerContent, "State documents:", state.documents.length);
+  if (state.documents.length === 0) {
+    progressCallback("No relevant knowledge element found");
+    console.log("No relevant knowledge element found.");
+    return {
+      answer: "Sorry, I couldn't find any relevant knowledge element for your question.",
+      message_id: uuidv4(),
+      elements: [],
+      count: 0,
+    };
   }
 
   /* ----------- generate final answer (uses your existing generateAnswer) --- */
@@ -1090,7 +1104,7 @@ Return the scratchpad, then output valid JSON with one of the actions:
  *       500: { description: Indexing error }
  */
 router.options('/llm/advanced-rating', jwtCorsMiddleware);
-router.post('/llm/advanced-rating', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.UNRESTRICTED_CONTRIBUTOR), async (req, res) => {
+router.post('/llm/advanced-rating', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.TRUSTED_USER), async (req, res) => {
   const {
     memoryId, messageId,
     relevance, sufficiency, accuracy,
@@ -1185,7 +1199,7 @@ router.post('/llm/advanced-rating', jwtCorsMiddleware, authenticateJWT, authoriz
  *                   example: "Failed to store thumbs rating"
  */
 router.options('/llm/basic-rating', jwtCorsMiddleware);
-router.post('/llm/basic-rating', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.UNRESTRICTED_CONTRIBUTOR), async (req, res) => {
+router.post('/llm/basic-rating', jwtCorsMiddleware, authenticateJWT, authorizeRole(utils.Role.TRUSTED_USER), async (req, res) => {
   const { memoryId, messageId, thumbsUp } = req.body;
 
   /* ---------- 1. basic validation ---------------------------------------- */
