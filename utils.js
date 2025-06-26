@@ -2,6 +2,9 @@ import path from 'path';
 import sharp from 'sharp';
 // local imports
 import * as n4j from './backend_neo4j.js'
+import {query} from "express";
+import {checkUniversityDomain} from "./routes/domain_utils.js";
+import neo4j from "neo4j-driver";
 
 /**************
  * Enums
@@ -378,6 +381,24 @@ export function updateOSBasedtOnVisibility(old_visibility, new_visibility) {
     }
 }
 
+export function getUserDetailsFromRequest(req) {
+    const {user_id, user_role} = (() => {
+	    if (!req.user || typeof req.user === 'undefined'){
+	        return {user_id:null, user_role:null};
+	    }
+	    return {user_id:req.user.id, user_role:req.user.role}
+    })();
+    return {user_id: user_id, user_role: user_role};
+}
+
+export function performUserCheck(req, user_id) {
+    const user_details = getUserDetailsFromRequest(req);
+    if (user_details?.user_id === user_id || user_details?.user_role === Role.SUPER_ADMIN) {
+        return true;
+    }
+    return false;
+}
+
 export function checkUpdateParameters(updates) {
     let updated_check = true;
     Object.values(UnEditableParameters).map((param) => {
@@ -386,4 +407,17 @@ export function checkUpdateParameters(updates) {
         }
     });
     return updated_check;
+}
+
+export function fetchNewUserRole(contributor) {
+    let contributor_domain = contributor['email'] &&
+        contributor['email'].toLowerCase().substring(contributor['email'].toLowerCase().lastIndexOf("@")+1);
+    if ((contributor['email'] && contributor['email'].toLowerCase().includes('.edu')) ||
+        (contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
+        (contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
+        (contributor['email'] && contributor['email'].toLowerCase().includes('.org'))
+    ) {
+        return neo4j.int(Role.TRUSTED_USER);
+    }
+    return neo4j.int(Role.UNTRUSTED_USER);
 }
