@@ -12,7 +12,7 @@ import * as spatialUtils from './routes/rag_modules/spatial_utils.js';
 // For deployment on JetStream VM
 import dotenv from 'dotenv';
 import {checkUniversityDomain} from "./routes/domain_utils.js";
-import {SortBy} from "./utils.js";
+import {fetchNewUserRole, SortBy} from "./utils.js";
 dotenv.config();
 console.log(process.env.NEO4J_CONNECTION_STRING);
 
@@ -1129,7 +1129,7 @@ export async function deleteUserById(id){
 	      await driver.executeQuery(query_str,
 					{id_param: id},
 					{database: process.env.NEO4J_DB});
-	if (summary.counters.updates()['nodesDeleted'] == 1){
+	if (summary.counters.updates()['nodesDeleted'] >= 1){
 	    return true;
 	}
     } catch(err){console.log('deleteUserByOpenId() - Error in query: '+ err);}
@@ -1203,19 +1203,7 @@ export async function registerContributor(contributor){
     contributor['id'] = uuidv4();
 
     // (2) assign roles for new contributor
-    contributor['role'] = (() => {
-		let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
-            .substring(contributor['email'].toLowerCase().lastIndexOf("@")+1);
-		if ((contributor['email'] && contributor['email'].toLowerCase().includes('.edu')) ||
-			(contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
-	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
-			(contributor['email'] && contributor['email'].toLowerCase().includes('.org'))
-	   	) {
-	    	return neo4j.int(utils.Role.TRUSTED_USER);
-		}
-		// default role
-		return neo4j.int(utils.Role.UNTRUSTED_USER);
-    })();
+    contributor['role'] = fetchNewUserRole(contributor);
     // (3) get avatar URL
     //contributor['avatar_url'] = contributor['avatar_url']['original'];
     // Add user registration date
@@ -1244,18 +1232,7 @@ export async function registerContributorV2(contributor){
     contributor['id'] = uuidv4();
 
     // (2) assign roles for new contributor
-    contributor['role'] = (() => {
-		let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
-            .substring(contributor['email'].toLowerCase().lastIndexOf("@"));
-		if ((contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
-	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
-            contributor['email'].toLowerCase().includes('.org')
-	   	) {
-	    	return neo4j.int(utils.Role.TRUSTED_USER);
-		}
-		// default role
-		return neo4j.int(utils.Role.UNTRUSTED_USER);
-    })();
+	contributor['role'] = fetchNewUserRole(contributor);
     // (3) get avatar URL
     //contributor['avatar_url'] = contributor['avatar_url']['original'];
     const query_str = "CREATE (c: Contributor $contr_param) " +
@@ -1267,12 +1244,14 @@ export async function registerContributorV2(contributor){
 			openid: contributor["openid"],
 			email: contributor["email"],
 			affiliation: contributor["affiliation"],
+			first_name: contributor["first_name"],
+			last_name: contributor["last_name"],
 			is_primary: true
 		};
 		let contr_param = {
 			id: contributor['id'],
-			first_name: contributor["first_name"],
-			last_name: contributor["last_name"],
+			display_first_name: contributor["first_name"],
+			display_last_name: contributor["last_name"],
 			bio: contributor["bio"],
 			role: contributor["role"],
 		};
@@ -1300,19 +1279,7 @@ export async function registerContributorAuth(contributor){
     contributor['id'] = uuidv4();
 
     // (2) assign roles for new contributor
-    contributor['role'] = (() => {
-		let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
-            .substring(contributor['email'].toLowerCase().lastIndexOf("@")+1);
-		if ((contributor['email'] && contributor['email'].toLowerCase().includes('.edu')) ||
-			(contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
-	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
-			(contributor['email'] && contributor['email'].toLowerCase().includes('.org'))
-	   	) {
-	    	return neo4j.int(utils.Role.TRUSTED_USER);
-		}
-		// default role
-		return neo4j.int(utils.Role.UNTRUSTED_USER);
-    })();
+	contributor['role'] = fetchNewUserRole(contributor);
     // (3) get avatar URL
     //contributor['avatar_url'] = contributor['avatar_url']['original'];
     // Add user registration date
@@ -1350,18 +1317,7 @@ export async function registerContributorAuthV2(contributor){
     contributor['id'] = uuidv4();
 
     // (2) assign roles for new contributor
-    contributor['role'] = (() => {
-		let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
-            .substring(contributor['email'].toLowerCase().lastIndexOf("@"));
-		if ((contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
-	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
-            contributor['email'].toLowerCase().includes('.org')
-	   	) {
-	    	return neo4j.int(utils.Role.TRUSTED_USER);
-		}
-		// default role
-		return neo4j.int(utils.Role.UNTRUSTED_USER);
-    })();
+	contributor['role'] = fetchNewUserRole(contributor);
     // (3) get avatar URL
     //contributor['avatar_url'] = contributor['avatar_url']['original'];
     const query_str = "CREATE (c: Contributor $contr_param) " +
@@ -1373,14 +1329,16 @@ export async function registerContributorAuthV2(contributor){
 			openid: contributor["openid"],
 			email: contributor["email"],
 			affiliation: contributor["affiliation"],
+			first_name: contributor["first_name"],
+			last_name: contributor["last_name"],
 			is_primary: true
 		};
 		let contr_param = {
 			id: contributor['id'],
-			first_name: contributor["first_name"],
-			last_name: contributor["last_name"],
 			bio: contributor["bio"],
 			role: contributor["role"],
+			display_first_name: contributor["first_name"],
+			display_last_name: contributor["last_name"],
 		};
 		const {records, summary} =
 	      	await driver.executeQuery(query_str,
@@ -1391,19 +1349,15 @@ export async function registerContributorAuthV2(contributor){
 				Contributor: records[0]['_fields'][0],
 				Aliases: records[0]['_fields'][1]
 			};
-			let primary_alias = {}
-			if (response?.Aliases) {
-				response?.Aliases.map((alias) => {
-					if (alias?.is_primary === true) {
-						primary_alias = alias;
-					}
-				});
-			}
+			let primary_alias = response?.Aliases;
 			let contributor = response?.Contributor;
 			contributor["openid"] = primary_alias["openid"];
 			contributor["email"] = primary_alias["email"];
+			contributor["first_name"] = primary_alias["first_name"];
+			contributor["last_name"] = primary_alias["last_name"];
 			contributor["affiliation"] = primary_alias["affiliation"];
-			contributor["aliases"] = response?.Aliases;
+			contributor["aliases"] = [primary_alias];
+			contributor["role"] = utils.parse64BitNumber(contributor["role"]);
 			return makeFrontendCompatible(contributor);
 		}
     } catch(err){
@@ -1568,7 +1522,10 @@ export async function getContributorByIDv2(id) {
 		contributor["openid"] = primary_alias["openid"];
 		contributor["email"] = primary_alias["email"];
 		contributor["affiliation"] = primary_alias["affiliation"];
+		contributor["first_name"] = primary_alias["first_name"];
+		contributor["last_name"] = primary_alias["last_name"];
 		contributor["aliases"] = response?.Aliases;
+		contributor["role"] = utils.parse64BitNumber(contributor["role"]);
 		return makeFrontendCompatible(contributor)
 	} catch (error) {
 		console.log("getContributorByIDv2 - Error in query: " + error);

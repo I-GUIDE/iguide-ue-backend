@@ -3,6 +3,8 @@ import sharp from 'sharp';
 // local imports
 import * as n4j from './backend_neo4j.js'
 import {query} from "express";
+import {checkUniversityDomain} from "./routes/domain_utils.js";
+import neo4j from "neo4j-driver";
 
 /**************
  * Enums
@@ -381,7 +383,7 @@ export function updateOSBasedtOnVisibility(old_visibility, new_visibility) {
 
 export function getUserDetailsFromRequest(req) {
     const {user_id, user_role} = (() => {
-	    if (!req?.user || typeof req.user === 'undefined'){
+	    if (!req.user || typeof req.user === 'undefined'){
 	        return {user_id:null, user_role:null};
 	    }
 	    return {user_id:req.user.id, user_role:req.user.role}
@@ -405,4 +407,17 @@ export function checkUpdateParameters(updates) {
         }
     });
     return updated_check;
+}
+
+export function fetchNewUserRole(contributor) {
+    let contributor_domain = contributor['email'] &&
+        contributor['email'].toLowerCase().substring(contributor['email'].toLowerCase().lastIndexOf("@")+1);
+    if ((contributor['email'] && contributor['email'].toLowerCase().includes('.edu')) ||
+        (contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
+        (contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
+        (contributor['email'] && contributor['email'].toLowerCase().includes('.org'))
+    ) {
+        return neo4j.int(Role.TRUSTED_USER);
+    }
+    return neo4j.int(Role.UNTRUSTED_USER);
 }

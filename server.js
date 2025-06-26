@@ -38,6 +38,7 @@ import elements from './routes/elements.js';
 import {
 	generateOptimizedDomainList,
 } from "./routes/domain_utils.js";
+import users_v2 from "./routes/users_v2.js";
 
 const app = express();
 
@@ -60,6 +61,8 @@ app.use('/api', private_elements);
 app.use('/api', documentation);
 // Use users/contributors route
 app.use(users);
+// User users V2 route
+app.use(users_v2);
 // Use elements route
 app.use(elements);
 
