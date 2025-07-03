@@ -13,6 +13,7 @@ import * as spatialUtils from './routes/rag_modules/spatial_utils.js';
 import dotenv from 'dotenv';
 import {checkUniversityDomain} from "./routes/domain_utils.js";
 import {fetchNewUserRole, SortBy} from "./utils.js";
+import {performReIndexElementsBasedOnUserId} from "./routes/elements_utils.js";
 dotenv.config();
 console.log(process.env.NEO4J_CONNECTION_STRING);
 
@@ -1697,6 +1698,48 @@ export async function checkIfAliasExists(id, open_id) {
 	return false;
 }
 
+export async function mergeUserAccountsByOpenId(primary_user_id, secondary_user_id) {
+	try {
+		/**
+		 * 1. Get the user details based on both openIds op1,op2 as a1-r1>u1,a2-r2>u2
+		 * 2. Get the greater role and set that as the new role for the u1
+		 * 3. While creating the new relation r3, set a2.is_primary = false
+		 * 4. Update the contributor_id for all the user's u2 contributions with u1's id
+		 * 5. Delete the u2 and r2
+		 */
+		const primary_user = await getContributorByIDv2(primary_user_id);
+		const secondary_user = await getContributorByIDv2(secondary_user_id);
+		const user_updated_role = Math.max(primary_user['role'], secondary_user['role'])
+		let update_query =
+			'match (c1:Contributor{id: $primary_userid})\n' +
+			'match (a2:Alias{is_primary: true})-[r2:ALIAS_OF]->(c2:Contributor{id: $secondary_userid})\n' +
+			'create (a2)-[r3:ALIAS_OF]->(c1)\n' +
+			'set a2.is_primary = false' +
+			'detach delete r2\n' +
+			'detach delete c2\n' +
+			'return a1,a2,c1;';
+
+	} catch (error) {
+		console.log("mergerUserAccountsByOpenId - Error in query: " + error);
+		return null;
+	}
+}
+
+export async function updateUserIdInElements(old_user_id, new_user_id) {
+	try {
+		let user_public_elements_count = await getElementsCountByContributor(old_user_id);
+		if (user_public_elements_count === 0) {
+			return true;
+		}
+		let update_contr_query = "";
+		let os_update_response =
+			await performReIndexElementsBasedOnUserId(new_user_id, user_public_elements_count)
+		return true;
+	} catch (error) {
+		console.log("updateUserIdInElements() - Error in query: " + error)
+		return false;
+	}
+}
 /**
  * Get all Contributors with all information based on a pagination criteria
  * from and size are optional parameters by default set to return 1st 100 records

@@ -569,6 +569,10 @@ router.post('/api/v2/users/merge',
 	authorizeRole(Role.SUPER_ADMIN),
 	async (req, res) => {
 	try {
+		let request_body = req.body;
+		if (!request_body['primary_email'] || request_body['secondary_email']) {
+			res.status(409).json({message: 'Required emails not present in the request body.'});
+		}
 
 	} catch (error) {
 		console.error('Error in merging accounts: ', error);
