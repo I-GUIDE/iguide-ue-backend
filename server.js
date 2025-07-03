@@ -68,11 +68,12 @@ const target_domain = process.env.JWT_TARGET_DOMAIN;
 // To make sure the path found through env is absolute when running the code
 const keyPath = path.resolve(process.env.SSL_KEY)
 const certPath = path.resolve(process.env.SSL_CERT)
+console.log("keyPath: ", keyPath, " certPath: ", certPath);
 
-const SSLOptions = {
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath)
-};
+// const SSLOptions = {
+//     key: fs.readFileSync(keyPath),
+//     cert: fs.readFileSync(certPath)
+// };
 /****************************************************************************
  * JWT Specific Functions
  ****************************************************************************/
