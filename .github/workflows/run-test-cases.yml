@@ -1,0 +1,52 @@
+name: Run Testing Environment
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to run on"
+        required: false
+        default: "dev-candidate"
+        type: string
+
+#  Commenting until basic flow is tested
+#  pull_request:
+#    branches: [ dev-candidate, main ]  # Add any others you want
+
+jobs:
+  Run-Test-Cases:
+    runs-on: ubuntu-latest
+    env:
+      LARGE_SECRET_PASSPHRASE: ${{ secrets.TESTING_PHRASE }}
+
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.head_ref || github.ref_name }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Install required Linux packages
+        run: |
+          sudo apt-get update && sudo apt-get install -y git gnupg
+
+      - name: Install npm packages
+        run: |
+          npm install
+
+      - name: Decrypt secrets
+        run: |
+          cd tests/secrets
+          sh decrypt.sh
+          cd -
+
+      - name: Run tests
+        run: |
+          npm run test:dev

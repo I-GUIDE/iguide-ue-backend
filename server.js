@@ -38,6 +38,7 @@ import elements from './routes/elements.js';
 import {
 	generateOptimizedDomainList,
 } from "./routes/domain_utils.js";
+import path from "path";
 
 const app = express();
 
@@ -64,9 +65,13 @@ app.use(users);
 app.use(elements);
 
 const target_domain = process.env.JWT_TARGET_DOMAIN;
+// To make sure the path found through env is absolute when running the code
+const keyPath = path.resolve(process.env.SSL_KEY)
+const certPath = path.resolve(process.env.SSL_CERT)
+
 const SSLOptions = {
-    key: fs.readFileSync(process.env.SSL_KEY),
-    cert: fs.readFileSync(process.env.SSL_CERT)
+    key: fs.readFileSync(keyPath),
+    cert: fs.readFileSync(certPath)
 };
 /****************************************************************************
  * JWT Specific Functions
@@ -317,9 +322,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 	});
 }
 
-https.createServer(SSLOptions, app).listen(process.env.PORT, () => {
-    console.log(`HTTPS server is running on port ${process.env.PORT}`);
-});
+/**
+ * Changes to handle JEST Testing module this if statement will run only when running the server
+ * and not run when jest is operating to avoid dual execution of the same and stop the process form JEST side
+ */
+if (import.meta.url === `file://${process.argv[1]}`) {
+	https.createServer(SSLOptions, app).listen(process.env.PORT, () => {
+		console.log(`HTTPS server is running on port ${process.env.PORT}`);
+	});
+}
 
 // Serve Swagger docs
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));

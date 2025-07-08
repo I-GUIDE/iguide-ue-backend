@@ -432,6 +432,7 @@ router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) =
 
     try {
 	const id = user['id'];
+	console.log("user body while adding user: ", user);
 	const response = await n4j.registerContributor(user);
 	if (response){
 	    res.status(201).json({ message: 'User added successfully', id: id });
@@ -484,8 +485,8 @@ router.options('/api/auth/users', jwtCorsMiddleware);
 router.post('/api/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, res) => {
 
 	const user = req.body;
-    console.log('Adding new user');
-
+    console.log('Adding new user through auth API');
+	console.log("user body while adding user: ", user);
     try {
 		const id = user['id'];
 		let existing_user = {}
@@ -575,7 +576,13 @@ router.put('/api/users/:id',
 	let current_user_details = await n4j.getContributorByID(user_id);
 
 	console.log("user detail from cookie: ", user_id, " detail from db: ", current_user_details['id']);
-	if (id !== current_user_details['id']) {
+	let user_permission = true
+	if (String(id).startsWith("http")) {
+		user_permission = id === current_user_details['openid']
+	} else {
+		user_permission = id === current_user_details['id']
+	}
+	if (!user_permission) {
 		res.status(403).json({message: 'Failed to edit user. User does not have permission.', result: false});
 		return;
 	}
