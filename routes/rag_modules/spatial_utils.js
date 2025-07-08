@@ -231,64 +231,55 @@ function parseMultiLineString(multi_line_string_str) {
 }
 
 /**
- * Convert multi-polygon string into GeoJSON Format
- * @param multi_polygon_str
- * @returns {{coordinates: *[], type: string}}
+ * Convert WKT MULTIPOLYGON string into GeoJSON Format
+ * @param {string} wkt - MULTIPOLYGON WKT string
+ * @returns {{type: string, coordinates: number[][][][]}}
  */
-function parseMultiPolygon(multi_polygon_str) {
-  // Sanitize input
-  const sanitized = multi_polygon_str
+function parseMultiPolygon(wkt) {
+  const result = {
+    type: 'MultiPolygon',
+    coordinates: []
+  };
+
+  // Remove 'MULTIPOLYGON' and outer parentheses
+  const body = wkt
     .replace(/^MULTIPOLYGON\s*/i, '')
-    .trim();
+    .trim()
+    .replace(/^\(\(\(/, '')
+    .replace(/\)\)\)$/, '');
 
-  const polygons = [];
-  let current = '';
-  let depth = 0;
+  // Split polygons using regex that matches polygon-level closing and opening
+  const polygonStrings = body.split(/\)\s*,\s*\(\(/);
 
-  for (let i = 0; i < sanitized.length; i++) {
-      const char = sanitized[i]
-      if (char === '(') {
-          depth++;
-      } else if (char === ')') {
-          depth--;
+  polygonStrings.forEach(polygonStr => {
+    // Split rings
+    const rings = polygonStr.split(/\)\s*,\s*\(/).map(ringStr => {
+      const coords = ringStr
+        .replace(/[()]/g, '') // remove all parentheses
+        .trim()
+        .split(',')
+        .map(pair => {
+          const [lon, lat] = pair.trim().split(/\s+/).map(Number);
+          return [lon, lat];
+        });
+
+      // Close the ring if not already closed
+      const first = coords[0];
+      const last = coords[coords.length - 1];
+      if (first[0] !== last[0] || first[1] !== last[1]) {
+        coords.push([...first]);
       }
-      current = current + char;
 
-      if (depth === 0 && current.trim()) {
-          polygons.push(current.trim());
-          current = '';
-      }
-  }
+      return coords;
+    });
 
-  const coordinates = polygons.map(polygon_str => {
-      const cleaned = polygon_str.replace(/^\(\(+/, '').replace(/\)+$/, '').trim();
-
-      //split into rings
-      const rings = cleaned.split(/\),\s*\(/).map(ring_str => {
-          const coord_pairs = ring_str.split(',').map(pair => {
-              const [lon, lat] = pair.trim().split(/\s+/).map(parseFloat);
-              if (isNaN(lon) || isNaN(lat)) {
-                  throw new Error(`Invalid coordinate pair: ${pair}`);
-              }
-              return [lon, lat];
-          });
-
-          //ensure ring is closed
-          const first_coord = coord_pairs[0];
-          const last_coord = coord_pairs[coord_pairs?.length - 1];
-          if (first_coord[0] !== last_coord[0] || first_coord[1] !== last_coord[1]) {
-              coord_pairs.push([...first_coord]);
-          }
-          return coord_pairs;
-      });
-      return rings;
+    result.coordinates.push(rings);
   });
 
-  return {
-    type: 'MultiPolygon',
-    coordinates: coordinates
-  };
+  return result;
 }
+
+
 
 /**
  * Converts the given WKT String to GeoJSON which is applicable for the following GeoJSON Types:
