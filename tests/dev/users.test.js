@@ -113,12 +113,13 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
     });
     it("6. Should not allow any other user to update user information", async () => {
         let user_id = encodeURIComponent("1293012-sfase1382-ead");
+        let updated_generated_auth_cookie = createAuthCookie({id: "1283782-random-user", role: Role.TRUSTED_USER});
         let updated_user_info = {
             display_first_name: testData.trusted_user_updated_first_name,
         }
         const res = await request(app)
             .put('/api/users/' + user_id)
-            .set('Cookie', generated_auth_cookie)
+            .set('Cookie', updated_generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
             .send(updated_user_info);
@@ -128,7 +129,7 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
     });
     it("7. Should allow the user to update editable information", async () => {
         let user_id = encodeURIComponent(testData.trusted_user.openid);
-        let updated_generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let updated_generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         let updated_user_info = {
             display_first_name: testData.trusted_user_updated_first_name,
             bio: testData.trusted_user_updated_bio,
