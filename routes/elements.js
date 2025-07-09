@@ -56,6 +56,73 @@ async function fetchNotebookContent(url) {
     }
     throw Error('Failed to fetch the notebook');
 }
+
+async function parseGitHubNotebookUrl(url) {
+  const GITHUB_BLOB_PREFIX = 'https://github.com/';
+
+  if (!url.startsWith(GITHUB_BLOB_PREFIX)) {
+    throw new Error('Invalid GitHub URL: Must start with https://github.com/');
+  }
+
+  const parts = new URL(url).pathname.split('/').filter(Boolean);
+
+  if (parts.length < 5 || parts[2] !== 'blob') {
+    throw new Error('Invalid GitHub notebook URL format');
+  }
+
+  const username = parts[0];
+  const repo = parts[1];
+  const branch = parts[3];
+  const filePath = parts.slice(4).join('/');
+  const filename = parts[parts.length - 1];
+
+  const rawUrl = `https://raw.githubusercontent.com/${username}/${repo}/${branch}/${filePath}`;
+
+  return {
+    username: username,
+    repo: repo,
+    branch: branch,
+    file_path: filePath,
+    filename: filename,
+    raw_url: rawUrl
+  };
+}
+
+async function convertNotebookToHtmlV2(githubUrl, outputDir) {
+	const fileDetails = parseGitHubNotebookUrl(githubUrl)
+	const notebookName = fileDetails.filename;
+	const timestamp = Date.now();
+	const htmlOutputPath = path.join(outputDir, `${timestamp}-${notebookName}.html`);
+	let notebookContent;
+	try {
+		notebookContent = await fetchNotebookContent(fileDetails.raw_url)
+	} catch (error) {
+		console.log(`Failed to fetch from ${fileDetails.branch}. Exiting process..`);
+	}
+	if (!notebookContent) {
+		console.log('Failed to fetch the notebook from the provided branch');
+		return null;
+    }
+	const notebookFilePath = path.join(outputDir, `${timestamp}-${notebookName}.ipynb`);
+    fs.writeFileSync(notebookFilePath, notebookContent);
+
+	try {
+		await new Promise((resolve, reject) => {
+	    	exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${htmlOutputPath}"`,
+		 	(error, stdout, stderr) => {
+		    	 if (error) {
+			 		reject(`Error converting notebook: ${stderr}`);
+		     	} else {
+			 		resolve();
+		     	}
+		 	});
+		});
+		return htmlOutputPath;
+	} catch (error) {
+		console.log('Error in converting to html: ' + error);
+		return null;
+    }
+}
 async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
     // [Done] Neo4j not required
     const notebookName = path.basename(notebookPath, '.ipynb');
