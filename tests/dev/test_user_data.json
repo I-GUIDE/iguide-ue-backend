@@ -12,6 +12,24 @@
     "affiliation": "University of Illinois, Urbana-Champaign",
     "version": "1"
   },
+  "gov_user": {
+    "email": "test.dev.doc@nsf.gov",
+    "first_name": "TestFirst",
+    "last_name": "DevLast",
+    "bio": "Test bio",
+    "openid": "http://cilogon.org/serverTestB/users/20913",
+    "affiliation": "University of Illinois, Urbana-Champaign",
+    "version": "1"
+  },
+  "untrusted_user_2": {
+    "email": "test.dev.doc@iguide.edu-haha.com",
+    "first_name": "TestFirst",
+    "last_name": "DevLast",
+    "bio": "Test bio",
+    "openid": "http://cilogon.org/serverTestA/users/213182",
+    "affiliation": "University of Illinois, Urbana-Champaign",
+    "version": "1"
+  },
   "elements_trusted_user": {
     "email": "test.dev.ele@iguide.edu",
     "first_name": "TestFirst",
