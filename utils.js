@@ -2,6 +2,8 @@ import path from 'path';
 import sharp from 'sharp';
 // local imports
 import * as n4j from './backend_neo4j.js'
+import neo4j from "neo4j-driver";
+import {checkUniversityDomain} from "./routes/domain_utils.js";
 
 /**************
  * Enums
@@ -386,4 +388,46 @@ export function checkUpdateParameters(updates) {
         }
     });
     return updated_check;
+}
+
+export function hasTrustedTLD(contributor_domain) {
+    if (!contributor_domain) {
+        return false;
+    }
+    const lowerDomain = contributor_domain.toLowerCase();
+    /**
+     * Regex to match .edu or .gov as TLD (with optional 2-letter country code)
+     * Pattern explanation:
+     *  \.edu(\.[a-z]{2})?$ - matches .edu or .edu.XX (where XX is 2 letters) at end (eg: .edu.uk)
+     *  \.gov(\.[a-z]{2})?$ - matches .gov or .gov.XX (where XX is 2 letters) at end (eg: .gov.uk, gov.in)
+     */
+    const trustedTLDPattern = /\.(edu|gov)(\.[a-z]{2})?$/;
+
+    return trustedTLDPattern.test(lowerDomain);
+}
+
+export function generateUserRole(contributor) {
+    // (2) assign roles for new contributor
+    let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
+        .substring(contributor['email'].toLowerCase().lastIndexOf("@")+1);
+
+    if (contributor['email'] && contributor_domain) {
+        // Check trusted Top Level Domain
+        if (hasTrustedTLD(contributor_domain)) {
+            return neo4j.int(Role.TRUSTED_USER);
+        }
+
+        // Check university domain
+        if (checkUniversityDomain(contributor_domain)) {
+            return neo4j.int(Role.TRUSTED_USER);
+        }
+    }
+
+    // Check IDP name
+    if (contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) {
+        return neo4j.int(Role.TRUSTED_USER);
+    }
+
+    // default role
+    return neo4j.int(Role.UNTRUSTED_USER);
 }

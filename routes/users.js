@@ -802,7 +802,7 @@ router.delete('/api/users/:id',
 	authenticateJWT,
 	authorizeRole(utils.Role.SUPER_ADMIN),
 	async (req, res) => {
-		const id = decodeURIComponent(req.params.id);
+		let id = decodeURIComponent(req.params.id);
 
 		try {
 			/**
@@ -828,6 +828,10 @@ router.delete('/api/users/:id',
 			/**
 			 * Delete the user from neo4J
 			 */
+			// Check to allow deletion from openId
+			if (id.startsWith('http')) {
+				id = user_details['id']
+			}
 			const del_resp = await n4j.deleteUserById(id)
 			if (del_resp) {
 				res.status(200).json({message: 'User deleted successfully', result: del_resp});
