@@ -225,7 +225,7 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty("message", 'User deleted successfully')
     });
-    it("13. Should create an UNTRUSTED USER for TLD based domains", async () => {
+    it("13.1. Should create an UNTRUSTED USER for TLD based domains", async () => {
         let user_body = testData.untrusted_user_2
         const res = await request(app)
             .post('/api/users')
@@ -236,7 +236,7 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         expect(res.statusCode).toBe(201);
         expect(res.body).toHaveProperty("message", 'User added successfully');
     });
-    it("14. The UNTRUSTED USER should have current role as 10", async () => {
+    it("13.2. The UNTRUSTED USER should have current role as 10", async () => {
         let user_open_id_encoded = encodeURIComponent(testData.untrusted_user_2.openid);
         const res = await request(app)
             .get('/api/users/' + user_open_id_encoded + "/role")
@@ -246,7 +246,7 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty("role", 10);
     });
-    it("15. Should allow only SUPER_ADMIN to delete untrusted user", async () => {
+    it("13.3. Should allow only SUPER_ADMIN to delete untrusted user", async () => {
         let user_open_id_encoded = encodeURIComponent(testData.untrusted_user_2.openid);
         const res = await request(app)
             .delete("/api/users/" + user_open_id_encoded)
@@ -256,7 +256,7 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty("message", 'User deleted successfully')
     });
-    it("16. Should create an TRUSTED USER for .gov based domains", async () => {
+    it("14.1. Should create an TRUSTED USER for .gov based domains", async () => {
         let user_body = testData.gov_user
         const res = await request(app)
             .post('/api/users')
@@ -267,7 +267,7 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         expect(res.statusCode).toBe(201);
         expect(res.body).toHaveProperty("message", 'User added successfully');
     });
-    it("17. The .gov user should have current role as 8", async () => {
+    it("14.2. The .gov user should have current role as 8", async () => {
         let user_open_id_encoded = encodeURIComponent(testData.gov_user.openid);
         const res = await request(app)
             .get('/api/users/' + user_open_id_encoded + "/role")
@@ -277,8 +277,39 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty("role", 8);
     });
-    it("18. Should allow only SUPER_ADMIN to delete .gov user", async () => {
+    it("14.3. Should allow only SUPER_ADMIN to delete .gov user", async () => {
         let user_open_id_encoded = encodeURIComponent(testData.gov_user.openid);
+        const res = await request(app)
+            .delete("/api/users/" + user_open_id_encoded)
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set('Content-Type', "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", 'User deleted successfully')
+    });
+    it("15.1. Should create an TRUSTED USER for foreign .edu based domains", async () => {
+        let user_body = testData.foreign_edu_user
+        const res = await request(app)
+            .post('/api/users')
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(user_body);
+        expect(res.statusCode).toBe(201);
+        expect(res.body).toHaveProperty("message", 'User added successfully');
+    });
+    it("15.2. The foreign .edu user should have current role as 8", async () => {
+        let user_open_id_encoded = encodeURIComponent(testData.foreign_edu_user.openid);
+        const res = await request(app)
+            .get('/api/users/' + user_open_id_encoded + "/role")
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("role", 8);
+    });
+    it("15.3. Should allow only SUPER_ADMIN to delete foreign .edu user", async () => {
+        let user_open_id_encoded = encodeURIComponent(testData.foreign_edu_user.openid);
         const res = await request(app)
             .delete("/api/users/" + user_open_id_encoded)
             .set('Cookie', generated_auth_super_admin_cookie)

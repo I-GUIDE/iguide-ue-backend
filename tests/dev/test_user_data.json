@@ -9,7 +9,7 @@
     "last_name": "DevLast",
     "bio": "Test bio",
     "openid": "http://cilogon.org/serverTest/users/293121",
-    "affiliation": "University of Illinois, Urbana-Champaign",
+    "affiliation": "I-GUIDE",
     "version": "1"
   },
   "gov_user": {
@@ -18,7 +18,16 @@
     "last_name": "DevLast",
     "bio": "Test bio",
     "openid": "http://cilogon.org/serverTestB/users/20913",
-    "affiliation": "University of Illinois, Urbana-Champaign",
+    "affiliation": "I-GUIDE",
+    "version": "1"
+  },
+  "foreign_edu_user": {
+    "email": "test.dev.doc@university.edu.au",
+    "first_name": "TestFirst",
+    "last_name": "DevLast",
+    "bio": "Test bio",
+    "openid": "http://cilogon.org/serverTestC/users/092813",
+    "affiliation": "Foreign University",
     "version": "1"
   },
   "untrusted_user_2": {
@@ -27,7 +36,7 @@
     "last_name": "DevLast",
     "bio": "Test bio",
     "openid": "http://cilogon.org/serverTestA/users/213182",
-    "affiliation": "University of Illinois, Urbana-Champaign",
+    "affiliation": "I-GUIDE",
     "version": "1"
   },
   "elements_trusted_user": {
@@ -36,7 +45,7 @@
     "last_name": "DevLast",
     "bio": "Test bio",
     "openid": "http://cilogon.org/serverTest/users/12312",
-    "affiliation": "University of Illinois, Urbana-Champaign",
+    "affiliation": "I-GUIDE",
     "version": "1"
   },
   "private_trusted_user": {
@@ -45,7 +54,7 @@
     "last_name": "DevLast",
     "bio": "Test bio",
     "openid": "http://cilogon.org/serverTest/users/241213",
-    "affiliation": "University of Illinois, Urbana-Champaign",
+    "affiliation": "I-GUIDE",
     "version": "1"
   },
   "trusted_user_updated_first_name": "TestUpdatedName",
