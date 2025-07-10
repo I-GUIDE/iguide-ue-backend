@@ -718,6 +718,13 @@ router.post('/api/elements',
         }
 
         // Handle notebook resource type
+		/**
+		 * In the request resource['notebook-url']
+		 * resource['notebook-repo']  => repo name
+		 * resource['notebook-file'] => file_name (
+		 * resource['html-notebook'] => generated
+		 * resource['notebook-url'] => new additions (if not present in the resource )
+		 */
         if (resource['resource-type'] === 'notebook' &&
             resource['notebook-repo'] &&
             resource['notebook-file']) {
