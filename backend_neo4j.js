@@ -12,7 +12,7 @@ import * as spatialUtils from './routes/rag_modules/spatial_utils.js';
 // For deployment on JetStream VM
 import dotenv from 'dotenv';
 import {checkUniversityDomain} from "./routes/domain_utils.js";
-import {SortBy} from "./utils.js";
+import {generateUserRole, SortBy} from "./utils.js";
 dotenv.config();
 console.log(process.env.NEO4J_CONNECTION_STRING);
 
@@ -1202,19 +1202,7 @@ export async function registerContributor(contributor){
     contributor['id'] = uuidv4();
 
     // (2) assign roles for new contributor
-    contributor['role'] = (() => {
-		let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
-            .substring(contributor['email'].toLowerCase().lastIndexOf("@")+1);
-		if ((contributor['email'] && contributor['email'].toLowerCase().includes('.edu')) ||
-			(contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
-	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
-			(contributor['email'] && contributor['email'].toLowerCase().includes('.org'))
-	   	) {
-	    	return neo4j.int(utils.Role.TRUSTED_USER);
-		}
-		// default role
-		return neo4j.int(utils.Role.UNTRUSTED_USER);
-    })();
+    contributor['role'] = generateUserRole(contributor);
     // (3) get avatar URL
     //contributor['avatar_url'] = contributor['avatar_url']['original'];
     // Add user registration date
@@ -1248,19 +1236,7 @@ export async function registerContributorAuth(contributor){
     contributor['id'] = uuidv4();
 
     // (2) assign roles for new contributor
-    contributor['role'] = (() => {
-		let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
-            .substring(contributor['email'].toLowerCase().lastIndexOf("@")+1);
-		if ((contributor['email'] && contributor['email'].toLowerCase().includes('.edu')) ||
-			(contributor['email'] && contributor_domain && checkUniversityDomain(contributor_domain)) ||
-	    	(contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) ||
-			(contributor['email'] && contributor['email'].toLowerCase().includes('.org'))
-	   	) {
-	    	return neo4j.int(utils.Role.TRUSTED_USER);
-		}
-		// default role
-		return neo4j.int(utils.Role.UNTRUSTED_USER);
-    })();
+    contributor['role'] = generateUserRole(contributor);
     // (3) get avatar URL
     //contributor['avatar_url'] = contributor['avatar_url']['original'];
     // Add user registration date
