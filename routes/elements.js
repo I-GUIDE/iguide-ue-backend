@@ -715,12 +715,18 @@ router.post('/api/elements',
 					const pdfUrl = await getPdfUrlFromDoi(doi);
 					if (pdfUrl) {
 					    const pdfText = await extractTextFromPdfUrl(pdfUrl);
-					    const chunks = splitTextIntoChunks(pdfText, 1000, 200);
+					    const chunks = splitTextIntoChunks(pdfText, 512, 100);
 					    // Generate embeddings for each chunk
 					    const chunkEmbeddings = [];
 					    for (const chunk of chunks) {
-						const embedding = await getFlaskEmbeddingResponse(chunk);
-						chunkEmbeddings.push({ chunk, embedding });
+							try {
+								if (chunk && chunk.trim().length > 0) {
+									const embedding = await getFlaskEmbeddingResponse(chunk);
+									chunkEmbeddings.push({ chunk, embedding });
+								}
+							} catch (err) {
+								console.error("Embedding failed for chunk:", chunk.slice(0, 100), "Error:", err.message);
+							}
 					    }
 					    // Store in OpenSearch (as an array of chunks/embeddings)
 					    os_element['pdf_chunks'] = chunkEmbeddings.map((c, i) => ({
