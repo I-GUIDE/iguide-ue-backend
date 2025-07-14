@@ -708,6 +708,7 @@ router.post('/api/elements',
 					os_element['contents-embedding'] = content_embedding;
 				}
 				// New code for handling publication DOI and PDF extraction
+				console.log('Element type: ' + resource['resource-type'] + ' DOI: ' + resource['doi']);
 				if (resource['resource-type'] === 'publication' && resource['doi']) {
 				    try {
 					const pdfUrl = await getPdfUrlFromDoi(resource['doi']);
