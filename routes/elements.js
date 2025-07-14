@@ -721,6 +721,7 @@ router.post('/api/elements',
 					    for (const chunk of chunks) {
 							try {
 								if (chunk && chunk.trim().length > 0) {
+									console.log("Embedding chunk (first 100 chars):", chunk.slice(0, 100));
 									const embedding = await getFlaskEmbeddingResponse(chunk);
 									chunkEmbeddings.push({ chunk, embedding });
 								}
