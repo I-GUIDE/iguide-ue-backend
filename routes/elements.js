@@ -19,7 +19,8 @@ import {parseVisibility, updateOSBasedtOnVisibility, Visibility} from "../utils.
 import {
 	getFlaskEmbeddingResponse,
 	performElementOpenSearchDelete,
-	performElementOpenSearchInsert, performElementOpenSearchUpdate
+	performElementOpenSearchInsert, performElementOpenSearchUpdate,
+	getPdfUrlFromDoi, extractTextFromPdfUrl, splitTextIntoChunks
 } from "./elements_utils.js";
 import {convertGeoSpatialFields} from "./rag_modules/spatial_utils.js"
 
@@ -705,6 +706,30 @@ router.post('/api/elements',
 				let content_embedding = await getFlaskEmbeddingResponse(resource['contents']);
 				if (content_embedding) {
 					os_element['contents-embedding'] = content_embedding;
+				}
+				// New code for handling publication DOI and PDF extraction
+				if (resource['resource-type'] === 'publication' && resource['doi']) {
+				    try {
+					const pdfUrl = await getPdfUrlFromDoi(resource['doi']);
+					if (pdfUrl) {
+					    const pdfText = await extractTextFromPdfUrl(pdfUrl);
+					    const chunks = splitTextIntoChunks(pdfText, 1000, 200);
+					    // Generate embeddings for each chunk
+					    const chunkEmbeddings = [];
+					    for (const chunk of chunks) {
+						const embedding = await getFlaskEmbeddingResponse(chunk);
+						chunkEmbeddings.push({ chunk, embedding });
+					    }
+					    // Store in OpenSearch (as an array of chunks/embeddings)
+					    os_element['pdf_chunks'] = chunkEmbeddings.map((c, i) => ({
+						chunk_id: i,
+						text: c.chunk,
+						embedding: c.embedding
+					    }));
+					}
+				    } catch (err) {
+					console.error("PDF extraction/embedding failed:", err.message);
+				    }
 				}
 				console.log('Indexing element: ' + os_element);
 				let os_response = await performElementOpenSearchInsert(os_element, element_id);

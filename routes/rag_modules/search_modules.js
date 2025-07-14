@@ -53,9 +53,28 @@ export async function getSemanticSearchResults(userQuery) {
       body: {
         size: 12,
         query: {
-          knn: { 'contents-embedding': { vector: embedding, k: 3 } },
-        },
-      },
+          bool: {
+            should: [
+              {
+                knn: { 'contents-embedding': { vector: embedding, k: 3 } }
+              },
+              {
+                nested: {
+                  path: 'pdf_chunks',
+                  query: {
+                    knn: { 'pdf_chunks.embedding': { vector: embedding, k: 3 } }
+                  },
+                  inner_hits: {
+                    name: 'pdf_chunk_hits',
+                    size: 1,
+                    _source: ['pdf_chunks.chunk_id', 'pdf_chunks.text']
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
     });
     return response.body.hits.hits;
   } catch (error) {
