@@ -726,6 +726,8 @@ router.post('/api/elements',
 						text: c.chunk,
 						embedding: c.embedding
 					    }));
+					}else{
+						console.log(`No PDF found for DOI: ${resource['doi']}`);
 					}
 				    } catch (err) {
 					console.error("PDF extraction/embedding failed:", err.message);
