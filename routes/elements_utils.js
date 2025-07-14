@@ -1,7 +1,7 @@
 import axios from "axios";
 import * as os from "../backend_opensearch.js";
 import * as n4j from '../backend_neo4j.js';
-import pdfParse from "pdf-parse/lib/pdf-parse";
+import pdfParse from "pdf-parse/lib/pdf-parse.js";
 
 // Element operations
 export async function getFlaskEmbeddingResponse(content) {
