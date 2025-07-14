@@ -152,7 +152,7 @@ export async function performReIndexElementsBasedOnUserId(user_id, total_element
 // Try to get PDF URL from Crossref or Unpaywall
 export async function getPdfUrlFromDoi(doi) {
     // Try Unpaywall first (better for OA PDFs)
-    const unpaywall = await axios.get(`https://api.unpaywall.org/v2/${encodeURIComponent(doi)}?email=YOUR_EMAIL`);
+    const unpaywall = await axios.get(`https://api.unpaywall.org/v2/${encodeURIComponent(doi)}?email=your@email.com`);
     if (unpaywall.data && unpaywall.data.best_oa_location && unpaywall.data.best_oa_location.url_for_pdf) {
         return unpaywall.data.best_oa_location.url_for_pdf;
     }

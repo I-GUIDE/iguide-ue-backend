@@ -711,41 +711,56 @@ router.post('/api/elements',
 				const doi = resource['external-link-publication'] || resource['doi'];
 				console.log('Element type: ' + resource['resource-type'] + ' DOI: ' + doi);
 				if (resource['resource-type'] === 'publication' && doi) {
+				    let pdfUrl = null;
+				    let pdfText = null;
+				    let chunks = [];
+				    let chunkEmbeddings = [];
 				    try {
-					const pdfUrl = await getPdfUrlFromDoi(doi);
+					pdfUrl = await getPdfUrlFromDoi(doi);
 					console.log("PDF URL:", pdfUrl);
-
-					if (pdfUrl) {
-					    const pdfText = await extractTextFromPdfUrl(pdfUrl);
-					    console.log("Extracted PDF text length:", pdfText ? pdfText.length : 0);
-					    console.log("Extracted PDF text sample:", pdfText ? pdfText.slice(0, 300) : '[empty]');
-
-					    const chunks = splitTextIntoChunks(pdfText, 512, 100);
-					    console.log("Number of chunks:", chunks.length);
-
-					    // Now loop over chunks as before...
-					    const chunkEmbeddings = [];
-					    for (const chunk of chunks) {
-					        try {
-					            if (chunk && chunk.trim().length > 0) {
-					                console.log("Embedding chunk (first 100 chars):", chunk.slice(0, 100));
-					                const embedding = await getFlaskEmbeddingResponse(chunk);
-					                chunkEmbeddings.push({ chunk, embedding });
-					            }
-					        } catch (err) {
-					            console.error("Embedding failed for chunk:", chunk.slice(0, 100), "Error:", err.message);
-					        }
-					    }
-					    os_element['pdf_chunks'] = chunkEmbeddings.map((c, i) => ({
-					        chunk_id: i,
-					        text: c.chunk,
-					        embedding: c.embedding
-					    }));
-					} else {
+					if (!pdfUrl) {
 					    console.log(`No PDF found for DOI: ${doi}`);
 					}
 				    } catch (err) {
-					console.error("PDF extraction/embedding failed:", err.message);
+					console.error("getPdfUrlFromDoi failed:", err.message);
+				    }
+
+				    if (pdfUrl) {
+					try {
+					    pdfText = await extractTextFromPdfUrl(pdfUrl);
+					    console.log("Extracted PDF text length:", pdfText ? pdfText.length : 0);
+					    console.log("Extracted PDF text sample:", pdfText ? pdfText.slice(0, 300) : '[empty]');
+					} catch (err) {
+					    console.error("extractTextFromPdfUrl failed:", err.message);
+					}
+				    }
+
+				    if (pdfText) {
+					try {
+					    chunks = splitTextIntoChunks(pdfText, 1000, 200);
+					    console.log("Number of chunks:", chunks.length);
+					} catch (err) {
+					    console.error("splitTextIntoChunks failed:", err.message);
+					}
+				    }
+
+				    if (chunks && chunks.length > 0) {
+					for (const chunk of chunks) {
+					    try {
+						if (chunk && chunk.trim().length > 0) {
+						    console.log("Embedding chunk (first 100 chars):", chunk.slice(0, 100));
+						    const embedding = await getFlaskEmbeddingResponse(chunk);
+						    chunkEmbeddings.push({ chunk, embedding });
+						}
+					    } catch (err) {
+						console.error("Embedding failed for chunk:", chunk.slice(0, 100), "Error:", err.message);
+					    }
+					}
+					os_element['pdf_chunks'] = chunkEmbeddings.map((c, i) => ({
+					    chunk_id: i,
+					    text: c.chunk,
+					    embedding: c.embedding
+					}));
 				    }
 				}
 				console.log('Indexing element: ' + os_element);
