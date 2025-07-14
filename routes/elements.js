@@ -877,74 +877,134 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
                     `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
             }
         }
-	const element_old_visibility = await n4j.getElementVisibilityForID(id);
-	const response = await n4j.updateElement(id, updates);
-	if (response) {
-	    // 'visibility' field is NOT searchable so should NOT be added to OS
-	    // elements should ONLY be in OpenSearch if they are public
-	    const visibility = utils.parseVisibility(updates['visibility']);
-		const visibility_action = updateOSBasedtOnVisibility(element_old_visibility, visibility);
-		const geo_spatial_updates = convertGeoSpatialFields(updates)
-		let os_doc_body = {
-			'title': updates['title'],
-			'contents': updates['contents'],
-			// Update the embedding field
-			// 'contents-embedding': newEmbedding,
-			'authors': updates['authors'],
-			'tags': updates['tags'],
-			'thumbnail-image': updates['thumbnail-image']['original'],
-			// Spatial-temporal properties
-			'spatial-coverage': updates['spatial-coverage'],
-			'spatial-geometry': updates['spatial-geometry'],
-			'spatial-geometry-geojson': geo_spatial_updates['spatial-geometry-geojson'],
-			'spatial-bounding-box': updates['spatial-bounding-box'],
-			'spatial-bounding-box-geojson': geo_spatial_updates['spatial-bounding-box-geojson'],
-			'spatial-centroid': updates['spatial-centroid'],
-			'spatial-centroid-geojson': geo_spatial_updates['spatial-centroid-geojson'],
-			'spatial-georeferenced': updates['spatial-georeferenced'],
-			'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
-			'spatial-index-year': updates['spatial-index-year'],
-			// Type and contributor should never be updated
-		}
-		switch (visibility_action) {
-			case 'INSERT':
-				let contributor = await n4j.getContributorByID(req.user.id);
-				let contributor_name = '';
-				if ('display-first-name' in contributor || 'display-last-name' in contributor) {
-					contributor_name = `${contributor['display-first-name']} ${contributor['display-last-name']}`;
-				}
-				os_doc_body['contributor'] = contributor_name;
-				let contentEmbeddingInsert = await getFlaskEmbeddingResponse(updates['contents']);
-				if (contentEmbeddingInsert) {
-					os_doc_body['contents-embedding'] = contentEmbeddingInsert;
-				}
-				let os_insert_response = await performElementOpenSearchInsert(os_doc_body, id);
-				console.log("OpenSearch Response: ",os_insert_response);
-				break;
-			case 'UPDATE':
-				let contentEmbeddingUpdate = await getFlaskEmbeddingResponse(updates['contents']);
-				if (contentEmbeddingUpdate) {
-					os_doc_body['contents-embedding'] = contentEmbeddingUpdate;
-				}
-				let os_update_response = await performElementOpenSearchUpdate(os_doc_body, id);
-				console.log("OpenSearch Response: ",os_update_response);
-				break;
-			case 'DELETE':
-				let os_delete_response = await performElementOpenSearchDelete(id);
-				console.log("OpenSearch Response: ", os_delete_response);
-				break;
-			case 'NONE':
-			default:
-				break;
-		}
-	    res.status(200).json({ message: 'Element updated successfully', result: response });
-	} else {
-	    console.log('Error updating element');
-	    res.status(500).json({ message: 'Error updating element', result: response });
-	}
+        const element_old_visibility = await n4j.getElementVisibilityForID(id);
+        const response = await n4j.updateElement(id, updates);
+        if (response) {
+            // 'visibility' field is NOT searchable so should NOT be added to OS
+            // elements should ONLY be in OpenSearch if they are public
+            const visibility = utils.parseVisibility(updates['visibility']);
+            const visibility_action = updateOSBasedtOnVisibility(element_old_visibility, visibility);
+            const geo_spatial_updates = convertGeoSpatialFields(updates)
+            let os_doc_body = {
+                'title': updates['title'],
+                'contents': updates['contents'],
+                // Update the embedding field
+                // 'contents-embedding': newEmbedding,
+                'authors': updates['authors'],
+                'tags': updates['tags'],
+                'thumbnail-image': updates['thumbnail-image']['original'],
+                // Spatial-temporal properties
+                'spatial-coverage': updates['spatial-coverage'],
+                'spatial-geometry': updates['spatial-geometry'],
+                'spatial-geometry-geojson': geo_spatial_updates['spatial-geometry-geojson'],
+                'spatial-bounding-box': updates['spatial-bounding-box'],
+                'spatial-bounding-box-geojson': geo_spatial_updates['spatial-bounding-box-geojson'],
+                'spatial-centroid': updates['spatial-centroid'],
+                'spatial-centroid-geojson': geo_spatial_updates['spatial-centroid-geojson'],
+                'spatial-georeferenced': updates['spatial-georeferenced'],
+                'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
+                'spatial-index-year': updates['spatial-index-year'],
+                // Type and contributor should never be updated
+            }
+
+            // --- PDF Embedding Update for Publications ---
+            if (updates['resource-type'] === 'publication') {
+                const doi = updates['external-link-publication'] || updates['doi'];
+                if (doi) {
+                    let pdfUrl = null;
+                    let pdfText = null;
+                    let chunks = [];
+                    let chunkEmbeddings = [];
+                    try {
+                        pdfUrl = await getPdfUrlFromDoi(doi);
+                        console.log("PDF URL:", pdfUrl);
+                        if (!pdfUrl) {
+                            console.log(`No PDF found for DOI: ${doi}`);
+                        }
+                    } catch (err) {
+                        console.error("getPdfUrlFromDoi failed:", err.message);
+                    }
+
+                    if (pdfUrl) {
+                        try {
+                            pdfText = await extractTextFromPdfUrl(pdfUrl);
+                            console.log("Extracted PDF text length:", pdfText ? pdfText.length : 0);
+                            console.log("Extracted PDF text sample:", pdfText ? pdfText.slice(0, 300) : '[empty]');
+                        } catch (err) {
+                            console.error("extractTextFromPdfUrl failed:", err.message);
+                        }
+                    }
+
+                    if (pdfText) {
+                        try {
+                            chunks = splitTextIntoChunks(pdfText, 1000, 200);
+                            console.log("Number of chunks:", chunks.length);
+                        } catch (err) {
+                            console.error("splitTextIntoChunks failed:", err.message);
+                        }
+                    }
+
+                    if (chunks && chunks.length > 0) {
+                        for (const chunk of chunks) {
+                            try {
+                                if (chunk && chunk.trim().length > 0) {
+                                    console.log("Embedding chunk (first 100 chars):", chunk.slice(0, 100));
+                                    const embedding = await getFlaskEmbeddingResponse(chunk);
+                                    chunkEmbeddings.push({ chunk, embedding });
+                                }
+                            } catch (err) {
+                                console.error("Embedding failed for chunk:", chunk.slice(0, 100), "Error:", err.message);
+                            }
+                        }
+                        os_doc_body['pdf_chunks'] = chunkEmbeddings.map((c, i) => ({
+                            chunk_id: i,
+                            text: c.chunk,
+                            embedding: c.embedding
+                        }));
+                    }
+                }
+            }
+            // --- End PDF Embedding Update ---
+
+            switch (visibility_action) {
+                case 'INSERT':
+                    let contributor = await n4j.getContributorByID(req.user.id);
+                    let contributor_name = '';
+                    if ('display-first-name' in contributor || 'display-last-name' in contributor) {
+                        contributor_name = `${contributor['display-first-name']} ${contributor['display-last-name']}`;
+                    }
+                    os_doc_body['contributor'] = contributor_name;
+                    let contentEmbeddingInsert = await getFlaskEmbeddingResponse(updates['contents']);
+                    if (contentEmbeddingInsert) {
+                        os_doc_body['contents-embedding'] = contentEmbeddingInsert;
+                    }
+                    let os_insert_response = await performElementOpenSearchInsert(os_doc_body, id);
+                    console.log("OpenSearch Response: ",os_insert_response);
+                    break;
+                case 'UPDATE':
+                    let contentEmbeddingUpdate = await getFlaskEmbeddingResponse(updates['contents']);
+                    if (contentEmbeddingUpdate) {
+                        os_doc_body['contents-embedding'] = contentEmbeddingUpdate;
+                    }
+                    let os_update_response = await performElementOpenSearchUpdate(os_doc_body, id);
+                    console.log("OpenSearch Response: ",os_update_response);
+                    break;
+                case 'DELETE':
+                    let os_delete_response = await performElementOpenSearchDelete(id);
+                    console.log("OpenSearch Response: ", os_delete_response);
+                    break;
+                case 'NONE':
+                default:
+                    break;
+            }
+            res.status(200).json({ message: 'Element updated successfully', result: response });
+        } else {
+            console.log('Error updating element');
+            res.status(500).json({ message: 'Error updating element', result: response });
+        }
     } catch (error) {
-	console.error('Error updating element:', error);
-	res.status(500).json({ message: 'Internal server error' });
+        console.error('Error updating element:', error);
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
 
