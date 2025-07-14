@@ -708,10 +708,11 @@ router.post('/api/elements',
 					os_element['contents-embedding'] = content_embedding;
 				}
 				// New code for handling publication DOI and PDF extraction
-				console.log('Element type: ' + resource['resource-type'] + ' DOI: ' + resource['doi']);
-				if (resource['resource-type'] === 'publication' && resource['doi']) {
+				const doi = resource['external-link-publication'] || resource['doi'];
+				console.log('Element type: ' + resource['resource-type'] + ' DOI: ' + doi);
+				if (resource['resource-type'] === 'publication' && doi) {
 				    try {
-					const pdfUrl = await getPdfUrlFromDoi(resource['doi']);
+					const pdfUrl = await getPdfUrlFromDoi(doi);
 					if (pdfUrl) {
 					    const pdfText = await extractTextFromPdfUrl(pdfUrl);
 					    const chunks = splitTextIntoChunks(pdfText, 1000, 200);
@@ -728,7 +729,7 @@ router.post('/api/elements',
 						embedding: c.embedding
 					    }));
 					}else{
-						console.log(`No PDF found for DOI: ${resource['doi']}`);
+						console.log(`No PDF found for DOI: ${doi}`);
 					}
 				    } catch (err) {
 					console.error("PDF extraction/embedding failed:", err.message);
