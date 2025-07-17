@@ -273,3 +273,107 @@ describe("Elements Endpoint testing for Element based APIs", () => {
     });
 });
 
+
+describe("Elements Endpoint testing for Notebook elements", () => {
+    let generated_element_id = "";
+    let generated_user_id = "";
+    let uploaded_image_urls = {};
+    let generated_auth_super_admin_cookie = createAuthCookie({id: 1, role: Role.SUPER_ADMIN});
+    it("(External) Create a trusted User to perform operations", async () => {
+        let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+        let user_body = testData.elements_trusted_user
+        const res = await request(app)
+            .post('/api/users')
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(user_body);
+        expect(res.statusCode).toBe(201);
+        expect(res.body).toHaveProperty("message", 'User added successfully');
+    });
+    it("(External) Should allow to fetch user details", async () => {
+        let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+        let user_open_id_encoded = encodeURIComponent(testData.elements_trusted_user.openid);
+        const res = await request(app)
+            .get('/api/users/' + user_open_id_encoded)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("openid", testData.elements_trusted_user.openid);
+        expect(res.body).toHaveProperty("first-name", testData.elements_trusted_user.first_name);
+        expect(res.body).toHaveProperty("last-name", testData.elements_trusted_user.last_name);
+        expect(res.body).toHaveProperty("email", testData.elements_trusted_user.email);
+        generated_user_id = res.body['id'];
+    });
+    it("1. Should be able to upload a thumbnail image and get the image data", async () => {
+        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        const file_path = path.join(__dirname, "test_avatar_image.jpg");
+        const res = await request(app)
+            .post('/api/elements/thumbnail')
+            .set('Cookie', generated_auth_cookie)
+            .set('Content-Type', 'multipart/form-data; boundary=----WebKitFormBoundaryotgYSdiIybBwVdSB')
+            .attach('file', file_path) // Use .attach() instead of FormData
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", "Thumbnail uploaded successfully");
+        expect(res.body).toHaveProperty("image-urls");
+        uploaded_image_urls = res.body['image-urls'];
+    });
+    it("2. Element should be registered for a given user", async () => {
+        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let user_body = testData.test_notebook_details_json
+        user_body["thumbnail-image"] = uploaded_image_urls;
+        user_body['metadata']['created_by'] = generated_user_id;
+        const res = await request(app)
+            .post("/api/elements")
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(user_body);
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", 'Resource registered successfully');
+        expect(res.body).toHaveProperty("elementId");
+        generated_element_id = res.body['elementId'];
+    });
+    it("3. Should be able to retrieve the element and verify the notebook specific attributes", async () => {
+        if (generated_element_id === "") {
+            throw new Error('No element created in (2), test case (3) failed!');
+        }
+        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let encoded_uri = encodeURIComponent(generated_element_id);
+        const res = await request(app)
+            .get("/api/elements/" + encoded_uri)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("resource-type", testData.test_notebook_details_json["resource-type"]);
+        expect(res.body).toHaveProperty("html-notebook");
+        expect(res.body).toHaveProperty("notebook-repo", testData.test_notebook_repo_name);
+        expect(res.body).toHaveProperty("notebook-file", testData.test_notebook_file_name);
+        expect(res.body).toHaveProperty("contents",testData.test_notebook_details_json["contents"]);
+    });
+    it("4. Element registered should be deleted by the user", async () => {
+        if (generated_element_id === "") {
+            throw new Error('No element created in (2), test case (4) failed!');
+        }
+        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let encoded_uri = encodeURIComponent(generated_element_id)
+        const res = await request(app)
+            .delete("/api/elements/" + encoded_uri)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", 'Resource deleted successfully');
+    });
+    it("(External) Should allow only SUPER_ADMIN to delete temp user", async () => {
+        const res = await request(app)
+            .delete("/api/users/" + generated_user_id)
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set('Content-Type', "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", 'User deleted successfully')
+    });
+});

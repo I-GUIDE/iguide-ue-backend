@@ -57,7 +57,7 @@ async function fetchNotebookContent(url) {
     throw Error('Failed to fetch the notebook');
 }
 
-async function parseGitHubNotebookUrl(url) {
+function parseGitHubNotebookUrl(url) {
   const GITHUB_BLOB_PREFIX = 'https://github.com/';
 
   if (!url.startsWith(GITHUB_BLOB_PREFIX)) {
@@ -108,7 +108,7 @@ async function convertNotebookToHtmlV2(githubUrl, outputDir) {
 
 	try {
 		await new Promise((resolve, reject) => {
-	    	exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${htmlOutputPath}"`,
+	    	exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${timestamp}-${notebookName}.html" --output-dir "${outputDir}"`,
 		 	(error, stdout, stderr) => {
 		    	 if (error) {
 			 		reject(`Error converting notebook: ${stderr}`);
@@ -117,12 +117,18 @@ async function convertNotebookToHtmlV2(githubUrl, outputDir) {
 		     	}
 		 	});
 		});
-		return htmlOutputPath;
+		return {
+			htmlOutputPath: htmlOutputPath,
+			'notebook-repo': `https://github.com/${fileDetails.username}/${fileDetails.repo}`,
+			'notebook-file': notebookName,
+			'notebook-url': githubUrl,
+		};
 	} catch (error) {
 		console.log('Error in converting to html: ' + error);
 		return null;
     }
 }
+
 async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
     // [Done] Neo4j not required
     const notebookName = path.basename(notebookPath, '.ipynb');
@@ -717,25 +723,37 @@ router.post('/api/elements',
             console.log(user_id, " is allowed to submit oers")
         }
 
-        // Handle notebook resource type
 		/**
-		 * In the request resource['notebook-url']
-		 * resource['notebook-repo']  => repo name
-		 * resource['notebook-file'] => file_name (
-		 * resource['html-notebook'] => generated
-		 * resource['notebook-url'] => new additions (if not present in the resource )
+		 * Updated logic building the repo details,
+		 * 	In the request resource['notebook-url']
+		 * 		resource['notebook-repo']  => repo name
+		 * 		resource['notebook-file'] => file_name (
+		 * 		resource['html-notebook'] => generated
+		 * 		resource['notebook-url'] => new additions (if not present in the resource )
 		 */
-        if (resource['resource-type'] === 'notebook' &&
-            resource['notebook-repo'] &&
-            resource['notebook-file']) {
-            const htmlNotebookPath =
-                await convertNotebookToHtml(resource['notebook-repo'],
-                                            resource['notebook-file'], notebook_html_dir);
-            if (htmlNotebookPath) {
-                resource['html-notebook'] =
-                    `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
-            }
-        }
+		if (resource['resource-type'] === 'notebook' &&
+			resource['notebook-url']) {
+			const notebookDetails = await convertNotebookToHtmlV2(resource['notebook-url'], notebook_html_dir);
+			console.log("notebook details runs: ", notebookDetails);
+			if (notebookDetails) {
+				resource['html-notebook'] =
+					`https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(notebookDetails.htmlOutputPath)}`
+				resource['notebook-repo'] = notebookDetails["notebook-repo"];
+				resource['notebook-file'] = notebookDetails['notebook-file'];
+			}
+		}
+		// Handle notebook resource type
+		// if (resource['resource-type'] === 'notebook' &&
+        //     resource['notebook-repo'] &&
+        //     resource['notebook-file']) {
+        //     const htmlNotebookPath =
+        //         await convertNotebookToHtml(resource['notebook-repo'],
+        //                                     resource['notebook-file'], notebook_html_dir);
+        //     if (htmlNotebookPath) {
+        //         resource['html-notebook'] =
+        //             `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+        //     }
+        // }
 
         const contributor_id = resource['metadata']['created_by'];
 
@@ -801,6 +819,7 @@ router.post('/api/elements',
 	    	}
         }
     } catch (error) {
+		console.log("error in creating element: ", error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -879,89 +898,107 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
     console.log('Updating element with id: ' + id);
 
     try {
-	const can_edit = await utils.userCanEditElement(id, req.user.id, req.user.role);
-	if (!can_edit){
-	    res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
-	}
-	if (updates['resource-type'] === 'notebook' &&
-            updates['notebook-repo'] &&
-            updates['notebook-file']) {
-            const htmlNotebookPath =
-                await convertNotebookToHtml(updates['notebook-repo'],
-                                            updates['notebook-file'], notebook_html_dir);
-            if (htmlNotebookPath) {
-                updates['html-notebook'] =
-                    `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
-            }
-        }
-	const element_old_visibility = await n4j.getElementVisibilityForID(id);
-	const response = await n4j.updateElement(id, updates);
-	if (response) {
-	    // 'visibility' field is NOT searchable so should NOT be added to OS
-	    // elements should ONLY be in OpenSearch if they are public
-	    const visibility = utils.parseVisibility(updates['visibility']);
-		const visibility_action = updateOSBasedtOnVisibility(element_old_visibility, visibility);
-		const geo_spatial_updates = convertGeoSpatialFields(updates)
-		let os_doc_body = {
-			'title': updates['title'],
-			'contents': updates['contents'],
-			// Update the embedding field
-			// 'contents-embedding': newEmbedding,
-			'authors': updates['authors'],
-			'tags': updates['tags'],
-			'thumbnail-image': updates['thumbnail-image']['original'],
-			// Spatial-temporal properties
-			'spatial-coverage': updates['spatial-coverage'],
-			'spatial-geometry': updates['spatial-geometry'],
-			'spatial-geometry-geojson': geo_spatial_updates['spatial-geometry-geojson'],
-			'spatial-bounding-box': updates['spatial-bounding-box'],
-			'spatial-bounding-box-geojson': geo_spatial_updates['spatial-bounding-box-geojson'],
-			'spatial-centroid': updates['spatial-centroid'],
-			'spatial-centroid-geojson': geo_spatial_updates['spatial-centroid-geojson'],
-			'spatial-georeferenced': updates['spatial-georeferenced'],
-			'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
-			'spatial-index-year': updates['spatial-index-year'],
-			// Type and contributor should never be updated
+		const can_edit = await utils.userCanEditElement(id, req.user.id, req.user.role);
+		if (!can_edit) {
+			res.status(403).json({message: 'Forbidden: You do not have permission to edit this element.'});
 		}
-		switch (visibility_action) {
-			case 'INSERT':
-				let contributor = await n4j.getContributorByID(req.user.id);
-				let contributor_name = '';
-				if ('display-first-name' in contributor || 'display-last-name' in contributor) {
-					contributor_name = `${contributor['display-first-name']} ${contributor['display-last-name']}`;
-				}
-				os_doc_body['contributor'] = contributor_name;
-				let contentEmbeddingInsert = await getFlaskEmbeddingResponse(updates['contents']);
-				if (contentEmbeddingInsert) {
-					os_doc_body['contents-embedding'] = contentEmbeddingInsert;
-				}
-				let os_insert_response = await performElementOpenSearchInsert(os_doc_body, id);
-				console.log("OpenSearch Response: ",os_insert_response);
-				break;
-			case 'UPDATE':
-				let contentEmbeddingUpdate = await getFlaskEmbeddingResponse(updates['contents']);
-				if (contentEmbeddingUpdate) {
-					os_doc_body['contents-embedding'] = contentEmbeddingUpdate;
-				}
-				let os_update_response = await performElementOpenSearchUpdate(os_doc_body, id);
-				console.log("OpenSearch Response: ",os_update_response);
-				break;
-			case 'DELETE':
-				let os_delete_response = await performElementOpenSearchDelete(id);
-				console.log("OpenSearch Response: ", os_delete_response);
-				break;
-			case 'NONE':
-			default:
-				break;
+		/**
+		 * Updated logic building the repo details,
+		 *    In the request resource['notebook-url']
+		 *        resource['notebook-repo']  => repo name
+		 *        resource['notebook-file'] => file_name (
+		 *        resource['html-notebook'] => generated
+		 *        resource['notebook-url'] => new additions (if not present in the resource )
+		 */
+		if (updates['resource-type'] === 'notebook' &&
+			updates['notebook-url']) {
+			const notebookDetails = await convertNotebookToHtmlV2(updates['notebook-url'], notebook_html_dir);
+			if (notebookDetails) {
+				updates['html-notebook'] =
+					`https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(notebookDetails.htmlOutputPath)}`
+				updates['notebook-repo'] = notebookDetails["notebook-repo"];
+				updates['notebook-file'] = notebookDetails['notebook-file'];
+			}
 		}
-	    res.status(200).json({ message: 'Element updated successfully', result: response });
-	} else {
-	    console.log('Error updating element');
-	    res.status(500).json({ message: 'Error updating element', result: response });
-	}
+		// if (updates['resource-type'] === 'notebook' &&
+		//         updates['notebook-repo'] &&
+		//         updates['notebook-file']) {
+		//         const htmlNotebookPath =
+		//             await convertNotebookToHtml(updates['notebook-repo'],
+		//                                         updates['notebook-file'], notebook_html_dir);
+		//         if (htmlNotebookPath) {
+		//             updates['html-notebook'] =
+		//                 `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+		//         }
+		//     }
+		const element_old_visibility = await n4j.getElementVisibilityForID(id);
+		const response = await n4j.updateElement(id, updates);
+		if (response) {
+			// 'visibility' field is NOT searchable so should NOT be added to OS
+			// elements should ONLY be in OpenSearch if they are public
+			const visibility = utils.parseVisibility(updates['visibility']);
+			const visibility_action = updateOSBasedtOnVisibility(element_old_visibility, visibility);
+			const geo_spatial_updates = convertGeoSpatialFields(updates)
+			let os_doc_body = {
+				'title': updates['title'],
+				'contents': updates['contents'],
+				// Update the embedding field
+				// 'contents-embedding': newEmbedding,
+				'authors': updates['authors'],
+				'tags': updates['tags'],
+				'thumbnail-image': updates['thumbnail-image']['original'],
+				// Spatial-temporal properties
+				'spatial-coverage': updates['spatial-coverage'],
+				'spatial-geometry': updates['spatial-geometry'],
+				'spatial-geometry-geojson': geo_spatial_updates['spatial-geometry-geojson'],
+				'spatial-bounding-box': updates['spatial-bounding-box'],
+				'spatial-bounding-box-geojson': geo_spatial_updates['spatial-bounding-box-geojson'],
+				'spatial-centroid': updates['spatial-centroid'],
+				'spatial-centroid-geojson': geo_spatial_updates['spatial-centroid-geojson'],
+				'spatial-georeferenced': updates['spatial-georeferenced'],
+				'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
+				'spatial-index-year': updates['spatial-index-year'],
+				// Type and contributor should never be updated
+			}
+			switch (visibility_action) {
+				case 'INSERT':
+					let contributor = await n4j.getContributorByID(req.user.id);
+					let contributor_name = '';
+					if ('display-first-name' in contributor || 'display-last-name' in contributor) {
+						contributor_name = `${contributor['display-first-name']} ${contributor['display-last-name']}`;
+					}
+					os_doc_body['contributor'] = contributor_name;
+					let contentEmbeddingInsert = await getFlaskEmbeddingResponse(updates['contents']);
+					if (contentEmbeddingInsert) {
+						os_doc_body['contents-embedding'] = contentEmbeddingInsert;
+					}
+					let os_insert_response = await performElementOpenSearchInsert(os_doc_body, id);
+					console.log("OpenSearch Response: ", os_insert_response);
+					break;
+				case 'UPDATE':
+					let contentEmbeddingUpdate = await getFlaskEmbeddingResponse(updates['contents']);
+					if (contentEmbeddingUpdate) {
+						os_doc_body['contents-embedding'] = contentEmbeddingUpdate;
+					}
+					let os_update_response = await performElementOpenSearchUpdate(os_doc_body, id);
+					console.log("OpenSearch Response: ", os_update_response);
+					break;
+				case 'DELETE':
+					let os_delete_response = await performElementOpenSearchDelete(id);
+					console.log("OpenSearch Response: ", os_delete_response);
+					break;
+				case 'NONE':
+				default:
+					break;
+			}
+			res.status(200).json({message: 'Element updated successfully', result: response});
+		} else {
+			console.log('Error updating element');
+			res.status(500).json({message: 'Error updating element', result: response});
+		}
     } catch (error) {
-	console.error('Error updating element:', error);
-	res.status(500).json({ message: 'Internal server error' });
+		console.error('Error updating element:', error);
+		res.status(500).json({ message: 'Internal server error' });
     }
 });
 
