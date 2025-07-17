@@ -34,6 +34,11 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y git gnupg
 
+      - name: Install Jupyter and nbconvert
+        run: |
+          pip install --upgrade pip
+          pip install jupyter nbconvert "nbconvert[webpdf]"
+
       - name: Install npm packages
         run: |
           npm install
