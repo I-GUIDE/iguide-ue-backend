@@ -8,16 +8,15 @@ import {
 import multerS3 from 'multer-s3';
 import multer from 'multer';
 import dotenv from 'dotenv';
-import path from "path";
-import fs from "fs";
 
 dotenv.config();
 /****************************************************************************
  * Constant variables and S3 Client
  ****************************************************************************/
 
-const MAX_FILE_SIZE = 2 * 1024 * 1025 * 1024; // 2 GB
+export const MAX_FILE_SIZE = 2 * 1024 * 1025 * 1024; // 2 GB
 const CHUNK_SIZE = 50 * 1024 * 1024; // 50 MB
+const BUFFER_CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB
 const MIN_CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
 
 // In-memory store for multipart uploads (use Redis/database in production)
@@ -60,10 +59,10 @@ export const upload = multer({
 export const multiChunkUpload = multer({
     storage: multer.memoryStorage(),
     limits: {
-       fileSize: 50 * 1024 * 1024,
+       fileSize: CHUNK_SIZE + BUFFER_CHUNK_SIZE,
     },
     fileFilter(req, file, cb) {
-    const allowed = ['text/csv', 'application/zip', 'application/x-zip-compressed'];
+    const allowed = ['text/csv', 'application/zip', 'application/x-zip-compressed', 'application/octet-stream'];
     if (!allowed.includes(file.mimetype)) {
       return cb(new Error('Invalid file type'), false);
     }

@@ -7,8 +7,6 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 // import { exec } from 'child_process';
 // import fetch from 'node-fetch';
-import { S3Client } from '@aws-sdk/client-s3';
-import multerS3 from 'multer-s3';
 import https from 'https';
 import http from 'http';
 import axios from 'axios';

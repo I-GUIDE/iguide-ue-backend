@@ -26,7 +26,7 @@ import {
 	abortMultipartUpload,
 	completeMultipartUpload, getUploadDetails,
 	getUploadProgress,
-	initializeChunkUpload, multiChunkUpload, processChunkBasedOnUploadId, upload,
+	initializeChunkUpload, MAX_FILE_SIZE, multiChunkUpload, processChunkBasedOnUploadId, upload,
 } from "./minio_uploader.js";
 
 const router = express.Router();
@@ -1220,8 +1220,7 @@ router.post('/api/elements/datasets/init-upload',
 		const {filename, fileSize, mimeType} = req.body;
 
 		// Validate file size (2GB limit)
-		const maxSize = 2 * 1024 * 1024 * 1024; // 2GB
-		if (fileSize > maxSize) {
+		if (fileSize > MAX_FILE_SIZE) {
 			return res.status(400).json({
 				error: 'File size exceeds 2GB limit'
 			});
