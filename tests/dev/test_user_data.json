@@ -86,7 +86,7 @@
     "tags":["Testing","Notebook"],
     "contents":"This is a test notebook being created",
     "thumbnail-credit":"Screenshot",
-    "notebook-url":"https://github.com/I-GUIDE/iguide-ue-backend/blob/dev-issue-262/tests/dev/cybergis_test_notebook.ipynb",
+    "notebook-url":"https://github.com/I-GUIDE/iguide-ue-backend/blob/dev-candidate/tests/dev/cybergis_test_notebook.ipynb",
     "spatial-index-year":[""],
     "funding-agency":"",
     "visibility":"public",
