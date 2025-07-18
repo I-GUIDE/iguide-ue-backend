@@ -26,7 +26,7 @@ import {
 	abortMultipartUpload,
 	completeMultipartUpload, getUploadDetails,
 	getUploadProgress,
-	initializeChunkUpload, MAX_FILE_SIZE, multiChunkUpload, processChunkBasedOnUploadId, upload,
+	initializeChunkUpload, MAX_FILE_SIZE, multiChunkUpload, performDatasetDeletion, processChunkBasedOnUploadId, upload,
 } from "./minio_uploader.js";
 
 const router = express.Router();
@@ -761,18 +761,25 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
 
     console.log('Deleting element: ' +  resourceId);
     try {
-	const response = await n4j.deleteElementByID(resourceId);
-	if (response) {
-	    // Deletes from OpenSearch regardless if it's present or not
-		let os_response = await performElementOpenSearchDelete(resourceId);
-		console.log("OpenSearch Response: " , os_response);
-	    res.status(200).json({ message: 'Resource deleted successfully' });
-	} else {
-	    res.status(500).json({ error: 'Resource still exists after deletion' });
-	}
+		let elementDetails = await n4j.getElementByID(resourceId);
+
+		const response = await n4j.deleteElementByID(resourceId);
+		if (response) {
+	    	// Deletes from OpenSearch regardless if it's present or not
+			let os_response = await performElementOpenSearchDelete(resourceId);
+			console.log("OpenSearch Response: " , os_response);
+
+			//Delete the dataset from MinIO if the same is hosted there
+			let minIOResponse = await performDatasetDeletion(elementDetails);
+			console.log("MinIO Response: ", minIOResponse);
+
+	    	res.status(200).json({ message: 'Resource deleted successfully' });
+		} else {
+	    	res.status(500).json({ error: 'Resource still exists after deletion' });
+		}
     } catch (error) {
-	console.error('Error deleting resource:', error.message);
-	res.status(500).json({ error: error.message });
+		console.error('Error deleting resource:', error.message);
+		res.status(500).json({ error: error.message });
     }
 });
 
