@@ -103,5 +103,41 @@
       "medium":"https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/1739418467098-test_cover_image-765px.jpg",
       "high":"https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/1739418467098-test_cover_image-1024px.jpg"}
   },
-  "element_update_title": "Test Updated Dataset"
+  "element_update_title": "Test Updated Dataset",
+  "notebook_update_title": "Test Updated Notebook",
+  "test_notebook_repo_name": "https://github.com/I-GUIDE/iguide-ue-backend",
+  "test_notebook_file_name": "cybergis_test_notebook.ipynb",
+  "test_notebook_details_json": {
+    "title":"Test notebook",
+    "authors":["Test Dev","I-GUIDE Dev"],
+    "tags":["Testing","Notebook"],
+    "contents":"This is a test notebook being created",
+    "thumbnail-credit":"Screenshot",
+    "notebook-url":"https://github.com/I-GUIDE/iguide-ue-backend/blob/dev-candidate/tests/dev/cybergis_test_notebook.ipynb",
+    "spatial-index-year":[""],
+    "funding-agency":"",
+    "visibility":"public",
+    "resource-type":"notebook",
+    "metadata": {
+      "created_by":"60b54804-980c-4774-974a-ec27bf7954f2"
+    },
+    "related-resources":[],
+    "external-link-publication":"",
+    "spatial-coverage":[],
+    "spatial-geometry":"",
+    "spatial-bounding-box":"",
+    "spatial-centroid":"",
+    "spatial-georeferenced":"",
+    "spatial-temporal-coverage": [],
+    "license-id": "",
+    "license-name": "",
+    "license-statement": "",
+    "license-url": "",
+    "thumbnail-image": {
+      "original": "https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/1752718006800-image.png",
+      "low": "https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/1752718006800-image-300px.png",
+      "medium": "https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/1752718006800-image-765px.png",
+      "high": "https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/1752718006800-image-1024px.png"
+    }
+  }
 }
