@@ -295,8 +295,8 @@ export async function initializeChunkUpload(fileName, fileSize, mimeType) {
  * @returns {Promise<{success: boolean, message: string}|{success: boolean, message: string}|{success: boolean, message: string}|boolean>}
  */
 export async function performDatasetDeletion(resource) {
-    if (parseElementType(resource['resource-type']) === ElementType.DATASET) {
-        if (String(resource['direct-download-link']).startsWith(process.env.MINIO_ENDPOINT)) {
+    if (resource['resource-type'] && parseElementType(resource['resource-type']) === ElementType.DATASET) {
+        if (resource['direct-download-link'] && String(resource['direct-download-link']).startsWith(process.env.MINIO_ENDPOINT)) {
             const result = await deleteElementData(resource['direct-download-link']);
             return result;
         } else {

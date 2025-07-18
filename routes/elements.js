@@ -1510,7 +1510,7 @@ router.delete('/api/elements/datasets/abort-upload/:uploadId',
 		const uploadData = getUploadDetails(uploadId);
 
 		if (!uploadData) {
-			return res.status(404).json({error: 'Upload not found'});
+			return res.status(404).json({message: 'Upload not found'});
 		}
 
 		const response = await abortMultipartUpload(uploadId);
