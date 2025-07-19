@@ -48,6 +48,15 @@
     "affiliation": "I-GUIDE",
     "version": "1"
   },
+  "minio_trusted_user": {
+    "email": "test.dev.minio@iguide.edu",
+    "first_name": "TestFirst",
+    "last_name": "DevLast",
+    "bio": "Test bio",
+    "openid": "http://cilogon.org/serverTestM/users/70321",
+    "affiliation": "I-GUIDE",
+    "version": "1"
+  },
   "private_trusted_user": {
     "email": "test.dev.priv@iguide.edu",
     "first_name": "TestFirst",
