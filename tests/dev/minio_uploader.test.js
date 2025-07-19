@@ -8,6 +8,7 @@ import url from "node:url";
 import fs from "fs";
 import axios from "axios";
 import * as crypto from "node:crypto";
+import {deleteElementData} from "../../routes/minio_uploader.js";
 
 /**
  * As the APIs involve the usage of JWT Token for the purposes of the testing we will create 2 test suites with 2 different access
@@ -41,6 +42,7 @@ const filename = 'test_upload_file.csv';
 const testFilePath = path.join(__dirname, filename);
 const fakeFileBuffer = Buffer.alloc(5 * 1024 * 1024, 'a'); // 1MB chunk filled with "a"
 fs.writeFileSync(testFilePath, fakeFileBuffer); // Create the test file
+let uploadedFileUrl = "";
 
 describe("Endpoint testing for MinIO Uploader APIs", () => {
     let uploadId = "";
@@ -131,6 +133,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         expect(res.body).toHaveProperty('message','Dataset uploaded successfully');
         expect(res.body).toHaveProperty('bucket', process.env.MINIO_AWS_BUCKET_NAME);
         expect(res.body.filename).toBeDefined();
+        uploadedFileUrl = res.body.url;
     });
     it("(External) Should be able to start the chunk upload (to abort in next step)", async () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
@@ -182,7 +185,9 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         expect(res.body).toHaveProperty("message", 'User deleted successfully')
     });
 
-    afterAll(() => {
+    afterAll(async () => {
+        const result = await deleteElementData(uploadedFileUrl);
+        console.log("minio_uploader.test.js - Deleting the temp file created on local and on server: ", result);
         fs.unlinkSync(testFilePath); // cleanup
     });
 });
