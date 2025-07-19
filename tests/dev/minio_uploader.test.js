@@ -48,7 +48,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
     let generated_auth_super_admin_cookie = createAuthCookie({id: 1, role: Role.SUPER_ADMIN});
     it("(External) Create a trusted User to perform operations", async () => {
         let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
-        let user_body = testData.elements_trusted_user
+        let user_body = testData.minio_trusted_user
         const res = await request(app)
             .post('/api/users')
             .set('Cookie', generated_auth_cookie)
@@ -60,17 +60,17 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
     });
     it("(External) Should allow to fetch user details", async () => {
         let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
-        let user_open_id_encoded = encodeURIComponent(testData.elements_trusted_user.openid);
+        let user_open_id_encoded = encodeURIComponent(testData.minio_trusted_user.openid);
         const res = await request(app)
             .get('/api/users/' + user_open_id_encoded)
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
         expect(res.statusCode).toBe(200);
-        expect(res.body).toHaveProperty("openid", testData.elements_trusted_user.openid);
-        expect(res.body).toHaveProperty("first-name", testData.elements_trusted_user.first_name);
-        expect(res.body).toHaveProperty("last-name", testData.elements_trusted_user.last_name);
-        expect(res.body).toHaveProperty("email", testData.elements_trusted_user.email);
+        expect(res.body).toHaveProperty("openid", testData.minio_trusted_user.openid);
+        expect(res.body).toHaveProperty("first-name", testData.minio_trusted_user.first_name);
+        expect(res.body).toHaveProperty("last-name", testData.minio_trusted_user.last_name);
+        expect(res.body).toHaveProperty("email", testData.minio_trusted_user.email);
         generated_user_id = res.body['id'];
     });
     it("1. Should be able to start the chunk upload", async () => {
