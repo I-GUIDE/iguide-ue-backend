@@ -850,10 +850,25 @@ router.post('/api/elements',
 router.options('/api/elements/:id', jwtCorsMiddleware);
 router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
     const resourceId = req.params['id'];
-
-    console.log('Deleting element: ' +  resourceId);
+	const {user_id, user_role} = (() => {
+		if (!req.user || req.user == null || typeof req.user === 'undefined'){
+	    	return {user_id:null, user_role:null};
+		}
+		return {user_id:req.user.id, user_role:req.user.role}
+    })();
+    console.log('Deleting element: ' +  resourceId + " for user id: " + user_id);
+	let elementDetails = await n4j.getElementByID(resourceId);
+	if (!elementDetails['id']) {
+		/**
+		 * Check if the element is private as it won't be returned in the normal GET call
+		 */
+		elementDetails = await n4j.getElementByID(resourceId, user_id);
+	}
+	if (!elementDetails['id']) {
+		res.status(404).json({message: 'Element does not exist'});
+		return;
+	}
     try {
-		let elementDetails = await n4j.getElementByID(resourceId);
 		const response = await n4j.deleteElementByID(resourceId);
 		if (response) {
 	    	// Deletes from OpenSearch regardless if it's present or not
@@ -861,7 +876,7 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
 			console.log("OpenSearch Response: " , os_response);
 			try {
 				let thumbnail_url = elementDetails['thumbnail-image'];
-				console.log("Deleting element's thumbnail image: ", thumbnail_url);
+				console.log("Deleting element's thumbnail image for Element Id: ", resourceId);
 				if (thumbnail_url) {
 					for (const type in thumbnail_url) {
 						let thumbnail_filepath = path.join(thumbnail_dir, path.basename(thumbnail_url[type]));
@@ -871,7 +886,7 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
 					}
 				}
 				let notebook_html_url = elementDetails['html-notebook'];
-				console.log("Deleting element's html-notebook file: ", notebook_html_url);
+				console.log("Deleting element's html-notebook file for Element Id: ", resourceId);
 				if (notebook_html_url) {
 					let notebook_html_filepath = path.join(notebook_html_dir, path.basename(notebook_html_url));
 					if (fs.existsSync(notebook_html_filepath)) {
