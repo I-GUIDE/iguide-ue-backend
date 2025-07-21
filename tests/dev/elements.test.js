@@ -22,6 +22,7 @@ import {generateAccessToken} from "../../jwtUtils.js";
 import {ElementType, Role} from "../../utils.js";
 import path from "path";
 import url from "node:url";
+import fs from "fs";
 
 /**
  * As the APIs involve the usage of JWT Token for the purposes of the testing we will create 2 test suites with 2 different access
@@ -32,6 +33,8 @@ import url from "node:url";
 const COOKIE_NAME = process.env.JWT_ACCESS_TOKEN_NAME || "access_token";
 const target_domain = "localhost"; // Adjust based on your setup
 
+const thumbnail_dir = path.join(process.env.UPLOAD_FOLDER, 'thumbnails');
+const notebook_html_dir = path.join(process.env.UPLOAD_FOLDER, 'notebook_html');
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -261,6 +264,15 @@ describe("Elements Endpoint testing for Element based APIs", () => {
             .set("Content-Type", "application/json");
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty("message", 'Resource deleted successfully');
+
+        //Assertion check for Thumbnail deletion of the user
+        if (uploaded_image_urls) {
+            for (const type in uploaded_image_urls) {
+                let thumbnail_filepath = path.join(thumbnail_dir, path.basename(uploaded_image_urls[type]));
+                expect(fs.existsSync(thumbnail_filepath)).toBe(false);
+            }
+        }
+
     });
     it("(External) Should allow only SUPER_ADMIN to delete temp user", async () => {
         const res = await request(app)
@@ -278,6 +290,7 @@ describe("Elements Endpoint testing for Notebook elements", () => {
     let generated_element_id = "";
     let generated_user_id = "";
     let uploaded_image_urls = {};
+    let html_notebook_url = "";
     let generated_auth_super_admin_cookie = createAuthCookie({id: 1, role: Role.SUPER_ADMIN});
     it("(External) Create a trusted User to perform operations", async () => {
         let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
@@ -349,6 +362,7 @@ describe("Elements Endpoint testing for Notebook elements", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty("resource-type", testData.test_notebook_details_json["resource-type"]);
         expect(res.body).toHaveProperty("html-notebook");
+        html_notebook_url = res.body['html-notebook'];
         expect(res.body).toHaveProperty("notebook-repo", testData.test_notebook_repo_name);
         expect(res.body).toHaveProperty("notebook-file", testData.test_notebook_file_name);
         expect(res.body).toHaveProperty("contents",testData.test_notebook_details_json["contents"]);
@@ -366,6 +380,20 @@ describe("Elements Endpoint testing for Notebook elements", () => {
             .set("Content-Type", "application/json");
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty("message", 'Resource deleted successfully');
+
+        //assert check for notebook_html to be deleted
+        if (html_notebook_url) {
+            let notebook_html_filepath = path.join(notebook_html_dir, path.basename(html_notebook_url));
+            expect(fs.existsSync(notebook_html_filepath)).toBe(false);
+        }
+
+        //Assertion check for Thumbnail deletion of the user
+        if (uploaded_image_urls) {
+            for (const type in uploaded_image_urls) {
+                let thumbnail_filepath = path.join(thumbnail_dir, path.basename(uploaded_image_urls[type]));
+                expect(fs.existsSync(thumbnail_filepath)).toBe(false);
+            }
+        }
     });
     it("(External) Should allow only SUPER_ADMIN to delete temp user", async () => {
         const res = await request(app)

@@ -117,6 +117,11 @@ async function convertNotebookToHtmlV2(githubUrl, outputDir) {
 		     	}
 		 	});
 		});
+
+		// Once html is converted deleting the .ipynb notebook file
+		if (fs.existsSync(notebookFilePath)) {
+			fs.unlinkSync(notebookFilePath);
+		}
 		return {
 			htmlOutputPath: htmlOutputPath,
 			'notebook-repo': `https://github.com/${fileDetails.username}/${fileDetails.repo}`,
@@ -845,21 +850,59 @@ router.post('/api/elements',
 router.options('/api/elements/:id', jwtCorsMiddleware);
 router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
     const resourceId = req.params['id'];
-
-    console.log('Deleting element: ' +  resourceId);
-    try {
-	const response = await n4j.deleteElementByID(resourceId);
-	if (response) {
-	    // Deletes from OpenSearch regardless if it's present or not
-		let os_response = await performElementOpenSearchDelete(resourceId);
-		console.log("OpenSearch Response: " , os_response);
-	    res.status(200).json({ message: 'Resource deleted successfully' });
-	} else {
-	    res.status(500).json({ error: 'Resource still exists after deletion' });
+	const {user_id, user_role} = (() => {
+		if (!req.user || req.user == null || typeof req.user === 'undefined'){
+	    	return {user_id:null, user_role:null};
+		}
+		return {user_id:req.user.id, user_role:req.user.role}
+    })();
+    console.log('Deleting element: ' +  resourceId + " for user id: " + user_id);
+	let elementDetails = await n4j.getElementByID(resourceId);
+	if (!elementDetails['id']) {
+		/**
+		 * Check if the element is private as it won't be returned in the normal GET call
+		 */
+		elementDetails = await n4j.getElementByID(resourceId, user_id);
 	}
+	if (!elementDetails['id']) {
+		res.status(404).json({message: 'Element does not exist'});
+		return;
+	}
+    try {
+		const response = await n4j.deleteElementByID(resourceId);
+		if (response) {
+	    	// Deletes from OpenSearch regardless if it's present or not
+			let os_response = await performElementOpenSearchDelete(resourceId);
+			console.log("OpenSearch Response: " , os_response);
+			try {
+				let thumbnail_url = elementDetails['thumbnail-image'];
+				console.log("Deleting element's thumbnail image for Element Id: ", resourceId);
+				if (thumbnail_url) {
+					for (const type in thumbnail_url) {
+						let thumbnail_filepath = path.join(thumbnail_dir, path.basename(thumbnail_url[type]));
+						if (fs.existsSync(thumbnail_filepath)) {
+							fs.unlinkSync(thumbnail_filepath);
+						}
+					}
+				}
+				let notebook_html_url = elementDetails['html-notebook'];
+				console.log("Deleting element's html-notebook file for Element Id: ", resourceId);
+				if (notebook_html_url) {
+					let notebook_html_filepath = path.join(notebook_html_dir, path.basename(notebook_html_url));
+					if (fs.existsSync(notebook_html_filepath)) {
+						fs.unlinkSync(notebook_html_filepath);
+					}
+				}
+			} catch (error) {
+				console.log('Users Delete API - Error in deleting avatar: ' + error);
+			}
+	    	res.status(200).json({ message: 'Resource deleted successfully' });
+		} else {
+	    	res.status(500).json({ error: 'Resource still exists after deletion' });
+		}
     } catch (error) {
-	console.error('Error deleting resource:', error.message);
-	res.status(500).json({ error: error.message });
+		console.error('Error deleting resource:', error.message);
+		res.status(500).json({ error: error.message });
     }
 });
 

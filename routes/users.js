@@ -834,6 +834,20 @@ router.delete('/api/users/:id',
 			}
 			const del_resp = await n4j.deleteUserById(id)
 			if (del_resp) {
+				console.log("Deleting user's avatar image");
+				try {
+					let avatar_url = user_details['avatar-url'];
+					if (avatar_url) {
+						for(const type in avatar_url) {
+							let avatar_filepath = path.join(avatar_dir, path.basename(avatar_url[type]));
+							if (fs.existsSync(avatar_filepath)) {
+								fs.unlinkSync(avatar_filepath);
+							}
+						}
+					}
+				} catch (error) {
+					console.log('Users Delete API - Error in deleting avatar: ' + error);
+				}
 				res.status(200).json({message: 'User deleted successfully', result: del_resp});
 			} else {
 				res.status(200).json({message: 'Error in deleting user', result: del_resp});
