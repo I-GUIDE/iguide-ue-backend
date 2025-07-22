@@ -125,7 +125,7 @@ async function convertNotebookToHtmlV2(githubUrl, outputDir) {
 		return {
 			htmlOutputPath: htmlOutputPath,
 			'notebook-repo': `https://github.com/${fileDetails.username}/${fileDetails.repo}`,
-			'notebook-file': notebookName,
+			'notebook-file': fileDetails.file_path,
 			'notebook-url': githubUrl,
 		};
 	} catch (error) {
