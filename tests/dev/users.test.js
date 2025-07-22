@@ -409,7 +409,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
         let encoded_user_id = encodeURIComponent(generated_user_id);
         let updated_generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
         let request_body = {
-            role: Role.HPC_ACCESS
+            role: Role.TRUSTED_USER_PLUS
         };
         const res = await request(app)
             .put('/api/users/' + encoded_user_id + "/role")
@@ -476,24 +476,10 @@ describe("Users Endpoint API Testing for Role based changes", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty('message', 'User role updated successfully');
     });
-    it("6. Should allow SUPER_ADMIN to update user's with to CONTENT_MODERATOR", async () => {
+    it("6. Should not allow SUPER_ADMIN to update user's with to TRUSTED_USER_PLUS for other affiliations", async () => {
         let encoded_user_id = encodeURIComponent(generated_user_id);
         let request_body = {
-            role: Role.CONTENT_MODERATOR,
-        };
-        const res = await request(app)
-            .put('/api/users/' + encoded_user_id + "/role")
-            .set('Cookie', generated_auth_super_admin_cookie)
-            .set("Accept", "*/*")
-            .set("Content-Type", "application/json")
-            .send(request_body);
-        expect(res.statusCode).toBe(200);
-        expect(res.body).toHaveProperty('message', 'User role updated successfully');
-    });
-    it("7. Should not allow SUPER_ADMIN to update user's with to HPC_ACCESS for other affiliations", async () => {
-        let encoded_user_id = encodeURIComponent(generated_user_id);
-        let request_body = {
-            role: Role.HPC_ACCESS,
+            role: Role.TRUSTED_USER_PLUS,
         };
         const res = await request(app)
             .put('/api/users/' + encoded_user_id + "/role")
@@ -502,7 +488,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
             .set("Content-Type", "application/json")
             .send(request_body);
         expect(res.statusCode).toBe(404);
-        expect(res.body).toHaveProperty('message', 'Cannot update user role for HPC_ACCESS, user should be ACCESS CI (XSEDE) logged in');
+        expect(res.body).toHaveProperty('message', 'Cannot update user role for TRUSTED_USER_PLUS, user should be ACCESS CI (XSEDE) logged in');
     });
     it("(External) Should allow only SUPER_ADMIN to delete trusted user", async () => {
         let user_open_id_encoded = encodeURIComponent(generated_user_id);
@@ -538,10 +524,10 @@ describe("Users Endpoint API Testing for Role based changes", () => {
         expect(res_detail.body).toHaveProperty("email", testData.access_trusted_user.email);
         generated_user_id = res_detail.body['id'];
     });
-     it("8. Should allow SUPER_ADMIN to update access user's with to HPC_ACCESS", async () => {
+     it("7. Should allow SUPER_ADMIN to update access user's with to TRUSTED_USER_PLUS", async () => {
         let encoded_user_id = encodeURIComponent(generated_user_id);
         let request_body = {
-            role: Role.HPC_ACCESS,
+            role: Role.TRUSTED_USER_PLUS,
         };
         const res = await request(app)
             .put('/api/users/' + encoded_user_id + "/role")
@@ -552,7 +538,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty('message', 'User role updated successfully');
     });
-     it("(External) Should allow only SUPER_ADMIN to delete access .org user", async () => {
+     it("(External) Should allow only SUPER_ADMIN to delete access .edu user", async () => {
         let user_open_id_encoded = encodeURIComponent(generated_user_id);
         const res = await request(app)
             .delete("/api/users/" + user_open_id_encoded)

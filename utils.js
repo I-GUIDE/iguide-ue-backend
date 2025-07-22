@@ -44,7 +44,7 @@ export const Role = Object.freeze({
     ADMIN: 2,
     CONTENT_MODERATOR: 3,        // can edit any contribution
     UNRESTRICTED_CONTRIBUTOR: 4, // can contribute restricted elements such as OERs etc.
-    HPC_ACCESS: 5,               // Allow to use HPC instances through ACCESS CI Accounts
+    TRUSTED_USER_PLUS: 5,               // Allow to use HPC instances through ACCESS CI Accounts
     TRUSTED_USER: 8,             // users with .edu emails
     UNTRUSTED_USER: 10,          // all other users
 });
@@ -130,7 +130,7 @@ export function parseRole(role) {
         case '8':
         case 8: return Role.TRUSTED_USER;
         case '5':
-        case 5: return Role.HPC_ACCESS;
+        case 5: return Role.TRUSTED_USER_PLUS;
         case '4':
         case 4: return Role.UNRESTRICTED_CONTRIBUTOR;
         case '3':

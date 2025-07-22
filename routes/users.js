@@ -220,11 +220,11 @@ router.put('/api/users/:id/role',
 			if (parsed_role <= Role.ADMIN) {
 				allowed_role = false
 			}
-			if (parsed_role === Role.HPC_ACCESS) {
+			if (parsed_role === Role.TRUSTED_USER_PLUS) {
 				allowed_role = await checkHPCAccessGrant(id);
 				if (!allowed_role) {
 					res.status(404).json(
-						{message: 'Cannot update user role for HPC_ACCESS, user should be ACCESS CI (XSEDE) logged in'});
+						{message: 'Cannot update user role for TRUSTED_USER_PLUS, user should be ACCESS CI (XSEDE) logged in'});
 					return;
 				}
 			}
