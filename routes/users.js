@@ -12,7 +12,7 @@ import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import {authenticateAuth, authenticateJWT, authorizeRole, generateAccessToken} from '../jwtUtils.js';
-import {checkUpdateParameters, EditableParameters, Role} from "../utils.js";
+import {checkHPCAccessGrant, checkUpdateParameters, EditableParameters, Role} from "../utils.js";
 import {getAllContributors, registerContributorAuth} from "../backend_neo4j.js";
 import {performReIndexElementsBasedOnUserId} from "./elements_utils.js";
 
@@ -219,6 +219,14 @@ router.put('/api/users/:id/role',
 			}
 			if (parsed_role <= Role.ADMIN) {
 				allowed_role = false
+			}
+			if (parsed_role === Role.HPC_ACCESS) {
+				allowed_role = await checkHPCAccessGrant(id);
+				if (!allowed_role) {
+					res.status(404).json(
+						{message: 'Cannot update user role for HPC_ACCESS, user should be ACCESS CI (XSEDE) logged in'});
+					return;
+				}
 			}
 			if (valid_role && allowed_role) {
 				const response = await n4j.updateRoleById(id, parsed_role);
