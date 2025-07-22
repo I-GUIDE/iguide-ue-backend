@@ -378,3 +378,188 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
         }
     });
 });
+
+describe("Users Endpoint API Testing for Role based changes", () => {
+    let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+    let generated_auth_super_admin_cookie = createAuthCookie({id: 1, role: Role.SUPER_ADMIN});
+    let generated_user_id = testData.trusted_user_id
+    let generated_element_id = ""
+    it("(External) Should allow to create a new user", async () => {
+        let user_body = testData.trusted_user
+        const res = await request(app)
+            .post('/api/users')
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(user_body);
+        expect(res.statusCode).toBe(201);
+        expect(res.body).toHaveProperty("message", 'User added successfully');
+        let user_open_id_encoded = encodeURIComponent(testData.trusted_user.openid);
+        const res_detail = await request(app)
+            .get('/api/users/' + user_open_id_encoded)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res_detail.statusCode).toBe(200);
+        expect(res_detail.body).toHaveProperty("openid", testData.trusted_user.openid);
+        expect(res_detail.body).toHaveProperty("email", testData.trusted_user.email);
+        generated_user_id = res_detail.body['id'];
+    });
+    it("1. Should not allow user less than SUPER_ADMIN role to update user's role", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let updated_generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let request_body = {
+            role: Role.HPC_ACCESS
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', updated_generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(403);
+        expect(res.body).toHaveProperty('message', 'Forbidden');
+    });
+    it("2. Should not allow SUPER_ADMIN to update user's role above ADMIN", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let request_body = {
+            role: Role.SUPER_ADMIN
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(404);
+        expect(res.body).toHaveProperty('message', 'Cannot update user role above TRUSTED USER');
+    });
+    it("3. Should not allow SUPER_ADMIN to update user's invalid roles", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let request_body = {
+            role: 12
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(404);
+        expect(res.body).toHaveProperty('message', 'Provided role id does not exist');
+    });
+    it("4. Should not allow SUPER_ADMIN to update user's with empty body", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let request_body = {
+            random_value: '123random'
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(404);
+        expect(res.body).toHaveProperty('message', 'User body not containing required attribute');
+    });
+    it("5. Should allow SUPER_ADMIN to update user's with to CONTENT_MODERATOR", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let request_body = {
+            role: Role.CONTENT_MODERATOR,
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('message', 'User role updated successfully');
+    });
+    it("6. Should allow SUPER_ADMIN to update user's with to CONTENT_MODERATOR", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let request_body = {
+            role: Role.CONTENT_MODERATOR,
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('message', 'User role updated successfully');
+    });
+    it("7. Should not allow SUPER_ADMIN to update user's with to HPC_ACCESS for other affiliations", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let request_body = {
+            role: Role.HPC_ACCESS,
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(404);
+        expect(res.body).toHaveProperty('message', 'Cannot update user role for HPC_ACCESS, user should be ACCESS CI (XSEDE) logged in');
+    });
+    it("(External) Should allow only SUPER_ADMIN to delete trusted user", async () => {
+        let user_open_id_encoded = encodeURIComponent(generated_user_id);
+        const res = await request(app)
+            .delete("/api/users/" + user_open_id_encoded)
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set('Content-Type', "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", 'User deleted successfully')
+    });
+    it("(External) Should allow to create a new access user", async () => {
+        let user_body = testData.access_trusted_user
+        const res = await request(app)
+            .post('/api/users')
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(user_body);
+        expect(res.statusCode).toBe(201);
+        expect(res.body).toHaveProperty("message", 'User added successfully');
+        let user_open_id_encoded = encodeURIComponent(testData.access_trusted_user.openid);
+        generated_auth_cookie = createAuthCookie({id: testData.access_trusted_user.openid, role: Role.TRUSTED_USER});
+        const res_detail = await request(app)
+            .get('/api/users/' + user_open_id_encoded)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res_detail.statusCode).toBe(200);
+        expect(res_detail.body).toHaveProperty("openid", testData.access_trusted_user.openid);
+        expect(res_detail.body).toHaveProperty("first-name", testData.access_trusted_user.first_name);
+        expect(res_detail.body).toHaveProperty("last-name", testData.access_trusted_user.last_name);
+        expect(res_detail.body).toHaveProperty("email", testData.access_trusted_user.email);
+        generated_user_id = res_detail.body['id'];
+    });
+     it("8. Should allow SUPER_ADMIN to update access user's with to HPC_ACCESS", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let request_body = {
+            role: Role.HPC_ACCESS,
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('message', 'User role updated successfully');
+    });
+     it("(External) Should allow only SUPER_ADMIN to delete access .org user", async () => {
+        let user_open_id_encoded = encodeURIComponent(generated_user_id);
+        const res = await request(app)
+            .delete("/api/users/" + user_open_id_encoded)
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set('Content-Type', "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", 'User deleted successfully')
+    });
+});
