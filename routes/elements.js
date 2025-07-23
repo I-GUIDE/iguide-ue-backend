@@ -1306,7 +1306,7 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
  * @swagger
  * /api/elements/datasets:
  *   post:
- *     summary: Upload a dataset (CSV or ZIP) for sizes less than 100 MB
+ *     summary: Upload a dataset (CSV or ZIP) for sizes less than 5 MB
  *     tags: ['elements', 'datasets']
  *     consumes:
  *       - multipart/form-data

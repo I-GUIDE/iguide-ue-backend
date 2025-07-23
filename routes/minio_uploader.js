@@ -16,7 +16,7 @@ dotenv.config();
  ****************************************************************************/
 
 export const MAX_FILE_SIZE = 2 * 1024 * 1025 * 1024; // 2 GB
-const CHUNK_SIZE = 50 * 1024 * 1024; // 50 MB
+const CHUNK_SIZE = 5 * 1024 * 1024; // 50 MB
 const BUFFER_CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB
 const MIN_CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
 
