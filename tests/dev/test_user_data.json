@@ -57,6 +57,15 @@
     "affiliation": "I-GUIDE",
     "version": "1"
   },
+  "access_trusted_user": {
+    "email": "test.access.ci@access.edu",
+    "first_name": "TestAccess",
+    "last_name": "DevCI",
+    "bio": "Test bio",
+    "openid": "http://cilogon.org/serverTestA/users/213890",
+    "affiliation": "ACCESS",
+    "version": "1"
+  },
   "private_trusted_user": {
     "email": "test.dev.priv@iguide.edu",
     "first_name": "TestFirst",
@@ -115,7 +124,7 @@
   "element_update_title": "Test Updated Dataset",
   "notebook_update_title": "Test Updated Notebook",
   "test_notebook_repo_name": "https://github.com/I-GUIDE/iguide-ue-backend",
-  "test_notebook_file_name": "cybergis_test_notebook.ipynb",
+  "test_notebook_file_name": "tests/dev/cybergis_test_notebook.ipynb",
   "test_notebook_details_json": {
     "title":"Test notebook",
     "authors":["Test Dev","I-GUIDE Dev"],
