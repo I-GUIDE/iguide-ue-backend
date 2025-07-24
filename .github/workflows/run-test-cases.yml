@@ -13,8 +13,8 @@ on:
         type: string
 
 #  Commenting until basic flow is tested
-#  pull_request:
-#    branches: [ dev-candidate, main ]  # Add any others you want
+  pull_request:
+    branches: [ dev-candidate, main ]  # Add any others you want
 
 jobs:
   Run-Test-Cases:
@@ -36,6 +36,11 @@ jobs:
       - name: Install required Linux packages
         run: |
           sudo apt-get update && sudo apt-get install -y git gnupg
+
+      - name: Install Jupyter and nbconvert
+        run: |
+          pip install --upgrade pip
+          pip install jupyter nbconvert "nbconvert[webpdf]"
 
       - name: Install npm packages
         run: |

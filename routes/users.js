@@ -12,7 +12,7 @@ import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import {authenticateAuth, authenticateJWT, authorizeRole, generateAccessToken} from '../jwtUtils.js';
-import {checkUpdateParameters, EditableParameters, Role} from "../utils.js";
+import {checkHPCAccessGrant, checkUpdateParameters, EditableParameters, Role} from "../utils.js";
 import {getAllContributors, registerContributorAuth} from "../backend_neo4j.js";
 import {performReIndexElementsBasedOnUserId} from "./elements_utils.js";
 
@@ -219,6 +219,14 @@ router.put('/api/users/:id/role',
 			}
 			if (parsed_role <= Role.ADMIN) {
 				allowed_role = false
+			}
+			if (parsed_role === Role.TRUSTED_USER_PLUS) {
+				allowed_role = await checkHPCAccessGrant(id);
+				if (!allowed_role) {
+					res.status(404).json(
+						{message: 'Cannot update user role for TRUSTED_USER_PLUS, user should be ACCESS CI (XSEDE) logged in'});
+					return;
+				}
 			}
 			if (valid_role && allowed_role) {
 				const response = await n4j.updateRoleById(id, parsed_role);
@@ -834,6 +842,20 @@ router.delete('/api/users/:id',
 			}
 			const del_resp = await n4j.deleteUserById(id)
 			if (del_resp) {
+				console.log("Deleting user's avatar image");
+				try {
+					let avatar_url = user_details['avatar-url'];
+					if (avatar_url) {
+						for(const type in avatar_url) {
+							let avatar_filepath = path.join(avatar_dir, path.basename(avatar_url[type]));
+							if (fs.existsSync(avatar_filepath)) {
+								fs.unlinkSync(avatar_filepath);
+							}
+						}
+					}
+				} catch (error) {
+					console.log('Users Delete API - Error in deleting avatar: ' + error);
+				}
 				res.status(200).json({message: 'User deleted successfully', result: del_resp});
 			} else {
 				res.status(200).json({message: 'Error in deleting user', result: del_resp});
