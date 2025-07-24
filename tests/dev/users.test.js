@@ -22,6 +22,7 @@ import {generateAccessToken} from "../../jwtUtils.js";
 import {Role} from "../../utils.js";
 import * as url from "node:url";
 import path from "path";
+import fs from "fs";
 
 /**
  * As the APIs involve the usage of JWT Token for the purposes of the testing we will create 2 test suites with 2 different access
@@ -32,6 +33,7 @@ import path from "path";
 const COOKIE_NAME = process.env.JWT_ACCESS_TOKEN_NAME || "access_token";
 const target_domain = "localhost"; // Adjust based on your setup
 
+const avatar_dir = path.join(process.env.UPLOAD_FOLDER, 'avatars');
 // Convert __dirname to ESM equivalent
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -310,6 +312,234 @@ describe("Users Endpoint API Testing from a Trusted User", () => {
     });
     it("15.3. Should allow only SUPER_ADMIN to delete foreign .edu user", async () => {
         let user_open_id_encoded = encodeURIComponent(testData.foreign_edu_user.openid);
+        const res = await request(app)
+            .delete("/api/users/" + user_open_id_encoded)
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set('Content-Type', "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", 'User deleted successfully')
+    });
+    it("16.1. Create a TRUSTED USER to check if avatar images are deleted after deletion", async () => {
+        let user_body = testData.trusted_user
+        const res = await request(app)
+            .post('/api/users')
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(user_body);
+        expect(res.statusCode).toBe(201);
+        expect(res.body).toHaveProperty("message", 'User added successfully');
+        let user_open_id_encoded = encodeURIComponent(testData.trusted_user.openid);
+        const res_detail = await request(app)
+            .get('/api/users/' + user_open_id_encoded)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res_detail.statusCode).toBe(200);
+        generated_user_id = res_detail.body['id'];
+    });
+    let avatar_images = {};
+    it("16.2. Upload a user's avatar image for the TRUSTED USER", async () => {
+        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        const file_path = path.join(__dirname, "test_avatar_image.jpg");
+        const res = await request(app)
+            .post('/api/users/avatar')
+            .set('Cookie', generated_auth_cookie)
+            .set('Content-Type', 'multipart/form-data; boundary=----WebKitFormBoundaryotgYSdiIybBwVdSB')
+            .attach('file', file_path) // Use .attach() instead of FormData
+            .field("id", generated_user_id); // Use .field() to send additional form data
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", "Avatar uploaded successfully");
+        let user_open_id_encoded = encodeURIComponent(testData.trusted_user.openid);
+        const res_detail = await request(app)
+            .get('/api/users/' + user_open_id_encoded)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res_detail.statusCode).toBe(200);
+        avatar_images = res_detail.body['avatar-url'];
+    });
+    it("16.3. Delete the user as a SUPER_ADMIN and check if the files still exist", async () => {
+        const res = await request(app)
+            .delete("/api/users/" + generated_user_id)
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set('Content-Type', "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", 'User deleted successfully');
+
+        //Check if the avatar_urls are deleted
+        if (avatar_images) {
+            for (const type in avatar_images) {
+                let avatar_filepath = path.join(avatar_dir, path.basename(avatar_images[type]));
+                expect(fs.existsSync(avatar_filepath)).toBe(false);
+            }
+        }
+    });
+});
+
+describe("Users Endpoint API Testing for Role based changes", () => {
+    let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+    let generated_auth_super_admin_cookie = createAuthCookie({id: 1, role: Role.SUPER_ADMIN});
+    let generated_user_id = testData.trusted_user_id
+    let generated_element_id = ""
+    it("(External) Should allow to create a new user", async () => {
+        let user_body = testData.trusted_user
+        const res = await request(app)
+            .post('/api/users')
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(user_body);
+        expect(res.statusCode).toBe(201);
+        expect(res.body).toHaveProperty("message", 'User added successfully');
+        let user_open_id_encoded = encodeURIComponent(testData.trusted_user.openid);
+        const res_detail = await request(app)
+            .get('/api/users/' + user_open_id_encoded)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res_detail.statusCode).toBe(200);
+        expect(res_detail.body).toHaveProperty("openid", testData.trusted_user.openid);
+        expect(res_detail.body).toHaveProperty("email", testData.trusted_user.email);
+        generated_user_id = res_detail.body['id'];
+    });
+    it("1. Should not allow user less than SUPER_ADMIN role to update user's role", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let updated_generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let request_body = {
+            role: Role.TRUSTED_USER_PLUS
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', updated_generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(403);
+        expect(res.body).toHaveProperty('message', 'Forbidden');
+    });
+    it("2. Should not allow SUPER_ADMIN to update user's role above ADMIN", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let request_body = {
+            role: Role.SUPER_ADMIN
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(404);
+        expect(res.body).toHaveProperty('message', 'Cannot update user role above TRUSTED USER');
+    });
+    it("3. Should not allow SUPER_ADMIN to update user's invalid roles", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let request_body = {
+            role: 12
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(404);
+        expect(res.body).toHaveProperty('message', 'Provided role id does not exist');
+    });
+    it("4. Should not allow SUPER_ADMIN to update user's with empty body", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let request_body = {
+            random_value: '123random'
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(404);
+        expect(res.body).toHaveProperty('message', 'User body not containing required attribute');
+    });
+    it("5. Should allow SUPER_ADMIN to update user's with to CONTENT_MODERATOR", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let request_body = {
+            role: Role.CONTENT_MODERATOR,
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('message', 'User role updated successfully');
+    });
+    it("6. Should not allow SUPER_ADMIN to update user's with to TRUSTED_USER_PLUS for other affiliations", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let request_body = {
+            role: Role.TRUSTED_USER_PLUS,
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(404);
+        expect(res.body).toHaveProperty('message', 'Cannot update user role for TRUSTED_USER_PLUS, user should be ACCESS CI (XSEDE) logged in');
+    });
+    it("(External) Should allow only SUPER_ADMIN to delete trusted user", async () => {
+        let user_open_id_encoded = encodeURIComponent(generated_user_id);
+        const res = await request(app)
+            .delete("/api/users/" + user_open_id_encoded)
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set('Content-Type', "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", 'User deleted successfully')
+    });
+    it("(External) Should allow to create a new access user", async () => {
+        let user_body = testData.access_trusted_user
+        const res = await request(app)
+            .post('/api/users')
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(user_body);
+        expect(res.statusCode).toBe(201);
+        expect(res.body).toHaveProperty("message", 'User added successfully');
+        let user_open_id_encoded = encodeURIComponent(testData.access_trusted_user.openid);
+        generated_auth_cookie = createAuthCookie({id: testData.access_trusted_user.openid, role: Role.TRUSTED_USER});
+        const res_detail = await request(app)
+            .get('/api/users/' + user_open_id_encoded)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res_detail.statusCode).toBe(200);
+        expect(res_detail.body).toHaveProperty("openid", testData.access_trusted_user.openid);
+        expect(res_detail.body).toHaveProperty("first-name", testData.access_trusted_user.first_name);
+        expect(res_detail.body).toHaveProperty("last-name", testData.access_trusted_user.last_name);
+        expect(res_detail.body).toHaveProperty("email", testData.access_trusted_user.email);
+        generated_user_id = res_detail.body['id'];
+    });
+     it("7. Should allow SUPER_ADMIN to update access user's with to TRUSTED_USER_PLUS", async () => {
+        let encoded_user_id = encodeURIComponent(generated_user_id);
+        let request_body = {
+            role: Role.TRUSTED_USER_PLUS,
+        };
+        const res = await request(app)
+            .put('/api/users/' + encoded_user_id + "/role")
+            .set('Cookie', generated_auth_super_admin_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('message', 'User role updated successfully');
+    });
+     it("(External) Should allow only SUPER_ADMIN to delete access .edu user", async () => {
+        let user_open_id_encoded = encodeURIComponent(generated_user_id);
         const res = await request(app)
             .delete("/api/users/" + user_open_id_encoded)
             .set('Cookie', generated_auth_super_admin_cookie)
