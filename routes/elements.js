@@ -57,6 +57,84 @@ async function fetchNotebookContent(url) {
     }
     throw Error('Failed to fetch the notebook');
 }
+
+function parseGitHubNotebookUrl(url) {
+  const GITHUB_BLOB_PREFIX = 'https://github.com/';
+
+  if (!url.startsWith(GITHUB_BLOB_PREFIX)) {
+    throw new Error('Invalid GitHub URL: Must start with https://github.com/');
+  }
+
+  const parts = new URL(url).pathname.split('/').filter(Boolean);
+
+  if (parts.length < 5 || parts[2] !== 'blob') {
+    throw new Error('Invalid GitHub notebook URL format');
+  }
+
+  const username = parts[0];
+  const repo = parts[1];
+  const branch = parts[3];
+  const filePath = parts.slice(4).join('/');
+  const filename = parts[parts.length - 1];
+
+  const rawUrl = `https://raw.githubusercontent.com/${username}/${repo}/${branch}/${filePath}`;
+
+  return {
+    username: username,
+    repo: repo,
+    branch: branch,
+    file_path: filePath,
+    filename: filename,
+    raw_url: rawUrl
+  };
+}
+
+async function convertNotebookToHtmlV2(githubUrl, outputDir) {
+	const fileDetails = parseGitHubNotebookUrl(githubUrl)
+	const notebookName = fileDetails.filename;
+	const timestamp = Date.now();
+	const htmlOutputPath = path.join(outputDir, `${timestamp}-${notebookName}.html`);
+	let notebookContent;
+	try {
+		notebookContent = await fetchNotebookContent(fileDetails.raw_url)
+	} catch (error) {
+		console.log(`Failed to fetch from ${fileDetails.branch}. Exiting process..`);
+	}
+	if (!notebookContent) {
+		console.log('Failed to fetch the notebook from the provided branch');
+		return null;
+    }
+	const notebookFilePath = path.join(outputDir, `${timestamp}-${notebookName}.ipynb`);
+    fs.writeFileSync(notebookFilePath, notebookContent);
+
+	try {
+		await new Promise((resolve, reject) => {
+	    	exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${timestamp}-${notebookName}.html" --output-dir "${outputDir}"`,
+		 	(error, stdout, stderr) => {
+		    	 if (error) {
+			 		reject(`Error converting notebook: ${stderr}`);
+		     	} else {
+			 		resolve();
+		     	}
+		 	});
+		});
+
+		// Once html is converted deleting the .ipynb notebook file
+		if (fs.existsSync(notebookFilePath)) {
+			fs.unlinkSync(notebookFilePath);
+		}
+		return {
+			htmlOutputPath: htmlOutputPath,
+			'notebook-repo': `https://github.com/${fileDetails.username}/${fileDetails.repo}`,
+			'notebook-file': fileDetails.file_path,
+			'notebook-url': githubUrl,
+		};
+	} catch (error) {
+		console.log('Error in converting to html: ' + error);
+		return null;
+    }
+}
+
 async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
     // [Done] Neo4j not required
     const notebookName = path.basename(notebookPath, '.ipynb');
@@ -651,18 +729,37 @@ router.post('/api/elements',
             console.log(user_id, " is allowed to submit oers")
         }
 
-        // Handle notebook resource type
-        if (resource['resource-type'] === 'notebook' &&
-            resource['notebook-repo'] &&
-            resource['notebook-file']) {
-            const htmlNotebookPath =
-                await convertNotebookToHtml(resource['notebook-repo'],
-                                            resource['notebook-file'], notebook_html_dir);
-            if (htmlNotebookPath) {
-                resource['html-notebook'] =
-                    `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
-            }
-        }
+		/**
+		 * Updated logic building the repo details,
+		 * 	In the request resource['notebook-url']
+		 * 		resource['notebook-repo']  => repo name
+		 * 		resource['notebook-file'] => file_name (
+		 * 		resource['html-notebook'] => generated
+		 * 		resource['notebook-url'] => new additions (if not present in the resource )
+		 */
+		if (resource['resource-type'] === 'notebook' &&
+			resource['notebook-url']) {
+			const notebookDetails = await convertNotebookToHtmlV2(resource['notebook-url'], notebook_html_dir);
+			console.log("notebook details runs: ", notebookDetails);
+			if (notebookDetails) {
+				resource['html-notebook'] =
+					`https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(notebookDetails.htmlOutputPath)}`
+				resource['notebook-repo'] = notebookDetails["notebook-repo"];
+				resource['notebook-file'] = notebookDetails['notebook-file'];
+			}
+		}
+		// Handle notebook resource type
+		// if (resource['resource-type'] === 'notebook' &&
+        //     resource['notebook-repo'] &&
+        //     resource['notebook-file']) {
+        //     const htmlNotebookPath =
+        //         await convertNotebookToHtml(resource['notebook-repo'],
+        //                                     resource['notebook-file'], notebook_html_dir);
+        //     if (htmlNotebookPath) {
+        //         resource['html-notebook'] =
+        //             `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+        //     }
+        // }
 
         const contributor_id = resource['metadata']['created_by'];
 
@@ -784,6 +881,7 @@ router.post('/api/elements',
 	    	}
         }
     } catch (error) {
+		console.log("error in creating element: ", error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -809,21 +907,59 @@ router.post('/api/elements',
 router.options('/api/elements/:id', jwtCorsMiddleware);
 router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
     const resourceId = req.params['id'];
-
-    console.log('Deleting element: ' +  resourceId);
-    try {
-	const response = await n4j.deleteElementByID(resourceId);
-	if (response) {
-	    // Deletes from OpenSearch regardless if it's present or not
-		let os_response = await performElementOpenSearchDelete(resourceId);
-		console.log("OpenSearch Response: " , os_response);
-	    res.status(200).json({ message: 'Resource deleted successfully' });
-	} else {
-	    res.status(500).json({ error: 'Resource still exists after deletion' });
+	const {user_id, user_role} = (() => {
+		if (!req.user || req.user == null || typeof req.user === 'undefined'){
+	    	return {user_id:null, user_role:null};
+		}
+		return {user_id:req.user.id, user_role:req.user.role}
+    })();
+    console.log('Deleting element: ' +  resourceId + " for user id: " + user_id);
+	let elementDetails = await n4j.getElementByID(resourceId);
+	if (!elementDetails['id']) {
+		/**
+		 * Check if the element is private as it won't be returned in the normal GET call
+		 */
+		elementDetails = await n4j.getElementByID(resourceId, user_id);
 	}
+	if (!elementDetails['id']) {
+		res.status(404).json({message: 'Element does not exist'});
+		return;
+	}
+    try {
+		const response = await n4j.deleteElementByID(resourceId);
+		if (response) {
+	    	// Deletes from OpenSearch regardless if it's present or not
+			let os_response = await performElementOpenSearchDelete(resourceId);
+			console.log("OpenSearch Response: " , os_response);
+			try {
+				let thumbnail_url = elementDetails['thumbnail-image'];
+				console.log("Deleting element's thumbnail image for Element Id: ", resourceId);
+				if (thumbnail_url) {
+					for (const type in thumbnail_url) {
+						let thumbnail_filepath = path.join(thumbnail_dir, path.basename(thumbnail_url[type]));
+						if (fs.existsSync(thumbnail_filepath)) {
+							fs.unlinkSync(thumbnail_filepath);
+						}
+					}
+				}
+				let notebook_html_url = elementDetails['html-notebook'];
+				console.log("Deleting element's html-notebook file for Element Id: ", resourceId);
+				if (notebook_html_url) {
+					let notebook_html_filepath = path.join(notebook_html_dir, path.basename(notebook_html_url));
+					if (fs.existsSync(notebook_html_filepath)) {
+						fs.unlinkSync(notebook_html_filepath);
+					}
+				}
+			} catch (error) {
+				console.log('Users Delete API - Error in deleting avatar: ' + error);
+			}
+	    	res.status(200).json({ message: 'Resource deleted successfully' });
+		} else {
+	    	res.status(500).json({ error: 'Resource still exists after deletion' });
+		}
     } catch (error) {
-	console.error('Error deleting resource:', error.message);
-	res.status(500).json({ error: error.message });
+		console.error('Error deleting resource:', error.message);
+		res.status(500).json({ error: error.message });
     }
 });
 
@@ -862,52 +998,69 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
     console.log('Updating element with id: ' + id);
 
     try {
-	const can_edit = await utils.userCanEditElement(id, req.user.id, req.user.role);
-	if (!can_edit){
-	    res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
-	}
-	if (updates['resource-type'] === 'notebook' &&
-            updates['notebook-repo'] &&
-            updates['notebook-file']) {
-            const htmlNotebookPath =
-                await convertNotebookToHtml(updates['notebook-repo'],
-                                            updates['notebook-file'], notebook_html_dir);
-            if (htmlNotebookPath) {
-                updates['html-notebook'] =
-                    `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
-            }
-        }
-        const element_old_visibility = await n4j.getElementVisibilityForID(id);
-        const response = await n4j.updateElement(id, updates);
-        if (response) {
-            // 'visibility' field is NOT searchable so should NOT be added to OS
-            // elements should ONLY be in OpenSearch if they are public
-            const visibility = utils.parseVisibility(updates['visibility']);
-            const visibility_action = updateOSBasedtOnVisibility(element_old_visibility, visibility);
-            const geo_spatial_updates = convertGeoSpatialFields(updates)
-            let os_doc_body = {
-                'title': updates['title'],
-                'contents': updates['contents'],
-                // Update the embedding field
-                // 'contents-embedding': newEmbedding,
-                'authors': updates['authors'],
-                'tags': updates['tags'],
-                'thumbnail-image': updates['thumbnail-image']['original'],
-                // Spatial-temporal properties
-                'spatial-coverage': updates['spatial-coverage'],
-                'spatial-geometry': updates['spatial-geometry'],
-                'spatial-geometry-geojson': geo_spatial_updates['spatial-geometry-geojson'],
-                'spatial-bounding-box': updates['spatial-bounding-box'],
-                'spatial-bounding-box-geojson': geo_spatial_updates['spatial-bounding-box-geojson'],
-                'spatial-centroid': updates['spatial-centroid'],
-                'spatial-centroid-geojson': geo_spatial_updates['spatial-centroid-geojson'],
-                'spatial-georeferenced': updates['spatial-georeferenced'],
-                'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
-                'spatial-index-year': updates['spatial-index-year'],
-                // Type and contributor should never be updated
-            }
-
-            // --- PDF Embedding Update for Publications ---
+		const can_edit = await utils.userCanEditElement(id, req.user.id, req.user.role);
+		if (!can_edit) {
+			res.status(403).json({message: 'Forbidden: You do not have permission to edit this element.'});
+		}
+		/**
+		 * Updated logic building the repo details,
+		 *    In the request resource['notebook-url']
+		 *        resource['notebook-repo']  => repo name
+		 *        resource['notebook-file'] => file_name (
+		 *        resource['html-notebook'] => generated
+		 *        resource['notebook-url'] => new additions (if not present in the resource )
+		 */
+		if (updates['resource-type'] === 'notebook' &&
+			updates['notebook-url']) {
+			const notebookDetails = await convertNotebookToHtmlV2(updates['notebook-url'], notebook_html_dir);
+			if (notebookDetails) {
+				updates['html-notebook'] =
+					`https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(notebookDetails.htmlOutputPath)}`
+				updates['notebook-repo'] = notebookDetails["notebook-repo"];
+				updates['notebook-file'] = notebookDetails['notebook-file'];
+			}
+		}
+		// if (updates['resource-type'] === 'notebook' &&
+		//         updates['notebook-repo'] &&
+		//         updates['notebook-file']) {
+		//         const htmlNotebookPath =
+		//             await convertNotebookToHtml(updates['notebook-repo'],
+		//                                         updates['notebook-file'], notebook_html_dir);
+		//         if (htmlNotebookPath) {
+		//             updates['html-notebook'] =
+		//                 `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+		//         }
+		//     }
+		const element_old_visibility = await n4j.getElementVisibilityForID(id);
+		const response = await n4j.updateElement(id, updates);
+		if (response) {
+			// 'visibility' field is NOT searchable so should NOT be added to OS
+			// elements should ONLY be in OpenSearch if they are public
+			const visibility = utils.parseVisibility(updates['visibility']);
+			const visibility_action = updateOSBasedtOnVisibility(element_old_visibility, visibility);
+			const geo_spatial_updates = convertGeoSpatialFields(updates)
+			let os_doc_body = {
+				'title': updates['title'],
+				'contents': updates['contents'],
+				// Update the embedding field
+				// 'contents-embedding': newEmbedding,
+				'authors': updates['authors'],
+				'tags': updates['tags'],
+				'thumbnail-image': updates['thumbnail-image']['original'],
+				// Spatial-temporal properties
+				'spatial-coverage': updates['spatial-coverage'],
+				'spatial-geometry': updates['spatial-geometry'],
+				'spatial-geometry-geojson': geo_spatial_updates['spatial-geometry-geojson'],
+				'spatial-bounding-box': updates['spatial-bounding-box'],
+				'spatial-bounding-box-geojson': geo_spatial_updates['spatial-bounding-box-geojson'],
+				'spatial-centroid': updates['spatial-centroid'],
+				'spatial-centroid-geojson': geo_spatial_updates['spatial-centroid-geojson'],
+				'spatial-georeferenced': updates['spatial-georeferenced'],
+				'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
+				'spatial-index-year': updates['spatial-index-year'],
+				// Type and contributor should never be updated
+			}
+      // --- PDF Embedding Update for Publications ---
             if (updates['resource-type'] === 'publication') {
                 const doi = updates['external-link-publication'] || updates['doi'];
                 if (doi) {
@@ -965,46 +1118,45 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
                 }
             }
             // --- End PDF Embedding Update ---
-
-            switch (visibility_action) {
-                case 'INSERT':
-                    let contributor = await n4j.getContributorByID(req.user.id);
-                    let contributor_name = '';
-                    if ('display-first-name' in contributor || 'display-last-name' in contributor) {
-                        contributor_name = `${contributor['display-first-name']} ${contributor['display-last-name']}`;
-                    }
-                    os_doc_body['contributor'] = contributor_name;
-                    let contentEmbeddingInsert = await getFlaskEmbeddingResponse(updates['contents']);
-                    if (contentEmbeddingInsert) {
-                        os_doc_body['contents-embedding'] = contentEmbeddingInsert;
-                    }
-                    let os_insert_response = await performElementOpenSearchInsert(os_doc_body, id);
-                    console.log("OpenSearch Response: ",os_insert_response);
-                    break;
-                case 'UPDATE':
-                    let contentEmbeddingUpdate = await getFlaskEmbeddingResponse(updates['contents']);
-                    if (contentEmbeddingUpdate) {
-                        os_doc_body['contents-embedding'] = contentEmbeddingUpdate;
-                    }
-                    let os_update_response = await performElementOpenSearchUpdate(os_doc_body, id);
-                    console.log("OpenSearch Response: ",os_update_response);
-                    break;
-                case 'DELETE':
-                    let os_delete_response = await performElementOpenSearchDelete(id);
-                    console.log("OpenSearch Response: ", os_delete_response);
-                    break;
-                case 'NONE':
-                default:
-                    break;
-            }
-            res.status(200).json({ message: 'Element updated successfully', result: response });
-        } else {
-            console.log('Error updating element');
-            res.status(500).json({ message: 'Error updating element', result: response });
-        }
+			switch (visibility_action) {
+				case 'INSERT':
+					let contributor = await n4j.getContributorByID(req.user.id);
+					let contributor_name = '';
+					if ('display-first-name' in contributor || 'display-last-name' in contributor) {
+						contributor_name = `${contributor['display-first-name']} ${contributor['display-last-name']}`;
+					}
+					os_doc_body['contributor'] = contributor_name;
+					let contentEmbeddingInsert = await getFlaskEmbeddingResponse(updates['contents']);
+					if (contentEmbeddingInsert) {
+						os_doc_body['contents-embedding'] = contentEmbeddingInsert;
+					}
+					let os_insert_response = await performElementOpenSearchInsert(os_doc_body, id);
+					console.log("OpenSearch Response: ", os_insert_response);
+					break;
+				case 'UPDATE':
+					let contentEmbeddingUpdate = await getFlaskEmbeddingResponse(updates['contents']);
+					if (contentEmbeddingUpdate) {
+						os_doc_body['contents-embedding'] = contentEmbeddingUpdate;
+					}
+					let os_update_response = await performElementOpenSearchUpdate(os_doc_body, id);
+					console.log("OpenSearch Response: ", os_update_response);
+					break;
+				case 'DELETE':
+					let os_delete_response = await performElementOpenSearchDelete(id);
+					console.log("OpenSearch Response: ", os_delete_response);
+					break;
+				case 'NONE':
+				default:
+					break;
+			}
+			res.status(200).json({message: 'Element updated successfully', result: response});
+		} else {
+			console.log('Error updating element');
+			res.status(500).json({message: 'Error updating element', result: response});
+		}
     } catch (error) {
-        console.error('Error updating element:', error);
-        res.status(500).json({ message: 'Internal server error' });
+		console.error('Error updating element:', error);
+		res.status(500).json({ message: 'Internal server error' });
     }
 });
 

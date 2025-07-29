@@ -2,6 +2,8 @@ import path from 'path';
 import sharp from 'sharp';
 // local imports
 import * as n4j from './backend_neo4j.js'
+import neo4j from "neo4j-driver";
+import {checkUniversityDomain} from "./routes/domain_utils.js";
 
 /**************
  * Enums
@@ -42,6 +44,7 @@ export const Role = Object.freeze({
     ADMIN: 2,
     CONTENT_MODERATOR: 3,        // can edit any contribution
     UNRESTRICTED_CONTRIBUTOR: 4, // can contribute restricted elements such as OERs etc.
+    TRUSTED_USER_PLUS: 5,               // Allow to use HPC instances through ACCESS CI Accounts
     TRUSTED_USER: 8,             // users with .edu emails
     UNTRUSTED_USER: 10,          // all other users
 });
@@ -126,6 +129,8 @@ export function parseRole(role) {
         case 10: return Role.UNTRUSTED_USER;
         case '8':
         case 8: return Role.TRUSTED_USER;
+        case '5':
+        case 5: return Role.TRUSTED_USER_PLUS;
         case '4':
         case 4: return Role.UNRESTRICTED_CONTRIBUTOR;
         case '3':
@@ -386,4 +391,60 @@ export function checkUpdateParameters(updates) {
         }
     });
     return updated_check;
+}
+
+export function hasTrustedTLD(contributor_domain) {
+    if (!contributor_domain) {
+        return false;
+    }
+    const lowerDomain = contributor_domain.toLowerCase();
+    /**
+     * Regex to match .edu or .gov as TLD (with optional 2-letter country code)
+     * Pattern explanation:
+     *  \.edu(\.[a-z]{2})?$ - matches .edu or .edu.XX (where XX is 2 letters) at end (eg: .edu.uk)
+     *  \.gov(\.[a-z]{2})?$ - matches .gov or .gov.XX (where XX is 2 letters) at end (eg: .gov.uk, gov.in)
+     */
+    const trustedTLDPattern = /\.(edu|gov)(\.[a-z]{2})?$/;
+
+    return trustedTLDPattern.test(lowerDomain);
+}
+
+export function generateUserRole(contributor) {
+    // (2) assign roles for new contributor
+    let contributor_domain = contributor['email'] && contributor['email'].toLowerCase()
+        .substring(contributor['email'].toLowerCase().lastIndexOf("@")+1);
+
+    if (contributor['email'] && contributor_domain) {
+        // Check trusted Top Level Domain
+        if (hasTrustedTLD(contributor_domain)) {
+            return neo4j.int(Role.TRUSTED_USER);
+        }
+
+        // Check university domain
+        if (checkUniversityDomain(contributor_domain)) {
+            return neo4j.int(Role.TRUSTED_USER);
+        }
+    }
+
+    // Check IDP name
+    if (contributor['idp_name'] && contributor['idp_name'].toLowerCase().includes('university')) {
+        return neo4j.int(Role.TRUSTED_USER);
+    }
+
+    // default role
+    return neo4j.int(Role.UNTRUSTED_USER);
+}
+
+export const HPC_ACCESS_AFFILIATION = "ACCESS";
+export async function checkHPCAccessGrant(user_id) {
+    try {
+        const user_details = await n4j.getContributorByID(user_id);
+        if (user_details['affiliation'] && user_details['affiliation'] === HPC_ACCESS_AFFILIATION) {
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.log("checkHPCAccessGrant() - Error: ", error);
+        return false;
+    }
 }
