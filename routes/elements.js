@@ -22,6 +22,12 @@ import {
 	performElementOpenSearchInsert, performElementOpenSearchUpdate
 } from "./elements_utils.js";
 import {convertGeoSpatialFields} from "./rag_modules/spatial_utils.js"
+import {
+	abortMultipartUpload,
+	completeMultipartUpload, getUploadDetails,
+	getUploadProgress,
+	initializeChunkUpload, MAX_FILE_SIZE, multiChunkUpload, performDatasetDeletion, processChunkBasedOnUploadId, upload,
+} from "./minio_uploader.js";
 
 const router = express.Router();
 
@@ -875,6 +881,10 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
 			let os_response = await performElementOpenSearchDelete(resourceId);
 			console.log("OpenSearch Response: " , os_response);
 			try {
+                //Delete the dataset from MinIO if the same is hosted there
+				let minIOResponse = await performDatasetDeletion(elementDetails);
+				console.log("MinIO Response: ", minIOResponse);
+
 				let thumbnail_url = elementDetails['thumbnail-image'];
 				console.log("Deleting element's thumbnail image for Element Id: ", resourceId);
 				if (thumbnail_url) {
@@ -885,7 +895,8 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
 						}
 					}
 				}
-				let notebook_html_url = elementDetails['html-notebook'];
+
+                let notebook_html_url = elementDetails['html-notebook'];
 				console.log("Deleting element's html-notebook file for Element Id: ", resourceId);
 				if (notebook_html_url) {
 					let notebook_html_filepath = path.join(notebook_html_dir, path.basename(notebook_html_url));
@@ -1289,6 +1300,311 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
 	console.error('Error getting related elememts:', error);
 	res.status(500).json({ message: 'Error getting related elememts' });
     }
+});
+
+/**
+ * @swagger
+ * /api/elements/datasets:
+ *   post:
+ *     summary: Upload a dataset (CSV or ZIP) for sizes less than 5 MB
+ *     tags: ['elements', 'datasets']
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: formData
+ *         name: file
+ *         type: file
+ *         description: The dataset file to upload
+ *     responses:
+ *       200:
+ *         description: Dataset uploaded successfully
+ *       400:
+ *         description: No file uploaded or invalid file type (.csv or .zip)
+ */
+router.options('/api/elements/datasets', jwtCorsMiddleware);
+router.post('/api/elements/datasets',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	upload.single('file'), (req, res) => {
+    if (!req.file) {
+		return res.status(400).json({
+	    	message: 'No file uploaded or invalid file type (.csv or .zip)!'
+		});
+    }
+    res.json({
+		message: 'Dataset uploaded successfully',
+		url: req.file.location,
+		bucket: process.env.AWS_BUCKET_NAME,
+		key: req.file.key,
+    });
+});
+
+/**
+ * @swagger
+ * /api/elements/datasets/init-upload:
+ *   post:
+ *     summary: Initialize a multipart upload for a large dataset (more than 100 MB Limit 2 GB)
+ *     tags: ['elements', 'datasets']
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - filename
+ *               - fileSize
+ *               - mimeType
+ *             properties:
+ *               filename:
+ *                 type: string
+ *               fileSize:
+ *                 type: integer
+ *               mimeType:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Upload initialized successfully
+ *       400:
+ *         description: File size or type is invalid
+ *       500:
+ *         description: Failed to initialize upload
+ */
+router.options('/api/elements/datasets/init-upload', jwtCorsMiddleware);
+router.post('/api/elements/datasets/init-upload',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
+	try {
+		const {filename, fileSize, mimeType} = req.body;
+
+		// Validate file size (2GB limit)
+		if (fileSize > MAX_FILE_SIZE) {
+			return res.status(400).json({
+				error: 'File size exceeds 2GB limit'
+			});
+		}
+
+		// Validate mime type
+		const allowed = ['text/csv', 'application/zip', 'application/x-zip-compressed'];
+		if (!allowed.includes(mimeType)) {
+			return res.status(400).json({
+				error: 'Invalid file type. Only CSV and ZIP files are allowed.'
+			});
+		}
+
+		// Generate unique upload ID
+		const response = await initializeChunkUpload(filename, fileSize, mimeType);
+		if (response) {
+			res.status(200).json(response);
+		} else {
+			res.status(500).json({message: 'Failed to initialize upload'});
+		}
+
+	} catch (error) {
+		console.error('Error initializing upload:', error);
+		res.status(500).json({message: 'Failed to initialize upload'});
+	}
+});
+
+/**
+ * @swagger
+ * /api/elements/datasets/upload-chunk/{uploadId}:
+ *   post:
+ *     summary: Upload a chunk of a large dataset file
+ *     tags: ['elements', 'datasets']
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: path
+ *         name: uploadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: formData
+ *         name: chunk
+ *         type: file
+ *         description: The chunk file part
+ *       - in: formData
+ *         name: chunkNumber
+ *         type: integer
+ *       - in: formData
+ *         name: totalChunks
+ *         type: integer
+ *     responses:
+ *       200:
+ *         description: Chunk uploaded successfully
+ *       400:
+ *         description: No chunk data received
+ *       404:
+ *         description: Upload not found
+ *       500:
+ *         description: Failed to upload chunk data
+ */
+router.options('/api/elements/datasets/upload-chunk/:uploadId', jwtCorsMiddleware);
+router.post('/api/elements/datasets/upload-chunk/:uploadId',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	multiChunkUpload.single('chunk'),
+	async (req, res) => {
+	const { uploadId } = req.params;
+	const { chunkNumber, totalChunks } = req.body;
+    try {
+
+      if (!req.file) {
+        return res.status(400).json({ error: 'No chunk data received' });
+      }
+
+      const uploadData = getUploadDetails(uploadId);
+      if (!uploadData) {
+        return res.status(404).json({ error: 'Upload not found' });
+      }
+
+      const response = await processChunkBasedOnUploadId(uploadId, uploadData, chunkNumber, totalChunks, req);
+	  if (response) {
+		  res.status(200).json(response);
+	  } else {
+		  res.status(500).json({message: 'Failed to upload chunk data, aborting operation'});
+		  const res = await abortMultipartUpload(uploadId);
+	  }
+
+    } catch (error) {
+      console.error('Error uploading chunk:', error);
+      res.status(500).json({message: 'Failed to upload chunk data, aborting operation'});
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /api/elements/datasets/complete-upload/{uploadId}:
+ *   post:
+ *     summary: Complete a multipart upload process
+ *     tags: ['elements', 'datasets']
+ *     parameters:
+ *       - in: path
+ *         name: uploadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Upload completed successfully
+ *       404:
+ *         description: Upload not found
+ *       500:
+ *         description: Failed to complete upload
+ */
+router.options('/api/elements/datasets/complete-upload/:uploadId', jwtCorsMiddleware);
+router.post('/api/elements/datasets/complete-upload/:uploadId',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
+  try {
+    const { uploadId } = req.params;
+
+	const uploadData = getUploadDetails(uploadId);
+	if (!uploadData) {
+        return res.status(404).json({ error: 'Upload not found' });
+	}
+
+	const response = await completeMultipartUpload(uploadId);
+	if (response) {
+		res.status(200).json(response);
+	} else {
+		res.status(500).json({message: 'Error in completing upload process, aborting the process'});
+		const res = await abortMultipartUpload(uploadId);
+	}
+  } catch (error) {
+    console.error('Error completing upload:', error);
+    res.status(500).json({ error: 'Failed to complete upload' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/elements/datasets/abort-upload/{uploadId}:
+ *   delete:
+ *     summary: Abort a multipart upload
+ *     tags: ['elements', 'datasets']
+ *     parameters:
+ *       - in: path
+ *         name: uploadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Upload aborted successfully
+ *       404:
+ *         description: Upload not found
+ *       500:
+ *         description: Failed to abort upload
+ */
+router.options('/api/elements/datasets/abort-upload/:uploadId', jwtCorsMiddleware);
+router.delete('/api/elements/datasets/abort-upload/:uploadId',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
+	try {
+		const {uploadId} = req.params;
+		const uploadData = getUploadDetails(uploadId);
+
+		if (!uploadData) {
+			return res.status(404).json({message: 'Upload not found'});
+		}
+
+		const response = await abortMultipartUpload(uploadId);
+		if (response) {
+			res.status(200).json({message: 'Upload aborted successfully'});
+		} else {
+			res.status(500).json({message: 'Error in aborting upload process'});
+		}
+
+	} catch (error) {
+		console.error('Error aborting upload:', error);
+		res.status(500).json({error: 'Failed to abort upload'});
+	}
+});
+
+/**
+ * @swagger
+ * /api/elements/datasets/upload-progress/{uploadId}:
+ *   get:
+ *     summary: Check the progress of a multipart upload
+ *     tags: ['elements', 'datasets']
+ *     parameters:
+ *       - in: path
+ *         name: uploadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Upload progress retrieved successfully
+ *       404:
+ *         description: Upload not found
+ *       500:
+ *         description: Failed to fetch upload progress
+ */
+router.options('/api/elements/datasets/upload-progress/:uploadId', jwtCorsMiddleware);
+router.get('/api/elements/datasets/upload-progress/:uploadId',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	(req, res) => {
+	const {uploadId} = req.params;
+
+	const uploadData = getUploadDetails(uploadId);
+	if (!uploadData) {
+		return res.status(404).json({error: 'Upload not found'});
+	}
+
+	const response = getUploadProgress(uploadId);
+	if (response) {
+		res.status(200).json(response);
+	} else {
+		res.status(500).json({message: 'Error in fetching upload progress'});
+	}
 });
 
 export default router;
