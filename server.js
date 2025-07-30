@@ -37,14 +37,27 @@ import {
 	generateOptimizedDomainList,
 } from "./routes/domain_utils.js";
 import path from "path";
+import rateLimit from "express-rate-limit";
 
 const app = express();
+
+// Rate Limiter Configuration
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // maximum 100 requests per Ip
+    message: 'Too many requests from this IP, please try again later.',
+    headers: true,
+});
 
 app.use(express.json());
 app.use(cookieParser());
 dotenv.config();
 
 // Use the LLM-based conversational search route
+
+//Addition of rate limiter for all requests
+app.use(limiter);
+
 //app.use('/beta', llm_routes);
 app.use('/beta', pipeline_routes);
 app.use('/beta', llm_spatial_only_routes);
