@@ -7,7 +7,7 @@ import { Filter } from 'bad-words'
 const customFilter = new Filter();
 
 // local imports
-import * as utils from '../utils.js';
+import * as utils from '../utils/utils.js';
 
 // Override the replace method to replace bad words with an empty string
 customFilter.replaceWord = (word) => '';
@@ -86,7 +86,7 @@ router.get('/search/count', cors(), async (req, res) => {
     const { keyword, 'element-type': element_type, 'sort-by': sort_by = '_score', order = 'desc', from = 0, size = 15, ...additionalFields } = req.query;
 
     let query = {
-	multi_match: {
+    multi_match: {
             query: keyword,
             fields: [
                 'title^3',    // Boost title matches

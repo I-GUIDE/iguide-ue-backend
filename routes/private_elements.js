@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 // local imports
-import * as utils from '../utils.js';
+import * as utils from '../utils/utils.js';
 import * as n4j from '../backend_neo4j.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../utils/jwtUtils.js';

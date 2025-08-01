@@ -5,7 +5,7 @@ import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import rateLimit from 'express-rate-limit';
 import {authenticateJWT, authorizeRole} from "../utils/jwtUtils.js";
-import {Role} from "../utils.js";
+import {Role} from "../utils/utils.js";
 
 const router = express.Router();
 

@@ -10,12 +10,12 @@ import fetch from 'node-fetch';
 import path from 'path';
 import axios from 'axios';
 // local imports
-import * as utils from '../utils.js';
+import * as utils from '../utils/utils.js';
 import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../utils/jwtUtils.js';
-import {parseVisibility, updateOSBasedtOnVisibility, Visibility} from "../utils.js";
+import {parseVisibility, updateOSBasedtOnVisibility, Visibility} from "../utils/utils.js";
 import {
 	getFlaskEmbeddingResponse,
 	performElementOpenSearchDelete,

@@ -1,7 +1,7 @@
 import express from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
-import * as utils from '../utils.js';
+import * as utils from '../utils/utils.js';
 import * as spatialUtils from '../utils/spatial_utils.js';
 
 const router = express.Router();

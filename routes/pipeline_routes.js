@@ -9,12 +9,12 @@ import { getSemanticSearchResults } from './rag_modules/search_modules.js';
 import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_modules/grader_modules.js';
 import { callGPTModel, callLlamaModel } from './rag_modules/llm_modules.js';
 import { routeUserQuery } from './rag_modules/routing_modules.js';
-import * as utils from '../utils.js';
+import * as utils from '../utils/utils.js';
 import { extractJsonFromLLMReturn, formatDocsJson, makeSearchRateLimiter, safeParseLLMJson} from '../utils/rag_utils.js';
 import { generateAnswer } from './rag_modules/generation_module.js';
 import { restrictToUIUC } from '../ip_policy.js';
 import {createQueryPayload} from './rag_modules/llm_modules.js';
-import {Role} from "../utils.js";
+import {Role} from "../utils/utils.js";
 const router = express.Router();
 const checkGenerationQuality = process.env.CHECK_GENERATION_QUALITY === 'true' || false; // Default to false if not set
 const MAX_SEARCHES_PER_HOUR =process.env.MAX_SEARCHES_PER_HOUR || 10; // Set a default value if not provided

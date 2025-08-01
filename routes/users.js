@@ -7,12 +7,12 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 // local imports
-import * as utils from '../utils.js';
+import * as utils from '../utils/utils.js';
 import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import {authenticateAuth, authenticateJWT, authorizeRole, generateAccessToken} from '../utils/jwtUtils.js';
-import {checkHPCAccessGrant, checkUpdateParameters, EditableParameters, Role} from "../utils.js";
+import {checkHPCAccessGrant, checkUpdateParameters, EditableParameters, Role} from "../utils/utils.js";
 import {getAllContributors, registerContributorAuth} from "../backend_neo4j.js";
 import {performReIndexElementsBasedOnUserId} from "../utils/elements_utils.js";
 

@@ -8,7 +8,7 @@ import {
 import multerS3 from 'multer-s3';
 import multer from 'multer';
 import dotenv from 'dotenv';
-import {ElementType, parseElementType} from "../utils.js";
+import {ElementType, parseElementType} from "../utils/utils.js";
 
 dotenv.config();
 /****************************************************************************
