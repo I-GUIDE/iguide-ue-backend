@@ -19,10 +19,18 @@ import {parseVisibility, updateOSBasedtOnVisibility, Visibility} from "../utils.
 import {
 	getFlaskEmbeddingResponse,
 	performElementOpenSearchDelete,
+
 	performElementOpenSearchInsert, performElementOpenSearchUpdate,
 	getPdfUrlFromDoi, extractTextFromPdfUrl, splitTextIntoChunks
 } from "../utils/elements_utils.js";
 import {convertGeoSpatialFields} from "../utils/spatial_utils.js"
+import {
+	abortMultipartUpload,
+	completeMultipartUpload, getUploadDetails,
+	getUploadProgress,
+	initializeChunkUpload, MAX_FILE_SIZE, multiChunkUpload, performDatasetDeletion, processChunkBasedOnUploadId, upload,
+} from "./minio_uploader.js";
+
 
 const router = express.Router();
 

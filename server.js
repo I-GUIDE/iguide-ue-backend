@@ -181,36 +181,6 @@ app.get('/api/check-tokens', jwtCorsMiddleware, authenticateJWT, async (req, res
  * General Helper Functions
  ****************************************************************************/
 
-const s3Client = new S3Client({
-	region: process.env.AWS_REGION,
-	credentials: {
-	accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-	secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-	},
-});
-
-const upload = multer({
-	storage: multerS3({
-	s3: s3Client,
-	bucket: process.env.AWS_BUCKET_NAME,
-	acl: 'public-read',
-	key: function (req, file, cb) {
-		cb(null, file.originalname);
-	}
-	}),
-	fileFilter: function (req, file, cb) {
-	const ext = path.extname(file.originalname).toLowerCase();
-	if (ext !== '.csv' && ext !== '.zip') {
-		return cb(null, false, new Error('Only .csv and .zip files are allowed!'));
-	}
-	const allowedMimeTypes = ['text/csv', 'application/zip', 'application/x-zip-compressed'];
-	if (!allowedMimeTypes.includes(file.mimetype)) {
-		return cb(null, false, new Error('Invalid file type, only CSV and ZIP files are allowed!'));
-	}
-	cb(null, true);
-	}
-});
-
 // Error handling middleware
 app.use((err, req, res, next) => {
 	if (err instanceof multer.MulterError) {
@@ -234,41 +204,6 @@ console.log("Domain list import complete!");
 /****************************************************************************
  * Misc. Endpoints
  ****************************************************************************/
-
-/**
- * @swagger
- * /api/elements/datasets:
- *   post:
- *     summary: Upload a dataset (CSV or ZIP)
- *     tags: ['elements', 'datasets']
- *     consumes:
- *       - multipart/form-data
- *     parameters:
- *       - in: formData
- *         name: file
- *         type: file
- *         description: The dataset file to upload
- *     responses:
- *       200:
- *         description: Dataset uploaded successfully
- *       400:
- *         description: No file uploaded or invalid file type (.csv or .zip)
- */
-app.options('/api/elements/datasets', jwtCorsMiddleware);
-app.post('/api/elements/datasets', jwtCorsMiddleware, authenticateJWT, upload.single('file'), (req, res) => {
-	// [Done] Neo4j not required
-	if (!req.file) {
-	return res.status(400).json({
-		message: 'No file uploaded or invalid file type (.csv or .zip)!'
-	});
-	}
-	res.json({
-	message: 'Dataset uploaded successfully',
-	url: req.file.location,
-	bucket: process.env.AWS_BUCKET_NAME,
-	key: req.file.key,
-	});
-});
 
 /**
  * @swagger
