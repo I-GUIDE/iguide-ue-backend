@@ -35,30 +35,31 @@ async function generateRoutingPrompt(userQuery, searchMethods) {
     prompt += `- ${method.functionName}: ${method.description}\n`;
   });
 
-  prompt += `\nBased on the query, suggest one or more retrieval methods should be used. 
-  Order them according to their relevance to the query. 
-  Respond with the method names only, separated by commas. 
-  Select spatial search methods if the query is related to geospatial knowledge like "Chicago" or "Florida".
-  If there is no suitable search result for the query or the user is not asking about a question about the geospatial knowledge, return a empty string.
-  Avoid selecting neo4j search methods if other search methods are selected.
-  Include the spatial search method if the query contains geospatial keywords like locations or longitude.
-  Only select the methods that are listed and do not invent new methods.
-  Do not include any explanations or additional text.
-  Examples:
-  Q: What are the most viewed datasets?
-→ getNeo4jSearchResults
+  prompt += `
+First, reason step by step about which search methods are most appropriate for this query and why. 
+Then, on a new line, output the method names only, separated by "Methods:".
+Do not include any explanations or additional text after the methods line.
+
+Examples:
+Q: What are the most viewed datasets?
+Reasoning: The query asks for the most viewed datasets, which is tracked in Neo4j.
+Methods: getNeo4jSearchResults
 
 Q: What is the challenge in computational Agent-Based Models?
-→ getSemanticSearchResults, getKeywordSearchResults
+Reasoning: The query is about a research challenge, so semantic and keyword search are relevant.
+Methods: getSemanticSearchResults, getKeywordSearchResults
 
 Q: What is the flood map for Chicago?
-→ getSemanticSearchResults, getSpatialSearchResults
+Reasoning: The query is about a map for a location, so semantic and spatial search are relevant.
+Methods: getSemanticSearchResults, getSpatialSearchResults
 
 Q: Climate change datasets
-→ getKeywordSearchResults
+Reasoning: The query is a general topic, so keyword search is appropriate.
+Methods: getKeywordSearchResults
 
 Q: Anything near Colorado?
-→ getSpatialSearchResults
+Reasoning: The query is about proximity to a location, so spatial search is relevant.
+Methods: getSpatialSearchResults
 `;
 
   return prompt;
@@ -86,24 +87,12 @@ async function routeUserQuery(userQuery) {
       console.log("Routing to Spatial search for query:", userQuery);
       return getSpatialSearchResults(userQuery);
     }
-    // If query is short or looks like a list of terms (no question words)
-    /*const isShort = userQuery.split(/\s+/).length < 4 && !/[?]/.test(uq);
-    if (isShort) {
-      console.log("Routing to Keyword search for query:", userQuery);
-      return getKeywordSearchResults(userQuery);
-    }*/
-    // 2. Otherwise, use LLM to decide (existing logic)
-    // Load the search methods descriptions from the CSV
-    const searchMethods = await loadSearchMethods();
 
-    // Generate the prompt for the LLM based on user query
+    // 2. Otherwise, use LLM to reason and decide
+    const searchMethods = await loadSearchMethods();
     const routingPrompt = await generateRoutingPrompt(userQuery, searchMethods);
 
-    // Call LLM to decide which methods to use
-    //const queryPayload = createQueryPayload("llama3.2:latest", "You are a routing agent for search methods.", routingPrompt);
-    //const result = await callLlamaModel(queryPayload);
     let result;
-    // Call the LLM to get the response
     if(process.env.USE_GPT=="true"){
       const queryPayload = createQueryPayload(
         "gpt-4o",
@@ -116,12 +105,22 @@ async function routeUserQuery(userQuery) {
       result = await callLlamaModel(queryPayload);
     }
 
-    // Parse LLM's response and extract selected methods
-    //const selectedMethods = result?.message?.content?.trim();
-    const selectedMethods = result;
-    if (!selectedMethods || selectedMethods[0] === 'noSearch') {
-      throw new Error('No methods selected by LLM： ' + selectedMethods);
+    // Parse LLM's response for reasoning and methods
+    let llmContent = result?.message?.content || result?.content || result;
+    let reasoning = '';
+    let selectedMethods = '';
+    if (typeof llmContent === 'string') {
+      const lines = llmContent.trim().split('\n');
+      const reasoningLine = lines.find(line => line.toLowerCase().startsWith('reasoning:'));
+      reasoning = reasoningLine ? reasoningLine.replace(/^reasoning:\s*/i, '') : '';
+      const methodsLine = lines.find(line => line.toLowerCase().startsWith('methods:'));
+      selectedMethods = methodsLine ? methodsLine.replace(/^methods:\s*/i, '') : '';
+    }
+
+    if (!selectedMethods) {
+      throw new Error('No methods selected by LLM: ' + selectedMethods);
     } else {
+      console.log('Routing reasoning:', reasoning);
       console.log('Selected methods:', selectedMethods);
     }
 
@@ -132,8 +131,6 @@ async function routeUserQuery(userQuery) {
     for (const methodName of methodsToCall) {
       if (functionMapping[methodName]) {
         console.log(`Calling method: ${methodName}`);
-        console.assert(typeof functionMapping[methodName] === 'function', `Function ${methodName} is not a function!`);
-        // Dynamically invoke the function based on method name
         const methodResults = await functionMapping[methodName](userQuery);
         console.log(`Method ${methodName} returned ${methodResults.length} results`);
         results.push(...methodResults);
@@ -144,6 +141,8 @@ async function routeUserQuery(userQuery) {
       new Map(results.map(item => [item._id, item])).values()
     );
 
+    // Optionally, return reasoning with results
+    // return { results: uniqueResults, reasoning };
     return uniqueResults;
 
   } catch (error) {

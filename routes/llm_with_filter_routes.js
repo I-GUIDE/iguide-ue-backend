@@ -4,8 +4,8 @@ import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import rateLimit from 'express-rate-limit';
-import {authenticateJWT, authorizeRole} from "../jwtUtils.js";
-import {Role} from "../utils.js";
+import {authenticateJWT, authorizeRole} from "../utils/jwtUtils.js";
+import {Role} from "../utils/utils.js";
 
 const router = express.Router();
 
@@ -111,7 +111,7 @@ Respond with a JSON array containing only the relevant elements.
                 'Content-Type': 'application/json',
             },
         });
-	//console.log(response)
+    //console.log(response)
         // Clean up the response to remove unwanted markdown and whitespace
         let responseContent = response.data.choices[0].message.content.trim();
         responseContent = responseContent.replace(/```json|```/g, '').trim(); // Remove markdown formatting

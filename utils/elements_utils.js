@@ -1,7 +1,9 @@
 import axios from "axios";
 import * as os from "../backend_opensearch.js";
 import * as n4j from '../backend_neo4j.js';
+import pdfParse from "pdf-parse/lib/pdf-parse.js";
 
+// Element operations
 export async function getFlaskEmbeddingResponse(content) {
     let newEmbedding;
     try {
@@ -143,4 +145,40 @@ export async function performReIndexElementsBasedOnUserId(user_id, total_element
         console.error("performReIndexElementsBasedOnUserId - Error: ", error);
         return false;
     }
+}
+
+// PDF operations
+
+// Try to get PDF URL from Crossref or Unpaywall
+export async function getPdfUrlFromDoi(doi) {
+    // Try Unpaywall first (better for OA PDFs)
+    const unpaywall = await axios.get(`https://api.unpaywall.org/v2/${encodeURIComponent(doi)}?email=your@email.com`);
+    if (unpaywall.data && unpaywall.data.best_oa_location && unpaywall.data.best_oa_location.url_for_pdf) {
+        return unpaywall.data.best_oa_location.url_for_pdf;
+    }
+    // Fallback: try Crossref (may not have PDF)
+    const crossref = await axios.get(`https://api.crossref.org/works/${encodeURIComponent(doi)}`);
+    if (crossref.data.message.link) {
+        const pdfLink = crossref.data.message.link.find(l => l['content-type'] === 'application/pdf');
+        if (pdfLink) return pdfLink.URL;
+    }
+    return null;
+}
+
+// Download and extract text from PDF
+export async function extractTextFromPdfUrl(pdfUrl) {
+    const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
+    const data = await pdfParse(response.data);
+    return data.text;
+}
+
+// Split text into chunks (e.g., 1000 characters)
+export function splitTextIntoChunks(text, chunkSize = 1000, overlap = 200) {
+    const chunks = [];
+    let start = 0;
+    while (start < text.length) {
+        chunks.push(text.slice(start, start + chunkSize));
+        start += chunkSize - overlap;
+    }
+    return chunks;
 }

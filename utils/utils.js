@@ -1,9 +1,9 @@
 import path from 'path';
 import sharp from 'sharp';
 // local imports
-import * as n4j from './backend_neo4j.js'
+import * as n4j from '../backend_neo4j.js'
 import neo4j from "neo4j-driver";
-import {checkUniversityDomain} from "./routes/domain_utils.js";
+import {checkUniversityDomain} from "./domain_utils.js";
 
 /**************
  * Enums
@@ -89,13 +89,13 @@ export function parseVisibility(visibility){
     case 'public':
     case '10':
     case 10:
-	return Visibility.PUBLIC;
+    return Visibility.PUBLIC;
     case 'private':
     case '1':
     case 1:
-	return Visibility.PRIVATE;
+    return Visibility.PRIVATE;
     default:
-	throw Error('Server Neo4j: Visibility ('+ visibility  +') parsing not implemented');
+    throw Error('Server Neo4j: Visibility ('+ visibility  +') parsing not implemented');
     }
 }
 //exports.parseVisibility = parseVisibility
@@ -114,7 +114,7 @@ export function parseElementType(type){
     case ElementType.MAP: return ElementType.MAP;
     case ElementType.CODE: return ElementType.CODE;
     default:
-	throw Error('Server Neo4j: Element type ('+ element_type  +') parsing not implemented');
+    throw Error('Server Neo4j: Element type ('+ element_type  +') parsing not implemented');
     }
 }
 
@@ -148,18 +148,18 @@ export function parseSortBy(sort_by){
     switch (sort_by){
     case SortBy.CLICK_COUNT:
     case SortBy.CLICK_COUNT.toLowerCase():
-	    return SortBy.CLICK_COUNT;
+        return SortBy.CLICK_COUNT;
     case SortBy.CREATION_TIME:
     case SortBy.CREATION_TIME.toLowerCase():
     case "creation_time":
-	    return SortBy.CREATION_TIME;
+        return SortBy.CREATION_TIME;
     case SortBy.TITLE: return SortBy.TITLE;
     case SortBy.FIRST_NAME:
     case SortBy.FIRST_NAME.toLowerCase(): return SortBy.FIRST_NAME;
     case SortBy.LAST_NAME:
     case SortBy.LAST_NAME.toLowerCase(): return SortBy.LAST_NAME;
     default:
-	throw Error('Server Neo4j: SortBy ('+ sort_by  +') not implemented');
+    throw Error('Server Neo4j: SortBy ('+ sort_by  +') not implemented');
     }
 }
 /**
@@ -168,7 +168,7 @@ export function parseSortBy(sort_by){
 export function parse64BitNumber(num_64){
     let res = num_64['high'];
     for (let i=0; i<32; i++) {
-	res *= 2;
+    res *= 2;
     }
     return num_64['low'] + res;
 }
@@ -185,13 +185,13 @@ export function parseDate(neo4jDateTime){
         return neo4jDateTime;
     }
     const date = new Date(
-	year.toInt(),
-	month.toInt() - 1, // neo4j dates start at 1, js dates start at 0
-	day.toInt(),
-	hour.toInt(),
-	minute.toInt(),
-	second.toInt(),
-	nanosecond.toInt() / 1000000 // js dates use milliseconds
+    year.toInt(),
+    month.toInt() - 1, // neo4j dates start at 1, js dates start at 0
+    day.toInt(),
+    hour.toInt(),
+    minute.toInt(),
+    second.toInt(),
+    nanosecond.toInt() / 1000000 // js dates use milliseconds
     );
 
     return date;
@@ -310,12 +310,12 @@ export async function userCanEditElement(element_id, user_id, user_role) {
     // (2) user sending update request is admin or super admin
     const element_owner = await n4j.getContributorIdForElement(element_id);
     if (user_id == element_owner['id'] || user_id == element_owner['openid']){
-	console.log('This element is owned by the user');
-	// this element is owned by the user sending update request
-	return true;
+    console.log('This element is owned by the user');
+    // this element is owned by the user sending update request
+    return true;
     } else if (user_role <= Role.CONTENT_MODERATOR) {
-	// user sending update request is admin or super admin
-	return true;
+    // user sending update request is admin or super admin
+    return true;
     }
     return false;
 }
@@ -333,22 +333,22 @@ export async function userCanViewElement(element_id, user_id, user_role) {
     const element_owner = await n4j.getContributorIdForElement(element_id);
 
     if (element_visibility === Visibility.PUBLIC){
-	return true;
+    return true;
     }
     // non-public element will never be visible to logged-out user
     if (user_id === null || user_role === null){
-	console.log('User is not logged in and trying to access a private element');
-	return false;
+    console.log('User is not logged in and trying to access a private element');
+    return false;
     }
     // non-public element should only be visible to owner or admin
     if (user_id == element_owner['id'] || user_id == element_owner['openid']){
-	console.log('This element is owned by the user');
-	// this element is owned by the user calling endpoing
-	return true;
+    console.log('This element is owned by the user');
+    // this element is owned by the user calling endpoing
+    return true;
     } else if (user_role <= Role.CONTENT_MODERATOR) {
-	// endpoing invoked by admin or super admin
-	console.log('Admin user accessing a private element');
-	return true;
+    // endpoing invoked by admin or super admin
+    console.log('Admin user accessing a private element');
+    return true;
     }
     return false;
 }

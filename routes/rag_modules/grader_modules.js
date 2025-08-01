@@ -1,5 +1,5 @@
 import { callLlamaModel, createQueryPayload, callGPTModel } from './llm_modules.js';
-import { extractJsonFromLLMReturn, formatDocsString, formatDocsJson } from './rag_utils.js';
+import { extractJsonFromLLMReturn, formatDocsString, formatDocsJson } from '../../utils/rag_utils.js';
 
 /*export async function gradeDocuments(documents, question) {
   const gradedDocuments = [];
