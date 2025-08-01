@@ -205,6 +205,7 @@ export function extractJsonFromLLMReturn(response) {
     }
     console.warn('safeParseLLMJson failed on all repairs');
     return null;
+  }
   
 /* return the first balanced { … } that matches a regex right after '{' */
 function selectBalancedBlockRE(str, regex) {
