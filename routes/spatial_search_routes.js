@@ -2,7 +2,7 @@ import express from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import * as utils from '../utils.js';
-import * as spatialUtils from './rag_modules/spatial_utils.js';
+import * as spatialUtils from '../utils/spatial_utils.js';
 
 const router = express.Router();
 
@@ -222,7 +222,7 @@ router.get('/search/spatial', cors(), async (req, res) => {
             contributor: hit._source.contributor || 'Unknown',
             'thumbnail-image': utils.generateMultipleResolutionImagesFor(hit._source['thumbnail-image']),
             'bounding-box': hit._source['spatial-bounding-box-geojson'] || null,
-	    'centroid': spatialUtils.convertWktToGeoJson(hit._source['spatial-centroid']) || null,
+        'centroid': spatialUtils.convertWktToGeoJson(hit._source['spatial-centroid']) || null,
             //'centroid': hit._source['spatial-centroid'].replace(/[^\d .-]/g,'').trim().split(/\s+/).map(Number) || null,
         }));
 

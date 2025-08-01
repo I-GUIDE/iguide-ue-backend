@@ -22,7 +22,7 @@ import * as utils from './utils.js';
 import * as n4j from './backend_neo4j.js';
 import * as os from './backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from './iguide_cors.js';
-import { authenticateJWT, authorizeRole, generateAccessToken } from './jwtUtils.js';
+import { authenticateJWT, authorizeRole, generateAccessToken } from './utils/jwtUtils.js';
 // local imports for endpoints
 //import llm_routes from './routes/llm_with_filter_routes.js';
 //import llm_routes from './routes/llm_routes.js';
@@ -37,7 +37,7 @@ import documentation from './routes/documentation.js';
 import elements from './routes/elements.js';
 import {
 	generateOptimizedDomainList,
-} from "./routes/domain_utils.js";
+} from "./utils/domain_utils.js";
 import path from "path";
 
 const app = express();
@@ -70,8 +70,8 @@ const keyPath = path.resolve(process.env.SSL_KEY)
 const certPath = path.resolve(process.env.SSL_CERT)
 
 const SSLOptions = {
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath)
+	key: fs.readFileSync(keyPath),
+	cert: fs.readFileSync(certPath)
 };
 /****************************************************************************
  * JWT Specific Functions
@@ -115,28 +115,28 @@ app.options('/api/refresh-token', jwtCorsMiddleware);
 app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 
 	// updated refresh token to use env variable
-    const refreshToken = req.cookies[process.env.JWT_REFRESH_TOKEN_NAME];
-    //console.log("Refresh token", refreshToken);
-    if (!refreshToken) {
+	const refreshToken = req.cookies[process.env.JWT_REFRESH_TOKEN_NAME];
+	//console.log("Refresh token", refreshToken);
+	if (!refreshToken) {
 	return res.sendStatus(401);
-    }
+	}
 
-    // Verify the refresh token exists in OpenSearch
-    const { body } = await os.client.search({
+	// Verify the refresh token exists in OpenSearch
+	const { body } = await os.client.search({
 	index: 'refresh_tokens',
 	body: {
-	    query: {
+		query: {
 		term: { token: refreshToken }
-	    }
+		}
 	}
-    });
+	});
 
-    if (body.hits.total.value === 0) {
+	if (body.hits.total.value === 0) {
 	console.log(`Token not found in database for ${refreshToken}`)
 	return res.sendStatus(403);
-    }
+	}
 
-    jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_SECRET, async (err, user) => {
+	jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_SECRET, async (err, user) => {
 		if (err) {
 			console.log(`Error processing refreshToken ${refreshToken}`)
 			return res.sendStatus(403);
@@ -160,7 +160,7 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 		// updated to new variable name
 		//res.cookie(process.env.JWT_ACCESS_TOKEN_NAME, newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
 		//res.json({ accessToken: newAccessToken });
-    });
+	});
 });
 
 
@@ -170,7 +170,7 @@ app.get('/api/check-tokens', jwtCorsMiddleware, authenticateJWT, async (req, res
 		res.json({
 			id: req.user.id,
 			role: req.user.role
-  		});
+		});
 	} catch (error) {
 		console.error("Error performing check user: ", error)
 		res.status(500).json({message: 'Error checking user details'});
@@ -182,47 +182,47 @@ app.get('/api/check-tokens', jwtCorsMiddleware, authenticateJWT, async (req, res
  ****************************************************************************/
 
 const s3Client = new S3Client({
-    region: process.env.AWS_REGION,
-    credentials: {
+	region: process.env.AWS_REGION,
+	credentials: {
 	accessKeyId: process.env.AWS_ACCESS_KEY_ID,
 	secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    },
+	},
 });
 
 const upload = multer({
-    storage: multerS3({
+	storage: multerS3({
 	s3: s3Client,
 	bucket: process.env.AWS_BUCKET_NAME,
 	acl: 'public-read',
 	key: function (req, file, cb) {
-	    cb(null, file.originalname);
+		cb(null, file.originalname);
 	}
-    }),
-    fileFilter: function (req, file, cb) {
+	}),
+	fileFilter: function (req, file, cb) {
 	const ext = path.extname(file.originalname).toLowerCase();
 	if (ext !== '.csv' && ext !== '.zip') {
-	    return cb(null, false, new Error('Only .csv and .zip files are allowed!'));
+		return cb(null, false, new Error('Only .csv and .zip files are allowed!'));
 	}
 	const allowedMimeTypes = ['text/csv', 'application/zip', 'application/x-zip-compressed'];
 	if (!allowedMimeTypes.includes(file.mimetype)) {
-	    return cb(null, false, new Error('Invalid file type, only CSV and ZIP files are allowed!'));
+		return cb(null, false, new Error('Invalid file type, only CSV and ZIP files are allowed!'));
 	}
 	cb(null, true);
-    }
+	}
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    if (err instanceof multer.MulterError) {
+	if (err instanceof multer.MulterError) {
 	// A Multer error occurred when uploading.
 	return res.status(400).json({ message: err.message });
-    } else if (err) {
+	} else if (err) {
 	// An unknown error occurred.
 	return res.status(400).json({ message: err.message });
-    }
+	}
 
-    // Forward to next middleware if no errors
-    next();
+	// Forward to next middleware if no errors
+	next();
 });
 /****************************************************************************
  * Importing Domain List
@@ -256,18 +256,18 @@ console.log("Domain list import complete!");
  */
 app.options('/api/elements/datasets', jwtCorsMiddleware);
 app.post('/api/elements/datasets', jwtCorsMiddleware, authenticateJWT, upload.single('file'), (req, res) => {
-    // [Done] Neo4j not required
-    if (!req.file) {
+	// [Done] Neo4j not required
+	if (!req.file) {
 	return res.status(400).json({
-	    message: 'No file uploaded or invalid file type (.csv or .zip)!'
+		message: 'No file uploaded or invalid file type (.csv or .zip)!'
 	});
-    }
-    res.json({
+	}
+	res.json({
 	message: 'Dataset uploaded successfully',
 	url: req.file.location,
 	bucket: process.env.AWS_BUCKET_NAME,
 	key: req.file.key,
-    });
+	});
 });
 
 /**
@@ -292,20 +292,20 @@ app.post('/api/elements/datasets', jwtCorsMiddleware, authenticateJWT, upload.si
  */
 app.options('/api/url-title', cors());
 app.get('/api/url-title', cors(), async (req, res) => {
-    // [Done] Neo4j not required
-    const url = req.query.url;
-    try {
+	// [Done] Neo4j not required
+	const url = req.query.url;
+	try {
 	const response = await axios.get(url);
 	const matches = response.data.match(/<title>(.*?)<\/title>/);
 	if (matches) {
-	    res.json({ title: matches[1] });
+		res.json({ title: matches[1] });
 	} else {
-	    res.status(404).json({ error: 'Title not found' });
+		res.status(404).json({ error: 'Title not found' });
 	}
-    } catch (error) {
+	} catch (error) {
 	console.log(error);
 	res.status(500).json({ error: 'Failed to retrieve title' });
-    }
+	}
 });
 
 /****************************************************************************/

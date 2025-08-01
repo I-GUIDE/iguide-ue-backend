@@ -14,15 +14,15 @@ import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
-import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
+import { authenticateJWT, authorizeRole, generateAccessToken } from '../utils/jwtUtils.js';
 import {parseVisibility, updateOSBasedtOnVisibility, Visibility} from "../utils.js";
 import {
 	getFlaskEmbeddingResponse,
 	performElementOpenSearchDelete,
 	performElementOpenSearchInsert, performElementOpenSearchUpdate,
 	getPdfUrlFromDoi, extractTextFromPdfUrl, splitTextIntoChunks
-} from "./elements_utils.js";
-import {convertGeoSpatialFields} from "./rag_modules/spatial_utils.js"
+} from "../utils/elements_utils.js";
+import {convertGeoSpatialFields} from "../utils/spatial_utils.js"
 
 const router = express.Router();
 
@@ -37,38 +37,38 @@ router.use('/user-uploads/thumbnails', express.static(thumbnail_dir));
 router.use('/user-uploads/notebook_html', express.static(notebook_html_dir));
 // Configure storage for thumbnails
 const thumbnailStorage = multer.diskStorage({
-    destination: (req, file, cb) => {
+	destination: (req, file, cb) => {
 	cb(null, thumbnail_dir);
-    },
-    filename: (req, file, cb) => {
+	},
+	filename: (req, file, cb) => {
 	// It's a good practice to sanitize the original file name
 	const sanitizedFilename = file.originalname.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
 	cb(null, `${Date.now()}-${sanitizedFilename}`);
-    }
+	}
 });
 const uploadThumbnail = multer({ storage: thumbnailStorage });
 
 // Function to convert notebook to HTML
 async function fetchNotebookContent(url) {
-    // [Done] Neo4j not required
-    const response = await fetch(url);
-    if (response.ok) {
+	// [Done] Neo4j not required
+	const response = await fetch(url);
+	if (response.ok) {
 	return await response.text();
-    }
-    throw Error('Failed to fetch the notebook');
+	}
+	throw Error('Failed to fetch the notebook');
 }
 
 function parseGitHubNotebookUrl(url) {
   const GITHUB_BLOB_PREFIX = 'https://github.com/';
 
   if (!url.startsWith(GITHUB_BLOB_PREFIX)) {
-    throw new Error('Invalid GitHub URL: Must start with https://github.com/');
+	throw new Error('Invalid GitHub URL: Must start with https://github.com/');
   }
 
   const parts = new URL(url).pathname.split('/').filter(Boolean);
 
   if (parts.length < 5 || parts[2] !== 'blob') {
-    throw new Error('Invalid GitHub notebook URL format');
+	throw new Error('Invalid GitHub notebook URL format');
   }
 
   const username = parts[0];
@@ -80,12 +80,12 @@ function parseGitHubNotebookUrl(url) {
   const rawUrl = `https://raw.githubusercontent.com/${username}/${repo}/${branch}/${filePath}`;
 
   return {
-    username: username,
-    repo: repo,
-    branch: branch,
-    file_path: filePath,
-    filename: filename,
-    raw_url: rawUrl
+	username: username,
+	repo: repo,
+	branch: branch,
+	file_path: filePath,
+	filename: filename,
+	raw_url: rawUrl
   };
 }
 
@@ -103,20 +103,20 @@ async function convertNotebookToHtmlV2(githubUrl, outputDir) {
 	if (!notebookContent) {
 		console.log('Failed to fetch the notebook from the provided branch');
 		return null;
-    }
+	}
 	const notebookFilePath = path.join(outputDir, `${timestamp}-${notebookName}.ipynb`);
-    fs.writeFileSync(notebookFilePath, notebookContent);
+	fs.writeFileSync(notebookFilePath, notebookContent);
 
 	try {
 		await new Promise((resolve, reject) => {
-	    	exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${timestamp}-${notebookName}.html" --output-dir "${outputDir}"`,
-		 	(error, stdout, stderr) => {
-		    	 if (error) {
-			 		reject(`Error converting notebook: ${stderr}`);
-		     	} else {
-			 		resolve();
-		     	}
-		 	});
+			exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${timestamp}-${notebookName}.html" --output-dir "${outputDir}"`,
+			(error, stdout, stderr) => {
+				 if (error) {
+					reject(`Error converting notebook: ${stderr}`);
+				} else {
+					resolve();
+				}
+			});
 		});
 
 		// Once html is converted deleting the .ipynb notebook file
@@ -132,52 +132,52 @@ async function convertNotebookToHtmlV2(githubUrl, outputDir) {
 	} catch (error) {
 		console.log('Error in converting to html: ' + error);
 		return null;
-    }
+	}
 }
 
 async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
-    // [Done] Neo4j not required
-    const notebookName = path.basename(notebookPath, '.ipynb');
-    const timestamp = Date.now();
-    const htmlOutputPath = path.join(outputDir, `${timestamp}-${notebookName}.html`);
-    const branches = ['main', 'master'];
+	// [Done] Neo4j not required
+	const notebookName = path.basename(notebookPath, '.ipynb');
+	const timestamp = Date.now();
+	const htmlOutputPath = path.join(outputDir, `${timestamp}-${notebookName}.html`);
+	const branches = ['main', 'master'];
 
-    let notebookContent;
+	let notebookContent;
 
-    for (const branch of branches) {
+	for (const branch of branches) {
 	try {
-	    const notebookUrl = `${githubRepo}/raw/${branch}/${notebookPath}`;
-	    notebookContent = await fetchNotebookContent(notebookUrl);
-	    break;
+		const notebookUrl = `${githubRepo}/raw/${branch}/${notebookPath}`;
+		notebookContent = await fetchNotebookContent(notebookUrl);
+		break;
 	} catch (error) {
-	    console.log(`Failed to fetch from ${branch} branch. Trying next branch...`);
+		console.log(`Failed to fetch from ${branch} branch. Trying next branch...`);
 	}
-    }
+	}
 
-    if (!notebookContent) {
+	if (!notebookContent) {
 	console.log('Failed to fetch the notebook from both main and master branches');
 	return null;
-    }
+	}
 
-    const notebookFilePath = path.join(outputDir, `${timestamp}-${notebookName}.ipynb`);
-    fs.writeFileSync(notebookFilePath, notebookContent);
+	const notebookFilePath = path.join(outputDir, `${timestamp}-${notebookName}.ipynb`);
+	fs.writeFileSync(notebookFilePath, notebookContent);
 
-    try {
+	try {
 	await new Promise((resolve, reject) => {
-	    exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${htmlOutputPath}"`,
+		exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${htmlOutputPath}"`,
 		 (error, stdout, stderr) => {
-		     if (error) {
+			 if (error) {
 			 reject(`Error converting notebook: ${stderr}`);
-		     } else {
+			 } else {
 			 resolve();
-		     }
+			 }
 		 });
 	});
 	return htmlOutputPath;
-    } catch (error) {
+	} catch (error) {
 	console.log(error);
 	return null;
-    }
+	}
 }
 
 /****************************************************************************/
@@ -230,47 +230,47 @@ async function convertNotebookToHtml(githubRepo, notebookPath, outputDir) {
  */
 router.options('/api/elements/bookmark', jwtCorsMiddleware);
 router.get('/api/elements/bookmark', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
-    //const user_id = decodeURIComponent(req.params['userId']);
-    const { 'user-id': user_id,
-	    'sort-by': sort_by,
-	    'order': order,
-	    'from': from,
-	    'size': size,
-	    'count-only':count_only} = req.query;
+	//const user_id = decodeURIComponent(req.params['userId']);
+	const { 'user-id': user_id,
+		'sort-by': sort_by,
+		'order': order,
+		'from': from,
+		'size': size,
+		'count-only':count_only} = req.query;
 
-    try {
+	try {
 	let total_count = 0;
 	let bookmarked_elements = [];
 	// get all public bookmarked elements for user
 	const public_elements = await n4j.getElementsBookmarkedByContributor(user_id,
-									      from,
-									      size,
-									      sort_by,
-									      order,
-									      false
-									     );
+										  from,
+										  size,
+										  sort_by,
+										  order,
+										  false
+										 );
 	total_count += public_elements['total-count'];
 	// get all private bookmarked elements for user
 	const private_elements = await n4j.getElementsBookmarkedByContributor(user_id,
-									       from,
-									       size,
-									       sort_by,
-									       order,
-									       true
-									      );
+										   from,
+										   size,
+										   sort_by,
+										   order,
+										   true
+										  );
 	total_count += private_elements['total-count'];
 	bookmarked_elements = [...public_elements['elements'],
-			       ...private_elements['elements']];
+				   ...private_elements['elements']];
 	if (total_count == 0){
-	    return res.status(404).json({message: 'No bookmarked elements found'});
+		return res.status(404).json({message: 'No bookmarked elements found'});
 	}
 
 	res.status(200).json({elements:bookmarked_elements,
-			      'total-count': total_count});
-    } catch (error) {
+				  'total-count': total_count});
+	} catch (error) {
 	console.error('Error getting bookmarked elememts:', error);
 	res.status(500).json({ message: 'Error getting bookmarked elememts' });
-    }
+	}
 });
 
 /**
@@ -297,31 +297,31 @@ router.get('/api/elements/bookmark', jwtCorsMiddleware, authenticateJWT, async (
  */
 router.options('/api/elements/titles', cors());
 router.get('/api/elements/titles', cors(), async (req, res) => {
-    // [Done] Neo4j not required. For related elements when registering. Should be from OS
-    const elementType = req.query['element-type'];
-    const scrollTimeout = '1m'; // Scroll timeout
+	// [Done] Neo4j not required. For related elements when registering. Should be from OS
+	const elementType = req.query['element-type'];
+	const scrollTimeout = '1m'; // Scroll timeout
 
-    if (!elementType) {
+	if (!elementType) {
 	res.status(400).json({ message: 'element_type query parameter is required' });
 	return;
-    }
+	}
 
-    try {
+	try {
 	// Initial search request with scrolling
 	const initialSearchResponse = await os.client.search({
-	    index: os.os_index,
-	    scroll: scrollTimeout,
-	    body: {
-        size: 100, // Number of results to fetch per scroll request
-        query: {
-            bool: {
-                must: [
-                    { term: { 'resource-type': elementType } }
-                ]
-            }
-        },
-        _source: ['title'], // Only fetch the title field
-    },
+		index: os.os_index,
+		scroll: scrollTimeout,
+		body: {
+		size: 100, // Number of results to fetch per scroll request
+		query: {
+			bool: {
+				must: [
+					{ term: { 'resource-type': elementType } }
+				]
+			}
+		},
+		_source: ['title'], // Only fetch the title field
+	},
 	});
 
 	let scrollId = initialSearchResponse.body._scroll_id;
@@ -329,30 +329,30 @@ router.get('/api/elements/titles', cors(), async (req, res) => {
 
 	// Function to handle scrolling
 	const fetchAllTitles = async (scrollId) => {
-	    while (true) {
+		while (true) {
 		const scrollResponse = await os.client.scroll({
-		    scroll_id: scrollId,
-		    scroll: scrollTimeout,
+			scroll_id: scrollId,
+			scroll: scrollTimeout,
 		});
 
 		const hits = scrollResponse.body.hits.hits;
 		if (hits.length === 0) {
-		    break; // Exit loop when no more results are returned
+			break; // Exit loop when no more results are returned
 		}
 
 		allTitles = allTitles.concat(hits.map(hit => hit._source.title));
 		scrollId = scrollResponse.body._scroll_id; // Update scrollId for the next scroll request
-	    }
-	    return allTitles;
+		}
+		return allTitles;
 	};
 
 	const titles = await fetchAllTitles(scrollId);
 
 	res.json(titles);
-    } catch (error) {
+	} catch (error) {
 	console.error('Error querying OpenSearch:', error);
 	res.status(500).json({ message: 'Internal server error' });
-    }
+	}
 });
 
 /**
@@ -385,17 +385,17 @@ router.get('/api/elements/titles', cors(), async (req, res) => {
  */
 router.options('/api/elements/homepage', cors());
 router.get('/api/elements/homepage', cors(), async (req, res) => {
-    let { 'element-type': element_type,
+	let { 'element-type': element_type,
 	  'limit': limit} = req.query;
-    // [Done] Neo4j
-    try {
+	// [Done] Neo4j
+	try {
 	const resources = await n4j.getFeaturedElementsByType(element_type, limit);
-	      //await n4j.getFeaturedElements();
+		  //await n4j.getFeaturedElements();
 	res.json(resources);
-    } catch (error) {
+	} catch (error) {
 	console.error('Error querying OpenSearch:', error);
 	res.status(500).json({ message: 'Internal server error' });
-    }
+	}
 });
 
 /**
@@ -423,25 +423,25 @@ router.get('/api/elements/homepage', cors(), async (req, res) => {
  */
 router.get('/api/elements/:id', cors(), async (req, res) => {
 
-    const element_id = decodeURIComponent(req.params['id']);
-    try {
+	const element_id = decodeURIComponent(req.params['id']);
+	try {
 	// to avoid direct access to private elements via URL
 	const element_visibility = await n4j.getElementVisibilityForID(element_id);
 	if (element_visibility === utils.Visibility.PRIVATE){
-	    res.status(404).json({ message: 'Element not found' });
-	    return;
+		res.status(404).json({ message: 'Element not found' });
+		return;
 	}
 	const element = await n4j.getElementByID(element_id);
 	if (JSON.stringify(element) === '{}'){
-	    res.status(404).json({ message: 'Element not found' });
-	    return;
+		res.status(404).json({ message: 'Element not found' });
+		return;
 	}
 
 	res.status(200).json(element);
-    } catch (error) {
+	} catch (error) {
 	console.error('/api/resources/:id Error querying:', error);
 	res.status(500).json({ message: 'Internal server error' });
-    }
+	}
 });
 
 /**
@@ -509,58 +509,58 @@ router.get('/api/elements/:id', cors(), async (req, res) => {
  *         description: Internal server error
  */
 router.options('/api/elements/:id', (req, res) => {
-    const method = req.header('Access-Control-Request-Method');
-    if (method === 'PUT') {
-        res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
-        res.header('Access-Control-Allow-Methods', 'PUT');
-        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
-        res.header('Access-Control-Allow-Credentials', 'true');
-    } else if (method === 'POST') {
-        res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
-        res.header('Access-Control-Allow-Methods', 'POST');
-        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
-        res.header('Access-Control-Allow-Credentials', 'true');
-    } else if (method === 'GET') {
-        res.header('Access-Control-Allow-Origin', '*');
-        res.header('Access-Control-Allow-Methods', 'GET');
-        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
-    }else if (method === 'DELETE') {
-        res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
-        res.header('Access-Control-Allow-Methods', 'DELETE');
-        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
-        res.header('Access-Control-Allow-Credentials', 'true');
-    }
-    res.sendStatus(204); // No content
+	const method = req.header('Access-Control-Request-Method');
+	if (method === 'PUT') {
+		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+		res.header('Access-Control-Allow-Methods', 'PUT');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+		res.header('Access-Control-Allow-Credentials', 'true');
+	} else if (method === 'POST') {
+		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+		res.header('Access-Control-Allow-Methods', 'POST');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+		res.header('Access-Control-Allow-Credentials', 'true');
+	} else if (method === 'GET') {
+		res.header('Access-Control-Allow-Origin', '*');
+		res.header('Access-Control-Allow-Methods', 'GET');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
+	}else if (method === 'DELETE') {
+		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+		res.header('Access-Control-Allow-Methods', 'DELETE');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+		res.header('Access-Control-Allow-Credentials', 'true');
+	}
+	res.sendStatus(204); // No content
 });
 
 router.options('/api/elements', (req, res) => {
-    const method = req.header('Access-Control-Request-Method');
-    if (method === 'PUT') {
-        res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
-        res.header('Access-Control-Allow-Methods', 'PUT');
-        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
-        res.header('Access-Control-Allow-Credentials', 'true');
-    } else if (method === 'POST') {
-        res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
-        res.header('Access-Control-Allow-Methods', 'POST');
-        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
-        res.header('Access-Control-Allow-Credentials', 'true');
-    } else if (method === 'GET') {
-        res.header('Access-Control-Allow-Origin', '*');
-        res.header('Access-Control-Allow-Methods', 'GET');
-        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
-    }else if (method === 'DELETE') {
-        res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
-        res.header('Access-Control-Allow-Methods', 'DELETE');
-        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
-        res.header('Access-Control-Allow-Credentials', 'true');
-    }
-    res.sendStatus(204); // No content
+	const method = req.header('Access-Control-Request-Method');
+	if (method === 'PUT') {
+		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+		res.header('Access-Control-Allow-Methods', 'PUT');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+		res.header('Access-Control-Allow-Credentials', 'true');
+	} else if (method === 'POST') {
+		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+		res.header('Access-Control-Allow-Methods', 'POST');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+		res.header('Access-Control-Allow-Credentials', 'true');
+	} else if (method === 'GET') {
+		res.header('Access-Control-Allow-Origin', '*');
+		res.header('Access-Control-Allow-Methods', 'GET');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
+	}else if (method === 'DELETE') {
+		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+		res.header('Access-Control-Allow-Methods', 'DELETE');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+		res.header('Access-Control-Allow-Credentials', 'true');
+	}
+	res.sendStatus(204); // No content
 });
 //router.options('/api/elements', cors());
 router.get('/api/elements', cors(), async (req, res) => {
-    // [Done] Neo4j
-    let { 'field-name': field_name,
+	// [Done] Neo4j
+	let { 'field-name': field_name,
 	  'match-value': match_value,
 	  'element-type': element_type,
 	  'sort-by': sort_by,
@@ -569,45 +569,45 @@ router.get('/api/elements', cors(), async (req, res) => {
 	  'size': size,
 	  'count-only':count_only} = req.query;
 
-    if (typeof element_type !== 'undefined')
+	if (typeof element_type !== 'undefined')
 	element_type = element_type.split(',').map(item => item.trim());
-    if (typeof match_value !== 'undefined')
+	if (typeof match_value !== 'undefined')
 	match_value = match_value.split(',').map(item => item.trim());
 
-    //console.log('Neo4j /api/elements/retrieve - '+ element_type + ', ' + match_value);
+	//console.log('Neo4j /api/elements/retrieve - '+ element_type + ', ' + match_value);
 
-    try{
+	try{
 	if (typeof match_value !== 'undefined' && match_value !== null){
-	    if (typeof element_type !== 'undefined' && element_type !== null){
+		if (typeof element_type !== 'undefined' && element_type !== null){
 		throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
-	    } else if (count_only === 'true') {
+		} else if (count_only === 'true') {
 		if (field_name == 'contributor') {
-		    let total_count = 0;
-		    for (let val of match_value){
+			let total_count = 0;
+			for (let val of match_value){
 			let response = await n4j.getElementsCountByContributor(val);
 			total_count += response;
-		    }
-		    res.json(total_count);
-		    return;
+			}
+			res.json(total_count);
+			return;
 		} else if (field_name == 'tags') {
-		    let total_count = 0;
-		    for (let val of match_value){
+			let total_count = 0;
+			for (let val of match_value){
 			let response = await n4j.getElementsCountByTag(val);
 			total_count += response;
-		    }
-		    res.json(total_count);
-		    return;
+			}
+			res.json(total_count);
+			return;
 		} else {
-		    throw Error('Neo4j not implemented Count:' + element_type + ', ' + match_value);
+			throw Error('Neo4j not implemented Count:' + element_type + ', ' + match_value);
 		}
-	    } else {
+		} else {
 		// [ToDo] Should be removed since '_id' is not used anymore???
 		if (field_name == '_id'){
-		    throw Error('GET /api/elements field_name=_id: Should not be used');
+			throw Error('GET /api/elements field_name=_id: Should not be used');
 		} else if (field_name == 'contributor') {
-		    const resources = [];
-		    let total_count = 0;
-		    for (let val of match_value){
+			const resources = [];
+			let total_count = 0;
+			for (let val of match_value){
 			let resource = await n4j.getElementsByContributor(val,
 									  from,
 									  size,
@@ -616,54 +616,54 @@ router.get('/api/elements', cors(), async (req, res) => {
 			//total_count += await n4j.getElementsCountByContributor(val);
 			total_count += resource['total-count'];
 			resources.push(...resource['elements']);
-		    }
-		    res.json({elements:resources, 'total-count': total_count});
-		    return;
+			}
+			res.json({elements:resources, 'total-count': total_count});
+			return;
 		} else if (field_name == 'tags') {
-		    const resources = [];
-		    let total_count = 0;
-		    for (let val of match_value){
+			const resources = [];
+			let total_count = 0;
+			for (let val of match_value){
 			let resource = await n4j.getElementsByTag(val, from, size, sort_by, order);
 			resources.push(...resource);
 			total_count += await n4j.getElementsCountByTag(val);
-		    }
-		    res.json({elements:resources, 'total-count': total_count});
-		    return;
+			}
+			res.json({elements:resources, 'total-count': total_count});
+			return;
 		} else {
-		    throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
+			throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
 		}
-	    }
+		}
 	} else if (typeof element_type !== 'undefined' && element_type !== null){
-	    if (typeof match_value !== 'undefined' && match_value !== null){
+		if (typeof match_value !== 'undefined' && match_value !== null){
 		// should never reach here
 		throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
-	    } else if (count_only === 'true') {
+		} else if (count_only === 'true') {
 		let total_count = 0;
 		for (let val of element_type){
-		    let response = await n4j.getElementsCountByType(val);
-		    total_count += response;
+			let response = await n4j.getElementsCountByType(val);
+			total_count += response;
 		}
 		res.json(total_count);
-	    } else {
+		} else {
 		const resources = [];
 		let total_count = 0;
 		for (let val of element_type){
-		    let resource = await n4j.getElementsByType(val, from, size, sort_by, order);
-		    if (resource['total-count'] > 0){
+			let resource = await n4j.getElementsByType(val, from, size, sort_by, order);
+			if (resource['total-count'] > 0){
 			resources.push(...resource['elements']);
-		    }
-		    total_count += resource['total-count'];
+			}
+			total_count += resource['total-count'];
 		}
 		res.json({elements:resources, 'total-count': total_count});
 		return;
-	    }
+		}
 	} else {
-	    throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
+		throw Error('Neo4j not implemented: ' + element_type + ', ' + match_value);
 	}
-    } catch (error) {
+	} catch (error) {
 	console.error('Error retrieving elements:', error);
 	res.status(500).json({ message: 'Internal server error' });
-    }
+	}
 });
 
 /**
@@ -710,24 +710,24 @@ router.post('/api/elements',
 	 authenticateJWT,
 	 authorizeRole(utils.Role.TRUSTED_USER),
 	 async (req, res) => {
-    const resource = req.body;
-    const {user_id, user_role} = (() => {
+	const resource = req.body;
+	const {user_id, user_role} = (() => {
 	if (!req.user || req.user == null || typeof req.user === 'undefined'){
-	    return {user_id:null, user_role:null};
+		return {user_id:null, user_role:null};
 	}
 	return {user_id:req.user.id, user_role:req.user.role}
-    })();
+	})();
 
-    try {
-        console.log('Registering ' + resource['resource-type'] + 'by ' + user_id);
-        // Check if the resource type is "oer" and user have enough permission to add OER
-        if (resource['resource-type'] === 'oer' &&
-	    !(user_role <= utils.Role.UNRESTRICTED_CONTRIBUTOR)) {
-            console.log(user_id, " blocked by role")
-            return res.status(403).json({ message: 'Forbidden: You do not have permission to submit OER elements.' });
-        }else{
-            console.log(user_id, " is allowed to submit oers")
-        }
+	try {
+		console.log('Registering ' + resource['resource-type'] + 'by ' + user_id);
+		// Check if the resource type is "oer" and user have enough permission to add OER
+		if (resource['resource-type'] === 'oer' &&
+		!(user_role <= utils.Role.UNRESTRICTED_CONTRIBUTOR)) {
+			console.log(user_id, " blocked by role")
+			return res.status(403).json({ message: 'Forbidden: You do not have permission to submit OER elements.' });
+		}else{
+			console.log(user_id, " is allowed to submit oers")
+		}
 
 		/**
 		 * Updated logic building the repo details,
@@ -750,23 +750,23 @@ router.post('/api/elements',
 		}
 		// Handle notebook resource type
 		// if (resource['resource-type'] === 'notebook' &&
-        //     resource['notebook-repo'] &&
-        //     resource['notebook-file']) {
-        //     const htmlNotebookPath =
-        //         await convertNotebookToHtml(resource['notebook-repo'],
-        //                                     resource['notebook-file'], notebook_html_dir);
-        //     if (htmlNotebookPath) {
-        //         resource['html-notebook'] =
-        //             `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
-        //     }
-        // }
+		//     resource['notebook-repo'] &&
+		//     resource['notebook-file']) {
+		//     const htmlNotebookPath =
+		//         await convertNotebookToHtml(resource['notebook-repo'],
+		//                                     resource['notebook-file'], notebook_html_dir);
+		//     if (htmlNotebookPath) {
+		//         resource['html-notebook'] =
+		//             `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+		//     }
+		// }
 
-        const contributor_id = resource['metadata']['created_by'];
+		const contributor_id = resource['metadata']['created_by'];
 
-        // Register element in Neo4j
-        const {response, element_id} = await n4j.registerElement(contributor_id, resource);
+		// Register element in Neo4j
+		const {response, element_id} = await n4j.registerElement(contributor_id, resource);
 
-        if (response) {
+		if (response) {
 			let resource_visibility = parseVisibility(resource['visibility']);
 			//Indexing the Element only if the visibility is Public
 			if (resource_visibility === Visibility.PUBLIC) {
@@ -808,64 +808,64 @@ router.post('/api/elements',
 				const doi = resource['external-link-publication'] || resource['doi'];
 				console.log('Element type: ' + resource['resource-type'] + ' DOI: ' + doi);
 				if (resource['resource-type'] === 'publication' && doi) {
-				    let pdfUrl = null;
-				    let pdfText = null;
-				    let chunks = [];
-				    let chunkEmbeddings = [];
-				    try {
+					let pdfUrl = null;
+					let pdfText = null;
+					let chunks = [];
+					let chunkEmbeddings = [];
+					try {
 					pdfUrl = await getPdfUrlFromDoi(doi);
 					console.log("PDF URL:", pdfUrl);
 					if (!pdfUrl) {
-					    console.log(`No PDF found for DOI: ${doi}`);
+						console.log(`No PDF found for DOI: ${doi}`);
 					}
-				    } catch (err) {
+					} catch (err) {
 					console.error("getPdfUrlFromDoi failed:", err.message);
-				    }
-
-				    if (pdfUrl) {
-					try {
-					    pdfText = await extractTextFromPdfUrl(pdfUrl);
-					    console.log("Extracted PDF text length:", pdfText ? pdfText.length : 0);
-					    console.log("Extracted PDF text sample:", pdfText ? pdfText.slice(0, 300) : '[empty]');
-					} catch (err) {
-					    console.error("extractTextFromPdfUrl failed:", err.message);
 					}
-				    }
 
-				    if (pdfText) {
+					if (pdfUrl) {
 					try {
-					    chunks = splitTextIntoChunks(pdfText, 1000, 200);
-					    console.log("Number of chunks:", chunks.length);
+						pdfText = await extractTextFromPdfUrl(pdfUrl);
+						console.log("Extracted PDF text length:", pdfText ? pdfText.length : 0);
+						console.log("Extracted PDF text sample:", pdfText ? pdfText.slice(0, 300) : '[empty]');
 					} catch (err) {
-					    console.error("splitTextIntoChunks failed:", err.message);
+						console.error("extractTextFromPdfUrl failed:", err.message);
 					}
-				    }
+					}
 
-				    if (chunks && chunks.length > 0) {
+					if (pdfText) {
+					try {
+						chunks = splitTextIntoChunks(pdfText, 1000, 200);
+						console.log("Number of chunks:", chunks.length);
+					} catch (err) {
+						console.error("splitTextIntoChunks failed:", err.message);
+					}
+					}
+
+					if (chunks && chunks.length > 0) {
 					for (const chunk of chunks) {
-					    try {
+						try {
 						if (chunk && chunk.trim().length > 0) {
-						    console.log("Embedding chunk (first 100 chars):", chunk.slice(0, 100));
-						    const embedding = await getFlaskEmbeddingResponse(chunk);
-						    chunkEmbeddings.push({ chunk, embedding });
+							console.log("Embedding chunk (first 100 chars):", chunk.slice(0, 100));
+							const embedding = await getFlaskEmbeddingResponse(chunk);
+							chunkEmbeddings.push({ chunk, embedding });
 						}
-					    } catch (err) {
+						} catch (err) {
 						console.error("Embedding failed for chunk:", chunk.slice(0, 100), "Error:", err.message);
-					    }
+						}
 					}
 					os_element['pdf_chunks'] = chunkEmbeddings.map((c, i) => ({
-					    chunk_id: i,
-					    text: c.chunk,
-					    embedding: c.embedding
+						chunk_id: i,
+						text: c.chunk,
+						embedding: c.embedding
 					}));
-				    }
+					}
 				}
 				console.log('Indexing element: ' + os_element);
 				let os_response = await performElementOpenSearchInsert(os_element, element_id);
 				console.log('OpenSearch Indexing result: ', os_response);
 			}
-            res.status(200).json({ message: 'Resource registered successfully', elementId: element_id });
-        } else {
+			res.status(200).json({ message: 'Resource registered successfully', elementId: element_id });
+		} else {
 			if (element_id) {
 			// registration failed because of duplicate element
 			console.log('Duplicate found while registering resource ...');
@@ -875,15 +875,15 @@ router.post('/api/elements',
 					error: 'Duplicate found while registering resource',
 					elementId: element_id
 				});
-	    	} else {
+			} else {
 				console.log('Error registering resource ...');
 				res.status(500).json({ error: 'Error registering resource' });
-	    	}
-        }
-    } catch (error) {
+			}
+		}
+	} catch (error) {
 		console.log("error in creating element: ", error);
-        res.status(500).json({ error: error.message });
-    }
+		res.status(500).json({ error: error.message });
+	}
 });
 
 /**
@@ -906,14 +906,14 @@ router.post('/api/elements',
  */
 router.options('/api/elements/:id', jwtCorsMiddleware);
 router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
-    const resourceId = req.params['id'];
+	const resourceId = req.params['id'];
 	const {user_id, user_role} = (() => {
 		if (!req.user || req.user == null || typeof req.user === 'undefined'){
-	    	return {user_id:null, user_role:null};
+			return {user_id:null, user_role:null};
 		}
 		return {user_id:req.user.id, user_role:req.user.role}
-    })();
-    console.log('Deleting element: ' +  resourceId + " for user id: " + user_id);
+	})();
+	console.log('Deleting element: ' +  resourceId + " for user id: " + user_id);
 	let elementDetails = await n4j.getElementByID(resourceId);
 	if (!elementDetails['id']) {
 		/**
@@ -925,10 +925,10 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
 		res.status(404).json({message: 'Element does not exist'});
 		return;
 	}
-    try {
+	try {
 		const response = await n4j.deleteElementByID(resourceId);
 		if (response) {
-	    	// Deletes from OpenSearch regardless if it's present or not
+			// Deletes from OpenSearch regardless if it's present or not
 			let os_response = await performElementOpenSearchDelete(resourceId);
 			console.log("OpenSearch Response: " , os_response);
 			try {
@@ -953,14 +953,14 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
 			} catch (error) {
 				console.log('Users Delete API - Error in deleting avatar: ' + error);
 			}
-	    	res.status(200).json({ message: 'Resource deleted successfully' });
+			res.status(200).json({ message: 'Resource deleted successfully' });
 		} else {
-	    	res.status(500).json({ error: 'Resource still exists after deletion' });
+			res.status(500).json({ error: 'Resource still exists after deletion' });
 		}
-    } catch (error) {
+	} catch (error) {
 		console.error('Error deleting resource:', error.message);
 		res.status(500).json({ error: error.message });
-    }
+	}
 });
 
 /**
@@ -992,12 +992,12 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
  */
 //router.options('/api/elements/:id', jwtCorsMiddleware);
 router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
-    const id = decodeURIComponent(req.params.id);
-    const updates = req.body;
+	const id = decodeURIComponent(req.params.id);
+	const updates = req.body;
 
-    console.log('Updating element with id: ' + id);
+	console.log('Updating element with id: ' + id);
 
-    try {
+	try {
 		const can_edit = await utils.userCanEditElement(id, req.user.id, req.user.role);
 		if (!can_edit) {
 			res.status(403).json({message: 'Forbidden: You do not have permission to edit this element.'});
@@ -1060,64 +1060,64 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 				'spatial-index-year': updates['spatial-index-year'],
 				// Type and contributor should never be updated
 			}
-      // --- PDF Embedding Update for Publications ---
-            if (updates['resource-type'] === 'publication') {
-                const doi = updates['external-link-publication'] || updates['doi'];
-                if (doi) {
-                    let pdfUrl = null;
-                    let pdfText = null;
-                    let chunks = [];
-                    let chunkEmbeddings = [];
-                    try {
-                        pdfUrl = await getPdfUrlFromDoi(doi);
-                        console.log("PDF URL:", pdfUrl);
-                        if (!pdfUrl) {
-                            console.log(`No PDF found for DOI: ${doi}`);
-                        }
-                    } catch (err) {
-                        console.error("getPdfUrlFromDoi failed:", err.message);
-                    }
+	  // --- PDF Embedding Update for Publications ---
+			if (updates['resource-type'] === 'publication') {
+				const doi = updates['external-link-publication'] || updates['doi'];
+				if (doi) {
+					let pdfUrl = null;
+					let pdfText = null;
+					let chunks = [];
+					let chunkEmbeddings = [];
+					try {
+						pdfUrl = await getPdfUrlFromDoi(doi);
+						console.log("PDF URL:", pdfUrl);
+						if (!pdfUrl) {
+							console.log(`No PDF found for DOI: ${doi}`);
+						}
+					} catch (err) {
+						console.error("getPdfUrlFromDoi failed:", err.message);
+					}
 
-                    if (pdfUrl) {
-                        try {
-                            pdfText = await extractTextFromPdfUrl(pdfUrl);
-                            console.log("Extracted PDF text length:", pdfText ? pdfText.length : 0);
-                            console.log("Extracted PDF text sample:", pdfText ? pdfText.slice(0, 300) : '[empty]');
-                        } catch (err) {
-                            console.error("extractTextFromPdfUrl failed:", err.message);
-                        }
-                    }
+					if (pdfUrl) {
+						try {
+							pdfText = await extractTextFromPdfUrl(pdfUrl);
+							console.log("Extracted PDF text length:", pdfText ? pdfText.length : 0);
+							console.log("Extracted PDF text sample:", pdfText ? pdfText.slice(0, 300) : '[empty]');
+						} catch (err) {
+							console.error("extractTextFromPdfUrl failed:", err.message);
+						}
+					}
 
-                    if (pdfText) {
-                        try {
-                            chunks = splitTextIntoChunks(pdfText, 1000, 200);
-                            console.log("Number of chunks:", chunks.length);
-                        } catch (err) {
-                            console.error("splitTextIntoChunks failed:", err.message);
-                        }
-                    }
+					if (pdfText) {
+						try {
+							chunks = splitTextIntoChunks(pdfText, 1000, 200);
+							console.log("Number of chunks:", chunks.length);
+						} catch (err) {
+							console.error("splitTextIntoChunks failed:", err.message);
+						}
+					}
 
-                    if (chunks && chunks.length > 0) {
-                        for (const chunk of chunks) {
-                            try {
-                                if (chunk && chunk.trim().length > 0) {
-                                    console.log("Embedding chunk (first 100 chars):", chunk.slice(0, 100));
-                                    const embedding = await getFlaskEmbeddingResponse(chunk);
-                                    chunkEmbeddings.push({ chunk, embedding });
-                                }
-                            } catch (err) {
-                                console.error("Embedding failed for chunk:", chunk.slice(0, 100), "Error:", err.message);
-                            }
-                        }
-                        os_doc_body['pdf_chunks'] = chunkEmbeddings.map((c, i) => ({
-                            chunk_id: i,
-                            text: c.chunk,
-                            embedding: c.embedding
-                        }));
-                    }
-                }
-            }
-            // --- End PDF Embedding Update ---
+					if (chunks && chunks.length > 0) {
+						for (const chunk of chunks) {
+							try {
+								if (chunk && chunk.trim().length > 0) {
+									console.log("Embedding chunk (first 100 chars):", chunk.slice(0, 100));
+									const embedding = await getFlaskEmbeddingResponse(chunk);
+									chunkEmbeddings.push({ chunk, embedding });
+								}
+							} catch (err) {
+								console.error("Embedding failed for chunk:", chunk.slice(0, 100), "Error:", err.message);
+							}
+						}
+						os_doc_body['pdf_chunks'] = chunkEmbeddings.map((c, i) => ({
+							chunk_id: i,
+							text: c.chunk,
+							embedding: c.embedding
+						}));
+					}
+				}
+			}
+			// --- End PDF Embedding Update ---
 			switch (visibility_action) {
 				case 'INSERT':
 					let contributor = await n4j.getContributorByID(req.user.id);
@@ -1154,10 +1154,10 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 			console.log('Error updating element');
 			res.status(500).json({message: 'Error updating element', result: response});
 		}
-    } catch (error) {
+	} catch (error) {
 		console.error('Error updating element:', error);
 		res.status(500).json({ message: 'Internal server error' });
-    }
+	}
 });
 
 /**
@@ -1189,53 +1189,53 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
  *         description: Internal server error
  */
 router.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, authenticateJWT, async (req, res) => {
-    const id = decodeURIComponent(req.params.id);
-    const visibility_str = decodeURIComponent(req.query.visibility);
+	const id = decodeURIComponent(req.params.id);
+	const visibility_str = decodeURIComponent(req.query.visibility);
 
-    console.log('Setting visibility (' + visibility_str + ') for element with id: ' + id);
+	console.log('Setting visibility (' + visibility_str + ') for element with id: ' + id);
 
-    try {
+	try {
 	const can_edit = await utils.userCanEditElement(id, req.user.id, req.user.role);
 	if (!can_edit){
-	    res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
+		res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
 	}
 
 	const visibility = utils.parseVisibility(visibility_str);
 	console.log(visibility);
 
 	const response =
-	      await n4j.setElementVisibilityForID(id, visibility);
+		  await n4j.setElementVisibilityForID(id, visibility);
 
 	// 'visibility' field is NOT searchable so should NOT be added to OS
 	// elements should ONLY be in OpenSearch if they are public
 	if (response) {
-	    if (visibility === utils.Visibility.PUBLIC) {
+		if (visibility === utils.Visibility.PUBLIC) {
 		// [ToDo] add/update element to OpenSearch
-	    } else {
+		} else {
 		// [ToDo] remove element from OpenSearch
-	    }
+		}
 
-	    // // Update in OpenSearch
-	    // const response = await os.client.update({
-	    // 	id: id,
-	    // 	index: os.os_index,
-	    // 	body: {
-	    // 	    doc: {
-	    // 		'visibility': visibility
-	    // 	    }
-	    // 	},
-	    // 	refresh: true,
-	    // });
-	    // console.log('OpenSearch set visibility:' + response['body']['result']);
-	    res.status(200).json({ message: 'Element visibility updated successfully'});
+		// // Update in OpenSearch
+		// const response = await os.client.update({
+		// 	id: id,
+		// 	index: os.os_index,
+		// 	body: {
+		// 	    doc: {
+		// 		'visibility': visibility
+		// 	    }
+		// 	},
+		// 	refresh: true,
+		// });
+		// console.log('OpenSearch set visibility:' + response['body']['result']);
+		res.status(200).json({ message: 'Element visibility updated successfully'});
 	} else {
-	    console.log('Error updating element');
-	    res.status(500).json({ message: 'Error updating element'});
+		console.log('Error updating element');
+		res.status(500).json({ message: 'Error updating element'});
 	}
-    } catch (error) {
+	} catch (error) {
 	console.error('Error updating element:', error);
 	res.status(500).json({ message: 'Internal server error' });
-    }
+	}
 });
 
 
@@ -1261,32 +1261,32 @@ router.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, authentica
 router.options('/api/elements/thumbnail', jwtCorsMiddleware);
 router.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single('file'), authenticateJWT, (req, res) => {
 	// // [ToDo] Change filename to user ID
-    // const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${req.file.filename}`;
-    try {
-        const body = JSON.parse(JSON.stringify(req.body));
-        const element_id = body.id;
-        const new_thumbnail_file = req.file;
+	// const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/thumbnails/${req.file.filename}`;
+	try {
+		const body = JSON.parse(JSON.stringify(req.body));
+		const element_id = body.id;
+		const new_thumbnail_file = req.file;
 
-        if (!new_thumbnail_file) {
-            return res.status(400).json({ message: 'Element ID and new thumbnail file are required' });
-        }
+		if (!new_thumbnail_file) {
+			return res.status(400).json({ message: 'Element ID and new thumbnail file are required' });
+		}
 
-        // Call the image processing function with a callback for error handling
-        utils.generateMultipleResolutionImagesFor(new_thumbnail_file.filename, thumbnail_dir, false, (errorMessage, images) => {
-            if (errorMessage) {
-                return res.status(400).json({ message: errorMessage });
-            }
+		// Call the image processing function with a callback for error handling
+		utils.generateMultipleResolutionImagesFor(new_thumbnail_file.filename, thumbnail_dir, false, (errorMessage, images) => {
+			if (errorMessage) {
+				return res.status(400).json({ message: errorMessage });
+			}
 
-            res.json({
-                message: 'Thumbnail uploaded successfully',
-                'image-urls': images
-            });
-        });
+			res.json({
+				message: 'Thumbnail uploaded successfully',
+				'image-urls': images
+			});
+		});
 
-    } catch (error) {
-        console.error('Error processing image:', error);
-        res.status(500).json({ message: 'Error processing image' });
-    }
+	} catch (error) {
+		console.error('Error processing image:', error);
+		res.status(500).json({ message: 'Error processing image' });
+	}
 });
 
 /**
@@ -1312,19 +1312,19 @@ router.post('/api/elements/thumbnail', jwtCorsMiddleware, uploadThumbnail.single
  */
 router.options('/api/elements/:id/neighbors', cors());
 router.get('/api/elements/:id/neighbors', cors(), async (req, res) => {
-    const id = decodeURIComponent(req.params.id);
-    try {
+	const id = decodeURIComponent(req.params.id);
+	try {
 	const response = await n4j.getRelatedElementsForID(id);
 	if (JSON.stringify(response) === '{}'){
-	    return res.status(404).json({message: 'No related elements found',
+		return res.status(404).json({message: 'No related elements found',
 					 nodes:[],
 					 neighbors:[] });
 	}
 	res.status(200).json(response);
-    } catch (error) {
+	} catch (error) {
 	console.error('Error fetching related elements:', error);
 	res.status(500).json({ message: 'Error fetching related elements' });
-    }
+	}
 });
 
 /**
@@ -1359,19 +1359,19 @@ router.get('/api/duplicate',
 	async (req, res) => {
 //router.get('/api/elements/duplicate', async (req, res) => {
 
-    let field_name = req.query['field-name'];
-    let value = req.query['value'];
-    try {
+	let field_name = req.query['field-name'];
+	let value = req.query['value'];
+	try {
 	const {response, element_id} = await n4j.checkDuplicatesForField(field_name, value);
 	if (response) {
-	    res.status(200).json({duplicate:true, elementId:element_id});
+		res.status(200).json({duplicate:true, elementId:element_id});
 	} else {
-	    res.status(200).json({duplicate:false, elementId:null});
+		res.status(200).json({duplicate:false, elementId:null});
 	}
-    } catch (error) {
+	} catch (error) {
 	console.error('Error checking duplicate:', error);
 	res.status(500).json({ message: 'Error checking duplicate' });
-    }
+	}
 });
 
 /**
@@ -1390,20 +1390,20 @@ router.get('/api/duplicate',
  */
 router.options('/api/connected-graph', cors());
 router.get('/api/connected-graph', cors(), async (req, res) => {
-    try {
+	try {
 	const response = await n4j.getAllRelatedElements();
 	if (JSON.stringify(response) === '{}'){
-	    return res.status(404).json({message: 'No related elements found',
+		return res.status(404).json({message: 'No related elements found',
 					 nodes:[],
 					 neighbors:[] });
 	}
 	//console.log('Number of connected nodes: ' + response['nodes'].length);
 	//console.log('Number of relations: ' + response['neighbors'].length);
 	res.status(200).json(response);
-    } catch (error) {
+	} catch (error) {
 	console.error('Error getting related elememts:', error);
 	res.status(500).json({ message: 'Error getting related elememts' });
-    }
+	}
 });
 
 export default router;

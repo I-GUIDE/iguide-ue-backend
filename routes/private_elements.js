@@ -4,7 +4,7 @@ import cors from 'cors';
 import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
-import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
+import { authenticateJWT, authorizeRole, generateAccessToken } from '../utils/jwtUtils.js';
 
 const router = express.Router();
 /**
@@ -33,35 +33,35 @@ const router = express.Router();
 router.options('/elements/private/:elementId', jwtCorsMiddleware);
 router.get('/elements/private/:elementId', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
 
-    const element_id = decodeURIComponent(req.params['elementId']);
-    const {user_id, user_role} = (() => {
+	const element_id = decodeURIComponent(req.params['elementId']);
+	const {user_id, user_role} = (() => {
 	if (!req.user || req.user == null || typeof req.user === 'undefined'){
-	    return {user_id:null, user_role:null};
+		return {user_id:null, user_role:null};
 	}
 	return {user_id:req.user.id, user_role:req.user.role}
-    })();
+	})();
 
-    // 'http://cilogon.org/serverA/users/48835826'
-    // const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
-    // 				  user_role: n4j.Role.TRUSTED_USER};
-    try {
+	// 'http://cilogon.org/serverA/users/48835826'
+	// const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
+	// 				  user_role: n4j.Role.TRUSTED_USER};
+	try {
 	const can_view = await utils.userCanViewElement(element_id, user_id, user_role);
 	if (!can_view){
-	    res.status(403).json({ message: 'Forbidden: You do not have permission to view this element.' });
-	    return;
+		res.status(403).json({ message: 'Forbidden: You do not have permission to view this element.' });
+		return;
 	}
 
 	const element = await n4j.getElementByID(element_id, user_id, user_role);
 	if (JSON.stringify(element) === '{}'){
-	    res.status(404).json({ message: 'Element not found' });
-	    return;
+		res.status(404).json({ message: 'Element not found' });
+		return;
 	}
 
 	res.status(200).json(element);
-    } catch (error) {
+	} catch (error) {
 	console.error('/api/resources/:id Error querying:', error);
 	res.status(500).json({ message: 'Internal server error' });
-    }
+	}
 });
 
 /**
@@ -113,31 +113,31 @@ router.get('/elements/private/:elementId', jwtCorsMiddleware, authenticateJWT, a
 router.options('/elements/private', jwtCorsMiddleware);
 router.get('/elements/private', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
 
-    //const contributor_id = decodeURIComponent(req.params['id']);
-    let {'user-id': contributor_id,
+	//const contributor_id = decodeURIComponent(req.params['id']);
+	let {'user-id': contributor_id,
 	 'sort-by': sort_by,
 	 'order': order,
 	 'from': from,
 	 'size': size} = req.query;
 
-    try {
+	try {
 	const response = await n4j.getElementsByContributor(contributor_id,
-							    from,
-							    size,
-							    sort_by,
-							    order,
-							    true
+								from,
+								size,
+								sort_by,
+								order,
+								true
 							   );
 	if (response['total-count'] === 0){
-	    res.status(404).json({ message: 'Element not found' });
-	    return;
+		res.status(404).json({ message: 'Element not found' });
+		return;
 	}
 	res.status(200).json({elements:response['elements'],
-			      'total-count': response['total-count']});
-    } catch (error) {
+				  'total-count': response['total-count']});
+	} catch (error) {
 	console.error('Error querying:', error);
 	res.status(500).json({ message: 'Internal server error' });
-    }
+	}
 });
 
 export default router;
