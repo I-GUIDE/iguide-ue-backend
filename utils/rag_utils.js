@@ -263,4 +263,4 @@ async function autoExtractFacts(question, docs, known = {}) {
       Object.keys(extracted).forEach(k => { if (k in known) delete extracted[k]; });
       return extracted;
     } catch { return {}; }
-  }
+}
