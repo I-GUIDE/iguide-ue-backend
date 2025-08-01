@@ -3,7 +3,7 @@ import sharp from 'sharp';
 // local imports
 import * as n4j from '../backend_neo4j.js'
 import neo4j from "neo4j-driver";
-import {checkUniversityDomain} from "./utils/domain_utils.js";
+import {checkUniversityDomain} from "./domain_utils.js";
 
 /**************
  * Enums
