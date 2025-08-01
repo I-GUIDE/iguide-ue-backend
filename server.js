@@ -18,7 +18,7 @@ import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 
 // local imports
-import * as utils from './utils.js';
+import * as utils from './utils/utils.js';
 import * as n4j from './backend_neo4j.js';
 import * as os from './backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from './iguide_cors.js';
