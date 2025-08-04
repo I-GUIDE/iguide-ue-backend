@@ -8,6 +8,7 @@ import {
 import multerS3 from 'multer-s3';
 import multer from 'multer';
 import dotenv from 'dotenv';
+import * as crypto from "node:crypto";
 import {ElementType, parseElementType} from "../utils.js";
 
 dotenv.config();
@@ -155,8 +156,17 @@ export async function completeMultipartUpload(uploadId) {
         .map(part => ({
             ETag: part.ETag,
             PartNumber: part.PartNumber,
+            buffer: part.buffer,
         }))
         .sort((a, b) => a.PartNumber - b.PartNumber);
+
+    // Checksum generation
+    const hash = crypto.createHash('sha256');
+    for(const part of parts) {
+        hash.update(part.buffer);
+    }
+
+    const checksum = hash.digest('hex');
 
     // Complete multipart upload
     const completeCommand = new CompleteMultipartUploadCommand({
@@ -174,11 +184,12 @@ export async function completeMultipartUpload(uploadId) {
     multipartUploads.delete(uploadId);
 
     return {
-      message: 'Dataset uploaded successfully',
-      url: result.Location,
-      bucket: process.env.MINIO_AWS_BUCKET_NAME,
-      key: uploadData.key,
-      filename: uploadData.filename,
+        message: 'Dataset uploaded successfully',
+        url: result.Location,
+        bucket: process.env.MINIO_AWS_BUCKET_NAME,
+        key: uploadData.key,
+        filename: uploadData.filename,
+        checksum: checksum,
     };
 }
 
@@ -237,8 +248,9 @@ export async function processChunkBasedOnUploadId(uploadId, uploadData, chunkNum
 
       // Store part info
       uploadData.parts[parseInt(chunkNumber)] = {
-        ETag: result.ETag,
-        PartNumber: partNumber,
+          ETag: result.ETag,
+          PartNumber: partNumber,
+          buffer: request.file.buffer,
       };
 
       multipartUploads.set(uploadId, uploadData);

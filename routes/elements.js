@@ -1304,7 +1304,7 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
 
 /**
  * @swagger
- * /api/elements/datasets:
+ * /api/elements/datasets/upload/simple:
  *   post:
  *     summary: Upload a dataset (CSV or ZIP) for sizes less than 5 MB
  *     tags: ['elements', 'datasets']
@@ -1321,8 +1321,8 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
  *       400:
  *         description: No file uploaded or invalid file type (.csv or .zip)
  */
-router.options('/api/elements/datasets', jwtCorsMiddleware);
-router.post('/api/elements/datasets',
+router.options('/api/elements/datasets/upload/simple', jwtCorsMiddleware);
+router.post('/api/elements/datasets/upload/simple',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	upload.single('file'), (req, res) => {
@@ -1341,7 +1341,7 @@ router.post('/api/elements/datasets',
 
 /**
  * @swagger
- * /api/elements/datasets/init-upload:
+ * /api/elements/datasets/upload/chunk/init:
  *   post:
  *     summary: Initialize a multipart upload for a large dataset (more than 100 MB Limit 2 GB)
  *     tags: ['elements', 'datasets']
@@ -1370,8 +1370,8 @@ router.post('/api/elements/datasets',
  *       500:
  *         description: Failed to initialize upload
  */
-router.options('/api/elements/datasets/init-upload', jwtCorsMiddleware);
-router.post('/api/elements/datasets/init-upload',
+router.options('/api/elements/datasets/upload/chunk/init', jwtCorsMiddleware);
+router.post('/api/elements/datasets/upload/chunk/init',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	async (req, res) => {
@@ -1409,7 +1409,7 @@ router.post('/api/elements/datasets/init-upload',
 
 /**
  * @swagger
- * /api/elements/datasets/upload-chunk/{uploadId}:
+ * /api/elements/datasets/upload/chunk/{uploadId}:
  *   post:
  *     summary: Upload a chunk of a large dataset file
  *     tags: ['elements', 'datasets']
@@ -1441,8 +1441,8 @@ router.post('/api/elements/datasets/init-upload',
  *       500:
  *         description: Failed to upload chunk data
  */
-router.options('/api/elements/datasets/upload-chunk/:uploadId', jwtCorsMiddleware);
-router.post('/api/elements/datasets/upload-chunk/:uploadId',
+router.options('/api/elements/datasets/upload/chunk/:uploadId', jwtCorsMiddleware);
+router.post('/api/elements/datasets/upload/chunk/:uploadId',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	multiChunkUpload.single('chunk'),
@@ -1477,7 +1477,7 @@ router.post('/api/elements/datasets/upload-chunk/:uploadId',
 
 /**
  * @swagger
- * /api/elements/datasets/complete-upload/{uploadId}:
+ * /api/elements/datasets/upload/chunk/complete/{uploadId}:
  *   post:
  *     summary: Complete a multipart upload process
  *     tags: ['elements', 'datasets']
@@ -1495,8 +1495,8 @@ router.post('/api/elements/datasets/upload-chunk/:uploadId',
  *       500:
  *         description: Failed to complete upload
  */
-router.options('/api/elements/datasets/complete-upload/:uploadId', jwtCorsMiddleware);
-router.post('/api/elements/datasets/complete-upload/:uploadId',
+router.options('/api/elements/datasets/upload/chunk/complete/:uploadId', jwtCorsMiddleware);
+router.post('/api/elements/datasets/upload/chunk/complete/:uploadId',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	async (req, res) => {
@@ -1523,7 +1523,7 @@ router.post('/api/elements/datasets/complete-upload/:uploadId',
 
 /**
  * @swagger
- * /api/elements/datasets/abort-upload/{uploadId}:
+ * /api/elements/datasets/upload/chunk/{uploadId}:
  *   delete:
  *     summary: Abort a multipart upload
  *     tags: ['elements', 'datasets']
@@ -1541,8 +1541,8 @@ router.post('/api/elements/datasets/complete-upload/:uploadId',
  *       500:
  *         description: Failed to abort upload
  */
-router.options('/api/elements/datasets/abort-upload/:uploadId', jwtCorsMiddleware);
-router.delete('/api/elements/datasets/abort-upload/:uploadId',
+router.options('/api/elements/datasets/upload/chunk/:uploadId', jwtCorsMiddleware);
+router.delete('/api/elements/datasets/upload/chunk/:uploadId',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	async (req, res) => {
@@ -1569,7 +1569,7 @@ router.delete('/api/elements/datasets/abort-upload/:uploadId',
 
 /**
  * @swagger
- * /api/elements/datasets/upload-progress/{uploadId}:
+ * /api/elements/datasets/upload/chunk/progress/{uploadId}:
  *   get:
  *     summary: Check the progress of a multipart upload
  *     tags: ['elements', 'datasets']
@@ -1587,8 +1587,8 @@ router.delete('/api/elements/datasets/abort-upload/:uploadId',
  *       500:
  *         description: Failed to fetch upload progress
  */
-router.options('/api/elements/datasets/upload-progress/:uploadId', jwtCorsMiddleware);
-router.get('/api/elements/datasets/upload-progress/:uploadId',
+router.options('/api/elements/datasets/upload/chunk/progress/:uploadId', jwtCorsMiddleware);
+router.get('/api/elements/datasets/upload/chunk/progress/:uploadId',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	(req, res) => {
