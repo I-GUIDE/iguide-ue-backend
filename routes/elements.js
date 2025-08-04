@@ -28,8 +28,12 @@ import {
 	getUploadProgress,
 	initializeChunkUpload, MAX_FILE_SIZE, multiChunkUpload, performDatasetDeletion, processChunkBasedOnUploadId, upload,
 } from "./minio_uploader.js";
+import {elementsRateLimiter} from "../ip_policy.js";
 
 const router = express.Router();
+
+//Addition of rate limiter
+router.use(elementsRateLimiter);
 
 /****************************************************************************/
 // Ensure required directories exist

@@ -1,4 +1,5 @@
 import ip from 'ip';
+import rateLimit from "express-rate-limit";
 
 // UIUC allowed CIDR ranges
 const allowedCIDRs = [
@@ -35,3 +36,27 @@ export function restrictToUIUC(req, res, next) {
     res.status(403).send("Access restricted to UIUC campus network.");
   }
 }
+
+const rateLimiterConfig = {
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 500, // maximum 100 requests per Ip
+  message: 'Too many requests from this IP, please try again later.',
+  headers: true,
+}
+// Rate Limiter Configuration for documentation.js
+export const documentationRateLimiter = rateLimit(rateLimiterConfig);
+
+// Rate Limiter Configuration for elements.js
+export const elementsRateLimiter = rateLimit(rateLimiterConfig);
+
+// Rate Limiter Configuration for private_elements.js
+export const privateElementsRateLimiter = rateLimit(rateLimiterConfig);
+
+// Rate Limiter Configuration for search_routes.js
+export const searchRoutesRateLimiter = rateLimit(rateLimiterConfig);
+
+// Rate Limiter Configuration for spatial_search_routes.js
+export const spatialSearchRoutesRateLimiter = rateLimit(rateLimiterConfig);
+
+// Rate Limiter Configuration for users.js
+export const usersRateLimiter = rateLimit(rateLimiterConfig);
