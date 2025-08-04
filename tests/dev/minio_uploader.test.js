@@ -83,7 +83,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
             mimeType: 'text/csv',
         };
         const res = await request(app)
-            .post('/api/elements/datasets/init-upload')
+            .post('/api/elements/datasets/upload/chunk/init')
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "/*")
             .set("Content-Type", "application/json")
@@ -97,7 +97,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
         let encoded_upload_id = encodeURIComponent(uploadId);
         const res = await request(app)
-            .post(`/api/elements/datasets/upload-chunk/${encoded_upload_id}`)
+            .post(`/api/elements/datasets/upload/chunk/${encoded_upload_id}`)
             .set('Cookie', generated_auth_cookie)
             .set('Content-Type', 'multipart/form-data; boundary=----WebKitFormBoundaryotgYSdiIybBwVdSB')
             .field('chunkNumber', 0)
@@ -111,7 +111,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
         let encoded_upload_id = encodeURIComponent(uploadId);
         const res = await request(app)
-            .get(`/api/elements/datasets/upload-progress/${encoded_upload_id}`)
+            .get(`/api/elements/datasets/upload/chunk/progress/${encoded_upload_id}`)
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set('Content-Type', "application/json");
@@ -125,7 +125,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
         let encoded_upload_id = encodeURIComponent(uploadId);
         const res = await request(app)
-            .post(`/api/elements/datasets/complete-upload/${encoded_upload_id}`)
+            .post(`/api/elements/datasets/upload/chunk/complete/${encoded_upload_id}`)
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set('Content-Type', "application/json");
@@ -143,7 +143,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
             mimeType: 'text/csv',
         };
         const res = await request(app)
-            .post('/api/elements/datasets/init-upload')
+            .post('/api/elements/datasets/upload/chunk/init')
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "/*")
             .set("Content-Type", "application/json")
@@ -157,7 +157,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
         let encoded_upload_id = encodeURIComponent(uploadId);
         const res = await request(app)
-            .delete(`/api/elements/datasets/abort-upload/${encoded_upload_id}`)
+            .delete(`/api/elements/datasets/upload/chunk/${encoded_upload_id}`)
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "/*")
             .set("Content-Type", "application/json");
@@ -168,7 +168,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
         let encoded_upload_id = encodeURIComponent("invalid-upload-id");
         const res = await request(app)
-            .delete(`/api/elements/datasets/abort-upload/${encoded_upload_id}`)
+            .delete(`/api/elements/datasets/upload/chunk/${encoded_upload_id}`)
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "/*")
             .set("Content-Type", "application/json");

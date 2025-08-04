@@ -214,7 +214,7 @@ router.put('/api/users/:id/role',
 			try {
 				parsed_role = utils.parseRole(updated_role_body['role']);
 			} catch (err) {
-				console.log('Unrecognized Role found: ', err);
+				console.log('Unrecognized Role found: ', updated_role_body['role']);
 				valid_role = false;
 			}
 			if (parsed_role <= Role.ADMIN) {
