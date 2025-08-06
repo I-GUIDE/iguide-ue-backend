@@ -24,7 +24,7 @@ import {
 import {convertGeoSpatialFields} from "./rag_modules/spatial_utils.js"
 import {
 	abortMultipartUpload,
-	completeMultipartUpload, getUploadDetails,
+	completeMultipartUpload, deleteElementData, getUploadDetails,
 	getUploadProgress,
 	initializeChunkUpload, MAX_FILE_SIZE, multiChunkUpload, performDatasetDeletion, processChunkBasedOnUploadId, upload,
 } from "./minio_uploader.js";
@@ -1564,6 +1564,61 @@ router.delete('/api/elements/datasets/upload/chunk/:uploadId',
 	} catch (error) {
 		console.error('Error aborting upload:', error);
 		res.status(500).json({error: 'Failed to abort upload'});
+	}
+});
+
+/**
+ * @swagger
+ * /api/elements/datasets/upload/delete:
+ *   delete:
+ *     summary: Delete an uploaded dataset
+ *     tags: ['elements', 'datasets']
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - uploadedUrl
+ *             properties:
+ *               uploadedUrl:
+ *                 type: string
+ *                 description: The S3/MinIO URL of the uploaded dataset to delete
+ *                 example: "https://minio.example.com/my-bucket/path/to/file.csv"
+ *     responses:
+ *       200:
+ *         description: Upload deleted successfully
+ *       404:
+ *         description: Dataset URL not present
+ *       500:
+ *         description: Failed to delete dataset
+ */
+
+router.options('/api/elements/datasets/upload/delete', jwtCorsMiddleware);
+router.delete('/api/elements/datasets/upload/delete',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
+	try {
+		const request_body = req.body;
+		let uploadedUrl = ""
+		if (!request_body['uploadedUrl']) {
+			res.status(404).json({message: 'Dataset URL not present.'});
+			return;
+		} else {
+			uploadedUrl = request_body['uploadedUrl'];
+		}
+		const response = await deleteElementData(uploadedUrl);
+		if (response.success) {
+			res.status(200).json(response);
+		} else {
+			res.status(500).json(response);
+		}
+
+	} catch (error) {
+		console.error('Error deleting dataset:', error);
+		res.status(500).json({error: 'Failed to delete dataset'});
 	}
 });
 
