@@ -731,7 +731,8 @@ router.post('/api/elements',
 	// HotFix: OERshare
 	if (resource['resource-type'] === 'oer' &&
 	    (user_role == utils.Role.TRUSTED_USER_PLUS)) {
-		resource['tags'].push('OERshare')
+		if !resource['tags'].includes('OERshare')
+			resource['tags'].push('OERshare')
 	}
 		/**
 		 * Updated logic building the repo details,
@@ -949,6 +950,12 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 		const can_edit = await utils.userCanEditElement(id, req.user.id, req.user.role);
 		if (!can_edit) {
 			res.status(403).json({message: 'Forbidden: You do not have permission to edit this element.'});
+		}
+		// HotFix: OERshare
+		if (updates['resource-type'] === 'oer' &&
+	    	(req.user.role == utils.Role.TRUSTED_USER_PLUS)) {
+			if !updates['tags'].includes('OERshare')
+				updates['tags'].push('OERshare')
 		}
 		/**
 		 * Updated logic building the repo details,
