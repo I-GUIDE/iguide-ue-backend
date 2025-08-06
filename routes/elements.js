@@ -720,14 +720,21 @@ router.post('/api/elements',
     try {
         console.log('Registering ' + resource['resource-type'] + 'by ' + user_id);
         // Check if the resource type is "oer" and user have enough permission to add OER
-        if (resource['resource-type'] === 'oer' &&
-	    !(user_role <= utils.Role.UNRESTRICTED_CONTRIBUTOR)) {
+        // HotFix: OERshare
+	    if (resource['resource-type'] === 'oer' &&
+	    !(user_role <= utils.Role.TRUSTED_USER_PLUS)) {
             console.log(user_id, " blocked by role")
             return res.status(403).json({ message: 'Forbidden: You do not have permission to submit OER elements.' });
         }else{
             console.log(user_id, " is allowed to submit oers")
         }
-
+	// HotFix: OERshare
+	if (resource['resource-type'] === 'oer' &&
+	    (user_role === utils.Role.TRUSTED_USER_PLUS)) {
+		if (!resource['tags'].includes('OERshare')) {
+			resource['tags'].push('OERshare')
+		}
+	}
 		/**
 		 * Updated logic building the repo details,
 		 * 	In the request resource['notebook-url']
@@ -944,6 +951,13 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 		const can_edit = await utils.userCanEditElement(id, req.user.id, req.user.role);
 		if (!can_edit) {
 			res.status(403).json({message: 'Forbidden: You do not have permission to edit this element.'});
+		}
+		// HotFix: OERshare
+		if (updates['resource-type'] === 'oer' &&
+	    	(req.user.role === utils.Role.TRUSTED_USER_PLUS)) {
+			if (!updates['tags'].includes('OERshare')) {
+				updates['tags'].push('OERshare')
+			}
 		}
 		/**
 		 * Updated logic building the repo details,
