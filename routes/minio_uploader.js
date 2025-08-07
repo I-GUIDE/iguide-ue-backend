@@ -3,7 +3,8 @@ import {
     CompleteMultipartUploadCommand,
     CreateMultipartUploadCommand, DeleteObjectCommand,
     S3Client,
-    UploadPartCommand
+    UploadPartCommand,
+    CopyObjectCommand
 } from '@aws-sdk/client-s3';
 import multerS3 from 'multer-s3';
 import multer from 'multer';
@@ -21,6 +22,7 @@ const CHUNK_SIZE = 5 * 1024 * 1024; // 50 MB
 const BUFFER_CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB
 const MIN_CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
 
+const FILE_SEPARATOR = "---"
 /**
  * In-memory store for multipart uploads [Use Database or other Redis later]
  * @type {Map<any, any>}
@@ -267,17 +269,21 @@ export async function processChunkBasedOnUploadId(uploadId, uploadData, chunkNum
  * @param fileName
  * @param fileSize
  * @param mimeType
+ * @param userId
  * @returns {Promise<{result: boolean, uploadId: `${string}-${string}-${string}-${string}-${string}`, chunkSize: number, s3UploadId, key: string}>}
  */
-export async function initializeChunkUpload(fileName, fileSize, mimeType) {
+export async function initializeChunkUpload(fileName, fileSize, mimeType, userId) {
     const uploadId = crypto.randomUUID();
-    const fileKey = `${uploadId}-${fileName}`;
+    const fileKey = `temp/${uploadId}${FILE_SEPARATOR}${fileName}`;
 
     const multiPartCommand = new CreateMultipartUploadCommand({
         Bucket: process.env.MINIO_AWS_BUCKET_NAME,
         Key: fileKey,
         ContentType: mimeType,
-        ACL: 'public-read'
+        ACL: 'public-read',
+        Metadata: {
+            'uploaded-by': userId,
+        }
     });
 
     const result = await s3.send(multiPartCommand);
@@ -353,6 +359,42 @@ export async function deleteElementData(datasetUrl) {
     }
 }
 
+export function getRawFileNameFromUrl(dataset_url) {
+    let fileKey = extractFileKeyFromUrl(dataset_url);
+    let fileKeyArray = fileKey.split("/");
+    let rawFileName = fileKeyArray[fileKeyArray.length - 1].split(FILE_SEPARATOR)[1];
+    return rawFileName;
+}
+
+export async function moveDatasetToElement(dataset_url, element_id) {
+    try {
+        const rawFileName = getRawFileNameFromUrl(dataset_url);
+        const currentFileKey = extractFileKeyFromUrl(dataset_url);
+        const newFileKey = `${element_id}/${rawFileName}`;
+        const bucketName = process.env.MINIO_AWS_BUCKET_NAME;
+        const copyFileCommand = new CopyObjectCommand({
+            Bucket: bucketName,
+            CopySource: `/${bucketName}/${currentFileKey}`,
+            Key: newFileKey,
+            ACL: 'public-read',
+        });
+
+        await s3.send(copyFileCommand);
+
+        const deleteFileCommand = new DeleteObjectCommand({
+            Bucket: bucketName,
+            Key: currentFileKey,
+        });
+
+        await s3.send(deleteFileCommand);
+
+        let newFilePath = `${process.env.MINIO_ENDPOINT}/${process.env.MINIO_AWS_BUCKET_NAME}/${newFileKey}`
+        return newFilePath;
+    } catch (error) {
+        console.log('moveDatasetToElement() - Error: ', error);
+        return "";
+    }
+}
 /**
  * Function to clean up old uploads periodically
  */
