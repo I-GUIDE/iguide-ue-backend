@@ -14,8 +14,15 @@ import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
-import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
-import {parseVisibility, updateOSBasedtOnVisibility, Visibility} from "../utils.js";
+import {authenticateJWT, authorizeRole, checkJWTTokenBypass, generateAccessToken} from '../jwtUtils.js';
+import {
+	ElementType,
+	parseElementType,
+	parseVisibility,
+	Role,
+	updateOSBasedtOnVisibility,
+	Visibility
+} from "../utils.js";
 import {
 	getFlaskEmbeddingResponse,
 	performElementOpenSearchDelete,
@@ -24,9 +31,17 @@ import {
 import {convertGeoSpatialFields} from "./rag_modules/spatial_utils.js"
 import {
 	abortMultipartUpload,
-	completeMultipartUpload, deleteElementData, getUploadDetails,
+	completeMultipartUpload,
+	deleteElementData,
+	getUploadDetails,
 	getUploadProgress,
-	initializeChunkUpload, MAX_FILE_SIZE, multiChunkUpload, performDatasetDeletion, processChunkBasedOnUploadId, upload,
+	initializeChunkUpload,
+	MAX_FILE_SIZE,
+	moveDatasetToElement,
+	multiChunkUpload,
+	performDatasetDeletion,
+	processChunkBasedOnUploadId,
+	upload,
 } from "./minio_uploader.js";
 
 const router = express.Router();
@@ -827,6 +842,21 @@ router.post('/api/elements',
         const {response, element_id} = await n4j.registerElement(contributor_id, resource);
 
         if (response) {
+			if (parseElementType(resource['resource-type']) === ElementType.DATASET
+				&& resource['direct-download-link'].startsWith(process.env.MINIO_ENDPOINT)) {
+				// Move the dataset to the element entry
+				const updated_download_link = await moveDatasetToElement(resource['direct-download-link'], element_id)
+				if (updated_download_link === "") {
+					console.log('error in updating direct-download-link for file: ' + resource['direct-download-link']);
+				} else {
+					resource['direct-download-link'] = updated_download_link
+					const response = await n4j.updateElement(element_id, resource);
+					if (!response) {
+						console.log('registerElement() - Error in updating direct-download-link for element_id: '
+							+ element_id + " link: "  + updated_download_link);
+					}
+				}
+			}
 			let resource_visibility = parseVisibility(resource['visibility']);
 			//Indexing the Element only if the visibility is Public
 			if (resource_visibility === Visibility.PUBLIC) {
@@ -1359,7 +1389,7 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
 
 // /**
 //  * @swagger
-//  * /api/elements/datasets/upload/simple:
+//  * /api/elements/datasets/simple:
 //  *   post:
 //  *     summary: Upload a dataset (CSV or ZIP) for sizes less than 5 MB
 //  *     tags: ['elements', 'datasets']
@@ -1396,7 +1426,7 @@ router.post('/api/elements/datasets/simple',
 
 /**
  * @swagger
- * /api/elements/datasets/upload/chunk/init:
+ * /api/elements/datasets/chunk/init:
  *   post:
  *     summary: Initialize a multipart upload for a large dataset (more than 100 MB Limit 2 GB)
  *     tags: ['elements', 'datasets']
@@ -1432,6 +1462,15 @@ router.post('/api/elements/datasets/chunk/init',
 	async (req, res) => {
 	try {
 		const {filename, fileSize, mimeType} = req.body;
+		const {user_id, user_role} = (() => {
+			if (checkJWTTokenBypass(req)) {
+				return {user_id: "MASTER_USER", user_role: Role.SUPER_ADMIN};
+			}
+			if (!req.user || req.user == null || typeof req.user === 'undefined'){
+	    		return {user_id:null, user_role:null};
+			}
+			return {user_id:req.user.id, user_role:req.user.role};
+    	})();
 
 		// Validate file size (2GB limit)
 		if (fileSize > MAX_FILE_SIZE) {
@@ -1449,7 +1488,7 @@ router.post('/api/elements/datasets/chunk/init',
 		}
 
 		// Generate unique upload ID
-		const response = await initializeChunkUpload(filename, fileSize, mimeType);
+		const response = await initializeChunkUpload(filename, fileSize, mimeType, user_id);
 		if (response) {
 			res.status(200).json(response);
 		} else {
@@ -1464,7 +1503,7 @@ router.post('/api/elements/datasets/chunk/init',
 
 /**
  * @swagger
- * /api/elements/datasets/upload/chunk/{uploadId}:
+ * /api/elements/datasets/chunk/{uploadId}:
  *   post:
  *     summary: Upload a chunk of a large dataset file
  *     tags: ['elements', 'datasets']
@@ -1532,7 +1571,7 @@ router.post('/api/elements/datasets/chunk/:uploadId',
 
 /**
  * @swagger
- * /api/elements/datasets/upload/chunk/complete/{uploadId}:
+ * /api/elements/datasets/chunk/complete/{uploadId}:
  *   post:
  *     summary: Complete a multipart upload process
  *     tags: ['elements', 'datasets']
@@ -1578,7 +1617,7 @@ router.post('/api/elements/datasets/chunk/complete/:uploadId',
 
 /**
  * @swagger
- * /api/elements/datasets/upload/chunk/{uploadId}:
+ * /api/elements/datasets/chunk/{uploadId}:
  *   delete:
  *     summary: Abort a multipart upload
  *     tags: ['elements', 'datasets']
@@ -1624,7 +1663,7 @@ router.delete('/api/elements/datasets/chunk/:uploadId',
 
 // /**
 //  * @swagger
-//  * /api/elements/datasets/upload/chunk/progress/{uploadId}:
+//  * /api/elements/datasets/chunk/progress/{uploadId}:
 //  *   get:
 //  *     summary: Check the progress of a multipart upload
 //  *     tags: ['elements', 'datasets']

@@ -48,6 +48,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
     let uploadId = "";
     let generated_user_id = "";
     let generated_auth_super_admin_cookie = createAuthCookie({id: 1, role: Role.SUPER_ADMIN});
+    let generated_element_id = ""
     it("(External) Create a trusted User to perform operations", async () => {
         let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
         let user_body = testData.minio_trusted_user
@@ -175,21 +176,64 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         expect(res.statusCode).toBe(404);
         expect(res.body).toHaveProperty('message','Upload not found');
     });
-    it("7. Should delete the uploaded file from the server", async () => {
+    it("(External) Create a Dataset element to link the file uploaded to the element_id", async () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
-        let request_body = {
-            url: uploadedFileUrl
-        }
+        let user_body = testData.element_details_json
+        user_body['metadata']['created_by'] = generated_user_id;
+        user_body['direct-download-link'] = uploadedFileUrl
         const res = await request(app)
-            .delete(`/api/elements/datasets/`)
+            .post("/api/elements")
             .set('Cookie', generated_auth_cookie)
-            .set("Accept", "/*")
+            .set("Accept", "*/*")
             .set("Content-Type", "application/json")
-            .send(request_body);
+            .send(user_body);
         expect(res.statusCode).toBe(200);
-        expect(res.body).toHaveProperty('message','File deleted successfully.');
-        expect(res.body).toHaveProperty('success', true);
+        expect(res.body).toHaveProperty("message", 'Resource registered successfully');
+        expect(res.body).toHaveProperty("elementId");
+        generated_element_id = res.body['elementId'];
     });
+    it("7. Should be able to retrieve a public element based on Id and check the Url", async () => {
+        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let encoded_uri = encodeURIComponent(generated_element_id);
+        const res = await request(app)
+            .get("/api/elements/" + encoded_uri)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("resource-type",testData.element_details_json["resource-type"]);
+        expect(res.body).toHaveProperty("contents",testData.element_details_json["contents"]);
+        let updated_dataset_url = res.body['direct-download-link'];
+        if (!String(updated_dataset_url).includes(generated_element_id)) {
+            throw new Error('Uploaded dataset not linked to element_id');
+        }
+    });
+    it("(External) Element registered should be deleted by the user", async () => {
+        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let encoded_uri = encodeURIComponent(generated_element_id)
+        const res = await request(app)
+            .delete("/api/elements/" + encoded_uri)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("message", 'Resource deleted successfully');
+    });
+    // it("7. Should delete the uploaded file from the server", async () => {
+    //     let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+    //     let request_body = {
+    //         url: uploadedFileUrl
+    //     }
+    //     const res = await request(app)
+    //         .delete(`/api/elements/datasets/`)
+    //         .set('Cookie', generated_auth_cookie)
+    //         .set("Accept", "/*")
+    //         .set("Content-Type", "application/json")
+    //         .send(request_body);
+    //     expect(res.statusCode).toBe(200);
+    //     expect(res.body).toHaveProperty('message','File deleted successfully.');
+    //     expect(res.body).toHaveProperty('success', true);
+    // });
     it("(External) Should allow only SUPER_ADMIN to delete temp user", async () => {
         const res = await request(app)
             .delete("/api/users/" + generated_user_id)
