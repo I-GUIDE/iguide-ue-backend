@@ -405,6 +405,61 @@ router.get('/api/elements/homepage', cors(), async (req, res) => {
 
 /**
  * @swagger
+ * /api/elements/datasets:
+ *   delete:
+ *     summary: Delete an uploaded dataset
+ *     tags: ['elements', 'datasets']
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - url
+ *             properties:
+ *               url:
+ *                 type: string
+ *                 description: The S3/MinIO URL of the uploaded dataset to delete
+ *                 example: "https://minio.example.com/my-bucket/path/to/file.csv"
+ *     responses:
+ *       200:
+ *         description: Upload deleted successfully
+ *       404:
+ *         description: Dataset URL not present
+ *       500:
+ *         description: Failed to delete dataset
+ */
+
+router.options('/api/elements/datasets', jwtCorsMiddleware);
+router.delete('/api/elements/datasets',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
+	try {
+		const request_body = req.body;
+		let uploadedUrl = ""
+		if (!request_body['url']) {
+			res.status(404).json({message: 'Dataset URL not present.'});
+			return;
+		} else {
+			uploadedUrl = request_body['url'];
+		}
+		const response = await deleteElementData(uploadedUrl);
+		if (response.success) {
+			res.status(200).json(response);
+		} else {
+			res.status(500).json(response);
+		}
+
+	} catch (error) {
+		console.error('Error deleting dataset:', error);
+		res.status(500).json({error: 'Failed to delete dataset'});
+	}
+});
+
+/**
+ * @swagger
  * /api/elements/{id}:
  *   get:
  *     summary: Retrieve ONE public element using id.
@@ -1302,27 +1357,27 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
     }
 });
 
-/**
- * @swagger
- * /api/elements/datasets/upload/simple:
- *   post:
- *     summary: Upload a dataset (CSV or ZIP) for sizes less than 5 MB
- *     tags: ['elements', 'datasets']
- *     consumes:
- *       - multipart/form-data
- *     parameters:
- *       - in: formData
- *         name: file
- *         type: file
- *         description: The dataset file to upload
- *     responses:
- *       200:
- *         description: Dataset uploaded successfully
- *       400:
- *         description: No file uploaded or invalid file type (.csv or .zip)
- */
-router.options('/api/elements/datasets/upload/simple', jwtCorsMiddleware);
-router.post('/api/elements/datasets/upload/simple',
+// /**
+//  * @swagger
+//  * /api/elements/datasets/upload/simple:
+//  *   post:
+//  *     summary: Upload a dataset (CSV or ZIP) for sizes less than 5 MB
+//  *     tags: ['elements', 'datasets']
+//  *     consumes:
+//  *       - multipart/form-data
+//  *     parameters:
+//  *       - in: formData
+//  *         name: file
+//  *         type: file
+//  *         description: The dataset file to upload
+//  *     responses:
+//  *       200:
+//  *         description: Dataset uploaded successfully
+//  *       400:
+//  *         description: No file uploaded or invalid file type (.csv or .zip)
+//  */
+router.options('/api/elements/datasets/simple', jwtCorsMiddleware);
+router.post('/api/elements/datasets/simple',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	upload.single('file'), (req, res) => {
@@ -1370,8 +1425,8 @@ router.post('/api/elements/datasets/upload/simple',
  *       500:
  *         description: Failed to initialize upload
  */
-router.options('/api/elements/datasets/upload/chunk/init', jwtCorsMiddleware);
-router.post('/api/elements/datasets/upload/chunk/init',
+router.options('/api/elements/datasets/chunk/init', jwtCorsMiddleware);
+router.post('/api/elements/datasets/chunk/init',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	async (req, res) => {
@@ -1441,8 +1496,8 @@ router.post('/api/elements/datasets/upload/chunk/init',
  *       500:
  *         description: Failed to upload chunk data
  */
-router.options('/api/elements/datasets/upload/chunk/:uploadId', jwtCorsMiddleware);
-router.post('/api/elements/datasets/upload/chunk/:uploadId',
+router.options('/api/elements/datasets/chunk/:uploadId', jwtCorsMiddleware);
+router.post('/api/elements/datasets/chunk/:uploadId',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	multiChunkUpload.single('chunk'),
@@ -1495,8 +1550,8 @@ router.post('/api/elements/datasets/upload/chunk/:uploadId',
  *       500:
  *         description: Failed to complete upload
  */
-router.options('/api/elements/datasets/upload/chunk/complete/:uploadId', jwtCorsMiddleware);
-router.post('/api/elements/datasets/upload/chunk/complete/:uploadId',
+router.options('/api/elements/datasets/chunk/complete/:uploadId', jwtCorsMiddleware);
+router.post('/api/elements/datasets/chunk/complete/:uploadId',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	async (req, res) => {
@@ -1541,8 +1596,8 @@ router.post('/api/elements/datasets/upload/chunk/complete/:uploadId',
  *       500:
  *         description: Failed to abort upload
  */
-router.options('/api/elements/datasets/upload/chunk/:uploadId', jwtCorsMiddleware);
-router.delete('/api/elements/datasets/upload/chunk/:uploadId',
+router.options('/api/elements/datasets/chunk/:uploadId', jwtCorsMiddleware);
+router.delete('/api/elements/datasets/chunk/:uploadId',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	async (req, res) => {
@@ -1567,83 +1622,28 @@ router.delete('/api/elements/datasets/upload/chunk/:uploadId',
 	}
 });
 
-/**
- * @swagger
- * /api/elements/datasets/upload/delete:
- *   delete:
- *     summary: Delete an uploaded dataset
- *     tags: ['elements', 'datasets']
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - uploadedUrl
- *             properties:
- *               uploadedUrl:
- *                 type: string
- *                 description: The S3/MinIO URL of the uploaded dataset to delete
- *                 example: "https://minio.example.com/my-bucket/path/to/file.csv"
- *     responses:
- *       200:
- *         description: Upload deleted successfully
- *       404:
- *         description: Dataset URL not present
- *       500:
- *         description: Failed to delete dataset
- */
-
-router.options('/api/elements/datasets/upload/delete', jwtCorsMiddleware);
-router.delete('/api/elements/datasets/upload/delete',
-	jwtCorsMiddleware,
-	authenticateJWT,
-	async (req, res) => {
-	try {
-		const request_body = req.body;
-		let uploadedUrl = ""
-		if (!request_body['uploadedUrl']) {
-			res.status(404).json({message: 'Dataset URL not present.'});
-			return;
-		} else {
-			uploadedUrl = request_body['uploadedUrl'];
-		}
-		const response = await deleteElementData(uploadedUrl);
-		if (response.success) {
-			res.status(200).json(response);
-		} else {
-			res.status(500).json(response);
-		}
-
-	} catch (error) {
-		console.error('Error deleting dataset:', error);
-		res.status(500).json({error: 'Failed to delete dataset'});
-	}
-});
-
-/**
- * @swagger
- * /api/elements/datasets/upload/chunk/progress/{uploadId}:
- *   get:
- *     summary: Check the progress of a multipart upload
- *     tags: ['elements', 'datasets']
- *     parameters:
- *       - in: path
- *         name: uploadId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Upload progress retrieved successfully
- *       404:
- *         description: Upload not found
- *       500:
- *         description: Failed to fetch upload progress
- */
-router.options('/api/elements/datasets/upload/chunk/progress/:uploadId', jwtCorsMiddleware);
-router.get('/api/elements/datasets/upload/chunk/progress/:uploadId',
+// /**
+//  * @swagger
+//  * /api/elements/datasets/upload/chunk/progress/{uploadId}:
+//  *   get:
+//  *     summary: Check the progress of a multipart upload
+//  *     tags: ['elements', 'datasets']
+//  *     parameters:
+//  *       - in: path
+//  *         name: uploadId
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *     responses:
+//  *       200:
+//  *         description: Upload progress retrieved successfully
+//  *       404:
+//  *         description: Upload not found
+//  *       500:
+//  *         description: Failed to fetch upload progress
+//  */
+router.options('/api/elements/datasets/chunk/progress/:uploadId', jwtCorsMiddleware);
+router.get('/api/elements/datasets/chunk/progress/:uploadId',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	(req, res) => {
