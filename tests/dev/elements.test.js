@@ -128,7 +128,6 @@ describe("Elements Endpoint testing for Element based APIs", () => {
     let generated_user_id = "";
     let uploaded_image_urls = {};
     let generated_auth_super_admin_cookie = createAuthCookie({id: 1, role: Role.SUPER_ADMIN});
-    let uploaded_dataset_url = ""
     it("(External) Create a trusted User to perform operations", async () => {
         let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
         let user_body = testData.elements_trusted_user
@@ -174,7 +173,6 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         let user_body = testData.element_details_json
         user_body["thumbnail-image"] = uploaded_image_urls;
         user_body['metadata']['created_by'] = generated_user_id;
-        user_body['direct-download-link'] = "http://i-guide-storage-dev.cis220065.projects.jetstream-cloud.org:9000/datasets/temp/b24c41ac-0903-4cd7-af8d-35efc3803fdc---h239exlsx.zip"
         const res = await request(app)
             .post("/api/elements")
             .set('Cookie', generated_auth_cookie)
@@ -197,13 +195,11 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty("resource-type",testData.element_details_json["resource-type"]);
         expect(res.body).toHaveProperty("contents",testData.element_details_json["contents"]);
-        uploaded_dataset_url = res.body['direct-download-link'];
     });
     it("4. Should be able to update an element based on Id", async () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
         let user_body = testData.element_details_json;
         user_body['title'] = testData.element_update_title;
-        user_body['direct-download-link'] = uploaded_dataset_url;
         let encoded_uri = encodeURIComponent(generated_element_id);
         const res = await request(app)
             .put("/api/elements/" + encoded_uri)
