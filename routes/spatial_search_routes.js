@@ -3,8 +3,12 @@ import { Client } from '@opensearch-project/opensearch';
 import cors from 'cors';
 import * as utils from '../utils.js';
 import * as spatialUtils from './rag_modules/spatial_utils.js';
+import {spatialSearchRoutesRateLimiter} from "../ip_policy.js";
 
 const router = express.Router();
+
+//Addition of rate limiter
+router.use(spatialSearchRoutesRateLimiter);
 
 // Initialize OpenSearch client
 const client = new Client({

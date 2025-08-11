@@ -15,8 +15,12 @@ import {authenticateAuth, authenticateJWT, authorizeRole, generateAccessToken} f
 import {checkHPCAccessGrant, checkUpdateParameters, EditableParameters, Role} from "../utils.js";
 import {getAllContributors, registerContributorAuth} from "../backend_neo4j.js";
 import {performReIndexElementsBasedOnUserId} from "./elements_utils.js";
+import {usersRateLimiter} from "../ip_policy.js";
 
 const router = express.Router();
+
+//Addition of rate limiter
+router.use(usersRateLimiter);
 
 // Ensure required directories exist
 const avatar_dir = path.join(process.env.UPLOAD_FOLDER, 'avatars');
