@@ -1103,6 +1103,7 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 				'contents': updates['contents'],
 				// Update the embedding field
 				// 'contents-embedding': newEmbedding,
+				'resource-type': updates['resource-type'],
 				'authors': updates['authors'],
 				'tags': updates['tags'],
 				'thumbnail-image': updates['thumbnail-image']['original'],
