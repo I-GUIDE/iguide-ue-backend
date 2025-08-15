@@ -181,6 +181,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         let user_body = testData.element_details_json
         user_body['metadata']['created_by'] = generated_user_id;
         user_body['direct-download-link'] = uploadedFileUrl
+        user_body['user-uploaded-dataset'] = true;
         const res = await request(app)
             .post("/api/elements")
             .set('Cookie', generated_auth_cookie)
@@ -207,6 +208,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         if (!String(updated_dataset_url).includes(generated_element_id)) {
             throw new Error('Uploaded dataset not linked to element_id');
         }
+        expect(res.body).toHaveProperty("user-uploaded-dataset", true);
     });
     it("(External) Element registered should be deleted by the user", async () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
