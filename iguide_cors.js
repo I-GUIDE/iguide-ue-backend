@@ -11,6 +11,10 @@ export const jwtCorsOptions = {
     allowedHeadersWithoutAuth: 'Origin, X-Requested-With, Content-Type, Accept, JWT-API-KEY, AUTH-API-KEY'
 };
 
+export const getAllowedOrigin = (origin) => {
+    return allowedOrigins.includes(origin) ? origin : null;
+}
+
 export const jwtCorsMiddleware = (req, res, next) => {
     res.header('Access-Control-Allow-Credentials', true);
     res.header('Access-Control-Allow-Methods', jwtCorsOptions.methods);
