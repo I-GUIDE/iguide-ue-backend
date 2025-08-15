@@ -30,7 +30,7 @@ import {
 } from "./elements_utils.js";
 import {convertGeoSpatialFields} from "./rag_modules/spatial_utils.js"
 import {
-	abortMultipartUpload,
+	abortMultipartUpload, ALLOWED_MIME_TYPES,
 	completeMultipartUpload,
 	deleteElementData,
 	getUploadDetails,
@@ -1502,8 +1502,7 @@ router.post('/api/elements/datasets/chunk/init',
 		}
 
 		// Validate mime type
-		const allowed = ['text/csv', 'application/zip', 'application/x-zip-compressed'];
-		if (!allowed.includes(mimeType)) {
+		if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
 			return res.status(400).json({
 				error: 'Invalid file type. Only CSV and ZIP files are allowed.'
 			});
