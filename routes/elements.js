@@ -862,7 +862,8 @@ router.post('/api/elements',
 				if (updated_download_link === "") {
 					console.log('error in updating direct-download-link for file: ' + resource['direct-download-link']);
 				} else {
-					resource['direct-download-link'] = updated_download_link
+					resource['direct-download-link'] = updated_download_link;
+					resource['user-uploaded-dataset'] = true;
 					const response = await n4j.updateElement(element_id, resource);
 					if (!response) {
 						console.log('registerElement() - Error in updating direct-download-link for element_id: '
