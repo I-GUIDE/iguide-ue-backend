@@ -977,6 +977,7 @@ async function elementToNode(element, generate_id=true){
 	//'visibility': visibility,
 	'external-link': external_link,                 // Dataset
 	'direct-download-link': direct_download_link,   // Dataset
+	'user-uploaded-dataset': user_uploaded_dataset,   // Dataset
 	'notebook-repo': notebook_repo,                 // Notebook
 	'notebook-file': notebook_file,                 // Notebook
 	size: size,                                     // Dataset
@@ -1002,6 +1003,7 @@ async function elementToNode(element, generate_id=true){
 	node['external_link'] = external_link;
 	node['direct_download_link'] = direct_download_link;
 	node['size'] = size;
+	node['user-uploaded-dataset'] = user_uploaded_dataset !== undefined ? user_uploaded_dataset : false;
     } else if (node_type == utils.ElementType.PUBLICATION){
 	node['external_link'] = external_link_pub;
     } else if (node_type == utils.ElementType.OER){
