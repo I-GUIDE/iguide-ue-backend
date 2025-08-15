@@ -13,7 +13,7 @@ import axios from 'axios';
 import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
-import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
+import {jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware, getAllowedOrigin} from '../iguide_cors.js';
 import {authenticateJWT, authorizeRole, checkJWTTokenBypass, generateAccessToken} from '../jwtUtils.js';
 import {
 	ElementType,
@@ -450,7 +450,17 @@ router.get('/api/elements/homepage', cors(), async (req, res) => {
  *         description: Failed to delete dataset
  */
 
-router.options('/api/elements/datasets', jwtCorsMiddleware);
+router.options('/api/elements/datasets', (req, res) => {
+    const method = req.header('Access-Control-Request-Method');
+	const origin = getAllowedOrigin(req?.headers?.origin);
+	if (method === 'DELETE') {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Access-Control-Allow-Methods', 'DELETE');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+        res.header('Access-Control-Allow-Credentials', 'true');
+    }
+    res.sendStatus(204); // No content
+});
 router.delete('/api/elements/datasets',
 	jwtCorsMiddleware,
 	authenticateJWT,
