@@ -21,7 +21,23 @@ export const MAX_FILE_SIZE = 2 * 1024 * 1025 * 1024; // 2 GB
 const CHUNK_SIZE = 5 * 1024 * 1024; // 50 MB
 const BUFFER_CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB
 const MIN_CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
-
+export const ALLOWED_MIME_TYPES = [
+    "application/x-shapefile",              // .shp
+    "application/octet-stream",             // .shx
+    "application/dbf",                      // .dbf
+    "application/x-prj",                    // .prj (no official standard; fallback to octet-stream if needed)
+    "application/geo+json",                 // .geojson
+    "application/json",                     // .json
+    "application/vnd.google-earth.kml+xml", // .kml
+    "application/vnd.google-earth.kmz",     // .kmz
+    "application/geopackage+sqlite3",       // .gpkg (sometimes application/x-sqlite3)
+    "application/x-filegdb",                // .gdb (Esri File Geodatabase)
+    "image/vnd.dxf",                        // .dxf
+    "image/vnd.dwg",                        // .dwg
+    "text/csv",                             // .csv
+    "application/zip",                      // .zip
+    "application/x-zip-compressed"          // Compressed .zip
+];
 const FILE_SEPARATOR = "---"
 /**
  * In-memory store for multipart uploads [Use Database or other Redis later]
@@ -55,8 +71,7 @@ export const upload = multer({
         key: (req, file, cb) => cb(null, file.originalname),
     }),
     fileFilter(req, file, cb) {
-        const allowed = ['text/csv', 'application/zip', 'application/x-zip-compressed'];
-        if (!allowed.includes(file.mimetype)) {
+        if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
             return cb(new Error('Invalid file type'), false);
         }
         cb(null, true);
@@ -73,8 +88,7 @@ export const multiChunkUpload = multer({
        fileSize: CHUNK_SIZE + BUFFER_CHUNK_SIZE,
     },
     fileFilter(req, file, cb) {
-    const allowed = ['text/csv', 'application/zip', 'application/x-zip-compressed', 'application/octet-stream'];
-    if (!allowed.includes(file.mimetype)) {
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
       return cb(new Error('Invalid file type'), false);
     }
     cb(null, true);
