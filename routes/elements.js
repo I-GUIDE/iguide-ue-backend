@@ -466,6 +466,15 @@ router.delete('/api/elements/datasets',
 	authenticateJWT,
 	async (req, res) => {
 	try {
+		const {user_id, user_role} = (() => {
+			if (checkJWTTokenBypass(req)) {
+				return {user_id: "MASTER_USER", user_role: Role.SUPER_ADMIN};
+			}
+			if (!req.user || req.user == null || typeof req.user === 'undefined'){
+	    		return {user_id:null, user_role:null};
+			}
+			return {user_id:req.user.id, user_role:req.user.role}
+    	})();
 		const request_body = req.body;
 		let uploadedUrl = ""
 		if (!request_body['url']) {
@@ -474,11 +483,24 @@ router.delete('/api/elements/datasets',
 		} else {
 			uploadedUrl = request_body['url'];
 		}
-		const response = await deleteElementData(uploadedUrl);
-		if (response.success) {
-			res.status(200).json(response);
+		if (request_body['elementId'] && uploadedUrl.includes(request_body['elementId'])) {
+			const response = await deleteElementData(uploadedUrl);
+			if (response.success) {
+				const update_element_response =
+					await n4j.updateDatasetElementUpload(request_body['elementId'], "", "", false);
+				if (update_element_response) {
+					res.status(200).json({success: true, message: 'File deleted successfully, Element updated successfully!'});
+				} else {
+					res.status(500).json({success: false, message: 'Error in updating element, File deleted successfully!'});
+				}
+			}
 		} else {
-			res.status(500).json(response);
+			const response = await deleteElementData(uploadedUrl);
+			if (response.success) {
+				res.status(200).json(response);
+			} else {
+				res.status(500).json(response);
+			}
 		}
 
 	} catch (error) {
@@ -1104,6 +1126,26 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 		const element_old_visibility = await n4j.getElementVisibilityForID(id);
 		const response = await n4j.updateElement(id, updates);
 		if (response) {
+			if (parseElementType(updates['resource-type']) === ElementType.DATASET
+				&& updates['direct-download-link'].startsWith(process.env.MINIO_ENDPOINT)) {
+
+				// If the download link is not updated do not move them else move
+				if (!updates['direct-download-link'].includes(id)) {
+					// Move the dataset to the element entry
+					const updated_download_link = await moveDatasetToElement(updates['direct-download-link'], id)
+					if (updated_download_link === "") {
+						console.log('error in updating direct-download-link for file: ' + updates['direct-download-link']);
+					} else {
+						updates['direct-download-link'] = updated_download_link;
+						updates['user-uploaded-dataset'] = true;
+						const response = await n4j.updateElement(id, updates);
+						if (!response) {
+							console.log('registerElement() - Error in updating direct-download-link for element_id: '
+								+ id + " link: "  + updated_download_link);
+						}
+					}
+				}
+			}
 			// 'visibility' field is NOT searchable so should NOT be added to OS
 			// elements should ONLY be in OpenSearch if they are public
 			const visibility = utils.parseVisibility(updates['visibility']);

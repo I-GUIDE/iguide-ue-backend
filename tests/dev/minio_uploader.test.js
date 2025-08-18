@@ -8,7 +8,6 @@ import url from "node:url";
 import fs from "fs";
 import axios from "axios";
 import * as crypto from "node:crypto";
-import {deleteElementData} from "../../routes/minio_uploader.js";
 
 /**
  * As the APIs involve the usage of JWT Token for the purposes of the testing we will create 2 test suites with 2 different access
@@ -49,6 +48,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
     let generated_user_id = "";
     let generated_auth_super_admin_cookie = createAuthCookie({id: 1, role: Role.SUPER_ADMIN});
     let generated_element_id = ""
+    let uploaded_file_url_update = ""
     it("(External) Create a trusted User to perform operations", async () => {
         let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
         let user_body = testData.minio_trusted_user
@@ -194,6 +194,114 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         generated_element_id = res.body['elementId'];
     });
     it("7. Should be able to retrieve a public element based on Id and check the Url", async () => {
+        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let encoded_uri = encodeURIComponent(generated_element_id);
+        const res = await request(app)
+            .get("/api/elements/" + encoded_uri)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("resource-type",testData.element_details_json["resource-type"]);
+        expect(res.body).toHaveProperty("contents",testData.element_details_json["contents"]);
+        let updated_dataset_url = res.body['direct-download-link'];
+        uploaded_file_url_update = updated_dataset_url
+        if (!String(updated_dataset_url).includes(generated_element_id)) {
+            throw new Error('Uploaded dataset not linked to element_id');
+        }
+        expect(res.body).toHaveProperty("user-uploaded-dataset", true);
+    });
+    it("8. Delete the file through delete element dataset and check if the element updated", async () => {
+        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let request_body = {
+            url: uploaded_file_url_update,
+            elementId: generated_element_id
+        }
+        const delete_res = await request(app)
+            .delete(`/api/elements/datasets/`)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(delete_res.statusCode).toBe(200);
+        expect(delete_res.body).toHaveProperty('message','File deleted successfully, Element updated successfully!');
+        expect(delete_res.body).toHaveProperty('success', true);
+        let encoded_uri = encodeURIComponent(generated_element_id);
+        const get_res = await request(app)
+            .get("/api/elements/" + encoded_uri)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json");
+        expect(get_res.statusCode).toBe(200);
+        expect(get_res.body).toHaveProperty("resource-type",testData.element_details_json["resource-type"]);
+        expect(get_res.body).toHaveProperty("contents",testData.element_details_json["contents"]);
+        let updated_dataset_url = get_res.body['direct-download-link'];
+        if (updated_dataset_url !== "") {
+            throw new Error('Uploaded dataset linked to element_id not deleted');
+        }
+        expect(get_res.body).toHaveProperty("user-uploaded-dataset", false);
+        expect(get_res.body).toHaveProperty("size","");
+    });
+    it("9. Upload another file and update the element with that file", async() => {
+        // Start a chunk upload
+        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        const req_body = {
+            filename: filename,
+            fileSize: fakeFileBuffer.length,
+            mimeType: 'text/csv',
+        };
+        const chunk_start_res = await request(app)
+            .post('/api/elements/datasets/chunk/init')
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "/*")
+            .set("Content-Type", "application/json")
+            .send(req_body);
+        expect(chunk_start_res.statusCode).toBe(200);
+        expect(chunk_start_res.body.uploadId).toBeDefined();
+        expect(chunk_start_res.body.result).toBe(true);
+        uploadId = chunk_start_res.body.uploadId;
+        // Send the chunk for the uploadId
+        let encoded_upload_id = encodeURIComponent(uploadId);
+        const chunk_push_res = await request(app)
+            .post(`/api/elements/datasets/chunk/${encoded_upload_id}`)
+            .set('Cookie', generated_auth_cookie)
+            .set('Content-Type', 'multipart/form-data; boundary=----WebKitFormBoundaryotgYSdiIybBwVdSB')
+            .field('chunkNumber', 0)
+            .field('chunk', 1)
+            .attach('chunk', testFilePath);
+        expect(chunk_push_res.statusCode).toBe(200);
+        expect(chunk_push_res.body.chunkNumber).toBe(0);
+        expect(chunk_push_res.body.success).toBe(true);
+        // Complete the upload
+        encoded_upload_id = encodeURIComponent(uploadId);
+        const complete_res = await request(app)
+            .post(`/api/elements/datasets/chunk/complete/${encoded_upload_id}`)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set('Content-Type', "application/json");
+        expect(complete_res.statusCode).toBe(200);
+        expect(complete_res.body).toHaveProperty('message','Dataset uploaded successfully');
+        expect(complete_res.body).toHaveProperty('bucket', process.env.MINIO_AWS_BUCKET_NAME);
+        expect(complete_res.body.filename).toBeDefined();
+        uploadedFileUrl = complete_res.body.url;
+
+        //Update the element
+        let request_body = testData.element_details_json;
+        request_body['id'] = generated_element_id
+        request_body['direct-download-link'] = uploadedFileUrl;
+        request_body['size'] = "5 mb";
+        let encoded_uri = encodeURIComponent(generated_element_id);
+        const update_res = await request(app)
+            .put("/api/elements/" + encoded_uri)
+            .set('Cookie', generated_auth_cookie)
+            .set("Accept", "*/*")
+            .set("Content-Type", "application/json")
+            .send(request_body);
+        expect(update_res.statusCode).toBe(200);
+        expect(update_res.body).toHaveProperty("message",'Element updated successfully');
+        expect(update_res.body).toHaveProperty("result",true);
+    });
+    it("10. Check if the updated element has the uploaded file moved", async () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
         let encoded_uri = encodeURIComponent(generated_element_id);
         const res = await request(app)
