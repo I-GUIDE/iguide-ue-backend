@@ -3,7 +3,7 @@ import {
     CompleteMultipartUploadCommand,
     CreateMultipartUploadCommand, DeleteObjectCommand,
     S3Client,
-    UploadPartCommand,
+    UploadPartCommand, ListObjectsV2Command,
     CopyObjectCommand
 } from '@aws-sdk/client-s3';
 import multerS3 from 'multer-s3';
@@ -431,6 +431,42 @@ function cleanupOldUploads() {
 }
 
 /**
- * Running the cleanup every hour
+ * Function to clean up all files in the `temp/` directory
+ */
+async function cleanupTempDirectory() {
+  try {
+    const listCommand = new ListObjectsV2Command({
+      Bucket: process.env.MINIO_AWS_BUCKET_NAME,
+      Prefix: "temp/",
+    });
+
+    const response = await s3.send(listCommand);
+
+    if (!response?.Contents || response?.Contents?.length === 0) {
+      console.log("No files found in temp/ directory.");
+      return;
+    }
+
+    for (const object of response.Contents) {
+      const deleteCommand = new DeleteObjectCommand({
+        Bucket: process.env.MINIO_AWS_BUCKET_NAME,
+        Key: object.Key,
+      });
+
+      await s3.send(deleteCommand);
+      console.log(`Deleted: ${object.Key}`);
+    }
+  } catch (err) {
+    console.error("Error cleaning temp directory:", err);
+  }
+}
+
+/**
+ * Run cleanup for /temp folder every 3 hours
+ */
+setInterval(cleanupTempDirectory, 3 * 60 * 60 * 1000);
+
+/**
+ * Running the cleanup of hashmap every hour
  */
 setInterval(cleanupOldUploads, 60 * 60 * 1000);
