@@ -872,6 +872,36 @@ export async function checkDuplicatesForField(field_name, value){
     return {response: false, element_id: null};
 }
 
+export async function updateDatasetElementUpload(id, dataset_url, dataset_size, user_uploaded_dataset) {
+	const session = driver.session({database: process.env.NEO4J_DB});
+    const tx = await session.beginTransaction();
+	try {
+		let query_params = {
+			element_id: id,
+			direct_download_link: dataset_url,
+			size: dataset_size,
+			user_uploaded_dataset: user_uploaded_dataset
+		}
+		let query_str = "MATCH (d:Dataset{id:$element_id}) SET d.direct_download_link = $direct_download_link, " +
+			"d.size = $size, d.user_uploaded_dataset = $user_uploaded_dataset";
+
+		let ret = false;
+		// Update the element node
+		const {_, summary} =
+			  await tx.run(query_str,
+				   query_params,
+				   {database: process.env.NEO4J_DB});
+		if (summary.counters.updates()['propertiesSet'] >= 1){
+			//return true;
+			ret = true;
+		}
+
+		await tx.commit();
+		return ret;
+	} catch (error) {
+		console.log("Error in updateDatasetElementUpload() - " + error);
+	}
+}
 export async function updateElement(id, element){
 
     const session = driver.session({database: process.env.NEO4J_DB});
@@ -978,6 +1008,7 @@ async function elementToNode(element, generate_id=true){
 	//'visibility': visibility,
 	'external-link': external_link,                 // Dataset
 	'direct-download-link': direct_download_link,   // Dataset
+	'user-uploaded-dataset': user_uploaded_dataset,   // Dataset
 	'notebook-repo': notebook_repo,                 // Notebook
 	'notebook-file': notebook_file,                 // Notebook
 	size: size,                                     // Dataset
@@ -1003,6 +1034,7 @@ async function elementToNode(element, generate_id=true){
 	node['external_link'] = external_link;
 	node['direct_download_link'] = direct_download_link;
 	node['size'] = size;
+	node['user_uploaded_dataset'] = user_uploaded_dataset !== undefined ? user_uploaded_dataset : false;
     } else if (node_type == utils.ElementType.PUBLICATION){
 	node['external_link'] = external_link_pub;
     } else if (node_type == utils.ElementType.OER){
