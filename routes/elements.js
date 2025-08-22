@@ -13,17 +13,42 @@ import axios from 'axios';
 import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
 import * as os from '../backend_opensearch.js';
-import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
-import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
-import {parseVisibility, updateOSBasedtOnVisibility, Visibility} from "../utils.js";
+import {jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware, getAllowedOrigin} from '../iguide_cors.js';
+import {authenticateJWT, authorizeRole, checkJWTTokenBypass, generateAccessToken} from '../jwtUtils.js';
+import {
+	ElementType,
+	parseElementType,
+	parseVisibility,
+	Role,
+	updateOSBasedtOnVisibility,
+	Visibility
+} from "../utils.js";
 import {
 	getFlaskEmbeddingResponse,
 	performElementOpenSearchDelete,
 	performElementOpenSearchInsert, performElementOpenSearchUpdate
 } from "./elements_utils.js";
 import {convertGeoSpatialFields} from "./rag_modules/spatial_utils.js"
+import {
+	abortMultipartUpload, ALLOWED_MIME_TYPES,
+	completeMultipartUpload,
+	deleteElementData,
+	getUploadDetails,
+	getUploadProgress,
+	initializeChunkUpload,
+	MAX_FILE_SIZE,
+	moveDatasetToElement,
+	multiChunkUpload,
+	performDatasetDeletion,
+	processChunkBasedOnUploadId,
+	upload,
+} from "./minio_uploader.js";
+import {elementsRateLimiter} from "../ip_policy.js";
 
 const router = express.Router();
+
+//Addition of rate limiter
+router.use(elementsRateLimiter);
 
 /****************************************************************************/
 // Ensure required directories exist
@@ -399,6 +424,93 @@ router.get('/api/elements/homepage', cors(), async (req, res) => {
 
 /**
  * @swagger
+ * /api/elements/datasets:
+ *   delete:
+ *     summary: Delete an uploaded dataset
+ *     tags: ['elements', 'datasets']
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - url
+ *             properties:
+ *               url:
+ *                 type: string
+ *                 description: The S3/MinIO URL of the uploaded dataset to delete
+ *                 example: "https://minio.example.com/my-bucket/path/to/file.csv"
+ *     responses:
+ *       200:
+ *         description: Upload deleted successfully
+ *       404:
+ *         description: Dataset URL not present
+ *       500:
+ *         description: Failed to delete dataset
+ */
+
+router.options('/api/elements/datasets', (req, res) => {
+    const method = req.header('Access-Control-Request-Method');
+	const origin = getAllowedOrigin(req?.headers?.origin);
+	if (method === 'DELETE') {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Access-Control-Allow-Methods', 'DELETE');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+        res.header('Access-Control-Allow-Credentials', 'true');
+    }
+    res.sendStatus(204); // No content
+});
+router.delete('/api/elements/datasets',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
+	try {
+		const {user_id, user_role} = (() => {
+			if (checkJWTTokenBypass(req)) {
+				return {user_id: "MASTER_USER", user_role: Role.SUPER_ADMIN};
+			}
+			if (!req.user || req.user == null || typeof req.user === 'undefined'){
+	    		return {user_id:null, user_role:null};
+			}
+			return {user_id:req.user.id, user_role:req.user.role}
+    	})();
+		const request_body = req.body;
+		let uploadedUrl = ""
+		if (!request_body['url']) {
+			res.status(404).json({message: 'Dataset URL not present.'});
+			return;
+		} else {
+			uploadedUrl = request_body['url'];
+		}
+		if (request_body['elementId'] && uploadedUrl.includes(request_body['elementId'])) {
+			const response = await deleteElementData(uploadedUrl);
+			if (response.success) {
+				const update_element_response =
+					await n4j.updateDatasetElementUpload(request_body['elementId'], "", "", false);
+				if (update_element_response) {
+					res.status(200).json({success: true, message: 'File deleted successfully, Element updated successfully!'});
+				} else {
+					res.status(500).json({success: false, message: 'Error in updating element, File deleted successfully!'});
+				}
+			}
+		} else {
+			const response = await deleteElementData(uploadedUrl);
+			if (response.success) {
+				res.status(200).json(response);
+			} else {
+				res.status(500).json(response);
+			}
+		}
+
+	} catch (error) {
+		console.error('Error deleting dataset:', error);
+		res.status(500).json({error: 'Failed to delete dataset'});
+	}
+});
+
+/**
+ * @swagger
  * /api/elements/{id}:
  *   get:
  *     summary: Retrieve ONE public element using id.
@@ -720,7 +832,9 @@ router.post('/api/elements',
     try {
         console.log('Registering ' + resource['resource-type'] + 'by ' + user_id);
         // Check if the resource type is "oer" and user have enough permission to add OER
-        // HotFix: OERshare
+        //if (resource['resource-type'] === 'oer' &&
+	    //!(user_role <= utils.Role.UNRESTRICTED_CONTRIBUTOR)) {
+		// HotFix: OERshare
 	    if (resource['resource-type'] === 'oer' &&
 	    !(user_role <= utils.Role.TRUSTED_USER_PLUS)) {
             console.log(user_id, " blocked by role")
@@ -728,13 +842,13 @@ router.post('/api/elements',
         }else{
             console.log(user_id, " is allowed to submit oers")
         }
-	// HotFix: OERshare
-	if (resource['resource-type'] === 'oer' &&
-	    (user_role === utils.Role.TRUSTED_USER_PLUS)) {
-		if (!resource['tags'].includes('OERshare')) {
-			resource['tags'].push('OERshare')
+		// HotFix: OERshare
+		if (resource['resource-type'] === 'oer' &&
+	    	(user_role === utils.Role.TRUSTED_USER_PLUS)) {
+			if (!resource['tags'].includes('OERshare')) {
+				resource['tags'].push('OERshare')
+			}
 		}
-	}
 		/**
 		 * Updated logic building the repo details,
 		 * 	In the request resource['notebook-url']
@@ -773,6 +887,22 @@ router.post('/api/elements',
         const {response, element_id} = await n4j.registerElement(contributor_id, resource);
 
         if (response) {
+			if (parseElementType(resource['resource-type']) === ElementType.DATASET
+				&& resource['direct-download-link'].startsWith(process.env.MINIO_ENDPOINT)) {
+				// Move the dataset to the element entry
+				const updated_download_link = await moveDatasetToElement(resource['direct-download-link'], element_id)
+				if (updated_download_link === "") {
+					console.log('error in updating direct-download-link for file: ' + resource['direct-download-link']);
+				} else {
+					resource['direct-download-link'] = updated_download_link;
+					resource['user-uploaded-dataset'] = true;
+					const response = await n4j.updateElement(element_id, resource);
+					if (!response) {
+						console.log('registerElement() - Error in updating direct-download-link for element_id: '
+							+ element_id + " link: "  + updated_download_link);
+					}
+				}
+			}
 			let resource_visibility = parseVisibility(resource['visibility']);
 			//Indexing the Element only if the visibility is Public
 			if (resource_visibility === Visibility.PUBLIC) {
@@ -882,6 +1012,10 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
 			let os_response = await performElementOpenSearchDelete(resourceId);
 			console.log("OpenSearch Response: " , os_response);
 			try {
+                //Delete the dataset from MinIO if the same is hosted there
+				let minIOResponse = await performDatasetDeletion(elementDetails);
+				console.log("MinIO Response: ", minIOResponse);
+
 				let thumbnail_url = elementDetails['thumbnail-image'];
 				console.log("Deleting element's thumbnail image for Element Id: ", resourceId);
 				if (thumbnail_url) {
@@ -892,7 +1026,8 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
 						}
 					}
 				}
-				let notebook_html_url = elementDetails['html-notebook'];
+
+                let notebook_html_url = elementDetails['html-notebook'];
 				console.log("Deleting element's html-notebook file for Element Id: ", resourceId);
 				if (notebook_html_url) {
 					let notebook_html_filepath = path.join(notebook_html_dir, path.basename(notebook_html_url));
@@ -991,6 +1126,26 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 		const element_old_visibility = await n4j.getElementVisibilityForID(id);
 		const response = await n4j.updateElement(id, updates);
 		if (response) {
+			if (parseElementType(updates['resource-type']) === ElementType.DATASET
+				&& updates['direct-download-link'].startsWith(process.env.MINIO_ENDPOINT)) {
+
+				// If the download link is not updated do not move them else move
+				if (!updates['direct-download-link'].includes(id)) {
+					// Move the dataset to the element entry
+					const updated_download_link = await moveDatasetToElement(updates['direct-download-link'], id)
+					if (updated_download_link === "") {
+						console.log('error in updating direct-download-link for file: ' + updates['direct-download-link']);
+					} else {
+						updates['direct-download-link'] = updated_download_link;
+						updates['user-uploaded-dataset'] = true;
+						const response = await n4j.updateElement(id, updates);
+						if (!response) {
+							console.log('registerElement() - Error in updating direct-download-link for element_id: '
+								+ id + " link: "  + updated_download_link);
+						}
+					}
+				}
+			}
 			// 'visibility' field is NOT searchable so should NOT be added to OS
 			// elements should ONLY be in OpenSearch if they are public
 			const visibility = utils.parseVisibility(updates['visibility']);
@@ -1001,6 +1156,7 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 				'contents': updates['contents'],
 				// Update the embedding field
 				// 'contents-embedding': newEmbedding,
+				'resource-type': updates['resource-type'],
 				'authors': updates['authors'],
 				'tags': updates['tags'],
 				'thumbnail-image': updates['thumbnail-image']['original'],
@@ -1303,6 +1459,319 @@ router.get('/api/connected-graph', cors(), async (req, res) => {
 	console.error('Error getting related elememts:', error);
 	res.status(500).json({ message: 'Error getting related elememts' });
     }
+});
+
+// /**
+//  * @swagger
+//  * /api/elements/datasets/simple:
+//  *   post:
+//  *     summary: Upload a dataset (CSV or ZIP) for sizes less than 5 MB
+//  *     tags: ['elements', 'datasets']
+//  *     consumes:
+//  *       - multipart/form-data
+//  *     parameters:
+//  *       - in: formData
+//  *         name: file
+//  *         type: file
+//  *         description: The dataset file to upload
+//  *     responses:
+//  *       200:
+//  *         description: Dataset uploaded successfully
+//  *       400:
+//  *         description: No file uploaded or invalid file type (.csv or .zip)
+//  */
+router.options('/api/elements/datasets/simple', jwtCorsMiddleware);
+router.post('/api/elements/datasets/simple',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	upload.single('file'), (req, res) => {
+    if (!req.file) {
+		return res.status(400).json({
+	    	message: 'No file uploaded or invalid file type (.csv or .zip)!'
+		});
+    }
+    res.json({
+		message: 'Dataset uploaded successfully',
+		url: req.file.location,
+		bucket: process.env.AWS_BUCKET_NAME,
+		key: req.file.key,
+    });
+});
+
+/**
+ * @swagger
+ * /api/elements/datasets/chunk/init:
+ *   post:
+ *     summary: Initialize a multipart upload for a large dataset (more than 100 MB Limit 2 GB)
+ *     tags: ['elements', 'datasets']
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - filename
+ *               - fileSize
+ *               - mimeType
+ *             properties:
+ *               filename:
+ *                 type: string
+ *               fileSize:
+ *                 type: integer
+ *               mimeType:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Upload initialized successfully
+ *       400:
+ *         description: File size or type is invalid
+ *       500:
+ *         description: Failed to initialize upload
+ */
+router.options('/api/elements/datasets/chunk/init', jwtCorsMiddleware);
+router.post('/api/elements/datasets/chunk/init',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
+	try {
+		const {filename, fileSize, mimeType} = req.body;
+		const {user_id, user_role} = (() => {
+			if (checkJWTTokenBypass(req)) {
+				return {user_id: "MASTER_USER", user_role: Role.SUPER_ADMIN};
+			}
+			if (!req.user || req.user == null || typeof req.user === 'undefined'){
+	    		return {user_id:null, user_role:null};
+			}
+			return {user_id:req.user.id, user_role:req.user.role};
+    	})();
+
+		// Validate file size (2GB limit)
+		if (fileSize > MAX_FILE_SIZE) {
+			return res.status(400).json({
+				error: 'File size exceeds 2GB limit'
+			});
+		}
+
+		// Validate mime type
+		if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
+			return res.status(400).json({
+				error: 'Invalid file type. Only CSV and ZIP files are allowed.'
+			});
+		}
+
+		// Generate unique upload ID
+		const response = await initializeChunkUpload(filename, fileSize, mimeType, user_id);
+		if (response) {
+			res.status(200).json(response);
+		} else {
+			res.status(500).json({message: 'Failed to initialize upload'});
+		}
+
+	} catch (error) {
+		console.error('Error initializing upload:', error);
+		res.status(500).json({message: 'Failed to initialize upload'});
+	}
+});
+
+/**
+ * @swagger
+ * /api/elements/datasets/chunk/{uploadId}:
+ *   post:
+ *     summary: Upload a chunk of a large dataset file
+ *     tags: ['elements', 'datasets']
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: path
+ *         name: uploadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: formData
+ *         name: chunk
+ *         type: file
+ *         description: The chunk file part
+ *       - in: formData
+ *         name: chunkNumber
+ *         type: integer
+ *       - in: formData
+ *         name: totalChunks
+ *         type: integer
+ *     responses:
+ *       200:
+ *         description: Chunk uploaded successfully
+ *       400:
+ *         description: No chunk data received
+ *       404:
+ *         description: Upload not found
+ *       500:
+ *         description: Failed to upload chunk data
+ */
+router.options('/api/elements/datasets/chunk/:uploadId', jwtCorsMiddleware);
+router.post('/api/elements/datasets/chunk/:uploadId',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	multiChunkUpload.single('chunk'),
+	async (req, res) => {
+	const { uploadId } = req.params;
+	const { chunkNumber, totalChunks } = req.body;
+    try {
+
+      if (!req.file) {
+        return res.status(400).json({ error: 'No chunk data received' });
+      }
+
+      const uploadData = getUploadDetails(uploadId);
+      if (!uploadData) {
+        return res.status(404).json({ error: 'Upload not found' });
+      }
+
+      const response = await processChunkBasedOnUploadId(uploadId, uploadData, chunkNumber, totalChunks, req);
+	  if (response) {
+		  res.status(200).json(response);
+	  } else {
+		  res.status(500).json({message: 'Failed to upload chunk data, aborting operation'});
+		  const res = await abortMultipartUpload(uploadId);
+	  }
+
+    } catch (error) {
+      console.error('Error uploading chunk:', error);
+      res.status(500).json({message: 'Failed to upload chunk data, aborting operation'});
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /api/elements/datasets/chunk/complete/{uploadId}:
+ *   post:
+ *     summary: Complete a multipart upload process
+ *     tags: ['elements', 'datasets']
+ *     parameters:
+ *       - in: path
+ *         name: uploadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Upload completed successfully
+ *       404:
+ *         description: Upload not found
+ *       500:
+ *         description: Failed to complete upload
+ */
+router.options('/api/elements/datasets/chunk/complete/:uploadId', jwtCorsMiddleware);
+router.post('/api/elements/datasets/chunk/complete/:uploadId',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
+  try {
+    const { uploadId } = req.params;
+
+	const uploadData = getUploadDetails(uploadId);
+	if (!uploadData) {
+        return res.status(404).json({ error: 'Upload not found' });
+	}
+
+	const response = await completeMultipartUpload(uploadId);
+	if (response) {
+		res.status(200).json(response);
+	} else {
+		res.status(500).json({message: 'Error in completing upload process, aborting the process'});
+		const res = await abortMultipartUpload(uploadId);
+	}
+  } catch (error) {
+    console.error('Error completing upload:', error);
+    res.status(500).json({ error: 'Failed to complete upload' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/elements/datasets/chunk/{uploadId}:
+ *   delete:
+ *     summary: Abort a multipart upload
+ *     tags: ['elements', 'datasets']
+ *     parameters:
+ *       - in: path
+ *         name: uploadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Upload aborted successfully
+ *       404:
+ *         description: Upload not found
+ *       500:
+ *         description: Failed to abort upload
+ */
+router.options('/api/elements/datasets/chunk/:uploadId', jwtCorsMiddleware);
+router.delete('/api/elements/datasets/chunk/:uploadId',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
+	try {
+		const {uploadId} = req.params;
+		const uploadData = getUploadDetails(uploadId);
+
+		if (!uploadData) {
+			return res.status(404).json({message: 'Upload not found'});
+		}
+
+		const response = await abortMultipartUpload(uploadId);
+		if (response) {
+			res.status(200).json({message: 'Upload aborted successfully'});
+		} else {
+			res.status(500).json({message: 'Error in aborting upload process'});
+		}
+
+	} catch (error) {
+		console.error('Error aborting upload:', error);
+		res.status(500).json({error: 'Failed to abort upload'});
+	}
+});
+
+// /**
+//  * @swagger
+//  * /api/elements/datasets/chunk/progress/{uploadId}:
+//  *   get:
+//  *     summary: Check the progress of a multipart upload
+//  *     tags: ['elements', 'datasets']
+//  *     parameters:
+//  *       - in: path
+//  *         name: uploadId
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *     responses:
+//  *       200:
+//  *         description: Upload progress retrieved successfully
+//  *       404:
+//  *         description: Upload not found
+//  *       500:
+//  *         description: Failed to fetch upload progress
+//  */
+router.options('/api/elements/datasets/chunk/progress/:uploadId', jwtCorsMiddleware);
+router.get('/api/elements/datasets/chunk/progress/:uploadId',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	(req, res) => {
+	const {uploadId} = req.params;
+
+	const uploadData = getUploadDetails(uploadId);
+	if (!uploadData) {
+		return res.status(404).json({error: 'Upload not found'});
+	}
+
+	const response = getUploadProgress(uploadId);
+	if (response) {
+		res.status(200).json(response);
+	} else {
+		res.status(500).json({message: 'Error in fetching upload progress'});
+	}
 });
 
 export default router;

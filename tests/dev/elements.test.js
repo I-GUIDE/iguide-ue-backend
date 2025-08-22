@@ -195,6 +195,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty("resource-type",testData.element_details_json["resource-type"]);
         expect(res.body).toHaveProperty("contents",testData.element_details_json["contents"]);
+        expect(res.body).toHaveProperty("user-uploaded-dataset", false);
     });
     it("4. Should be able to update an element based on Id", async () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});

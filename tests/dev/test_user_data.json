@@ -96,6 +96,7 @@
     "external-link":"https://testDataset.com/link-to-dataset/data",
     "direct-download-link":"https://testDataset.com/link-to-dataset/data.zip",
     "size":"100Mb",
+    "user-uploaded-dataset": false,
     "spatial-index-year":[""],
     "funding-agency":"",
     "visibility":"public",
