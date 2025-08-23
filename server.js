@@ -228,18 +228,72 @@ console.log("Domain list import complete!");
 app.options('/api/url-title', cors());
 app.get('/api/url-title', cors(), async (req, res) => {
     // [Done] Neo4j not required
-    const url = req.query.url;
+    const urlString = req.query.url;
+    // SSRF prevention: allow only public http/https URLs and block private/intranet/local IPs/domains
     try {
-	const response = await axios.get(url);
-	const matches = response.data.match(/<title>(.*?)<\/title>/);
-	if (matches) {
-	    res.json({ title: matches[1] });
-	} else {
-	    res.status(404).json({ error: 'Title not found' });
-	}
+        if (!urlString) {
+            return res.status(400).json({ error: 'Missing url query parameter' });
+        }
+        let parsed;
+        try {
+            parsed = new URL(urlString);
+        } catch (e) {
+            return res.status(400).json({ error: 'Invalid URL format' });
+        }
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+            return res.status(400).json({ error: 'URL must start with http:// or https://' });
+        }
+        // Prevent SSRF: block localhost and private IPs/networks
+        const net = await import('net');
+        const dns = await import('dns').then(module => module.promises);
+        let hostname = parsed.hostname;
+        let block = false;
+        const localHosts = [
+            "localhost",
+            "127.0.0.1",
+            "::1",
+        ];
+        if (localHosts.includes(hostname.toLowerCase())) {
+            block = true;
+        }
+        // Block obvious internal hostnames
+        if (hostname.toLowerCase().endsWith('.local') || hostname.toLowerCase().endsWith('.internal')) {
+            block = true;
+        }
+        // Block by IP range
+        try {
+            const addresses = await dns.lookup(hostname, { all: true });
+            for (const { address } of addresses) {
+                if (
+                    net.isIP(address) &&
+                    (
+                        address.startsWith('10.') ||
+                        address.startsWith('192.168.') ||
+                        /^172\.(1[6-9]|2\d|3[0-1])\./.test(address) || // 172.16.x.x - 172.31.x.x
+                        address === '127.0.0.1' ||
+                        address === '::1'
+                    )
+                ) {
+                    block = true;
+                }
+            }
+        } catch (e) {
+            // If DNS fails, block as precaution
+            block = true;
+        }
+        if (block) {
+            return res.status(400).json({ error: 'URL points to a disallowed or private address' });
+        }
+        const response = await axios.get(urlString);
+        const matches = response.data.match(/<title>(.*?)<\/title>/);
+        if (matches) {
+            res.json({ title: matches[1] });
+        } else {
+            res.status(404).json({ error: 'Title not found' });
+        }
     } catch (error) {
-	console.log(error);
-	res.status(500).json({ error: 'Failed to retrieve title' });
+        console.log(error);
+        res.status(500).json({ error: 'Failed to retrieve title' });
     }
 });
 
