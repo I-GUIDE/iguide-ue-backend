@@ -12,7 +12,8 @@ import * as spatialUtils from './routes/rag_modules/spatial_utils.js';
 // For deployment on JetStream VM
 import dotenv from 'dotenv';
 import {checkUniversityDomain} from "./routes/domain_utils.js";
-import {generateUserRole, SortBy} from "./utils.js";
+import {fetchNewUserRole, generateUserRole, SortBy} from "./utils.js";
+import {performReIndexElementsBasedOnUserId} from "./routes/elements_utils.js";
 dotenv.config();
 console.log(process.env.NEO4J_CONNECTION_STRING);
 
@@ -1154,13 +1155,14 @@ export async function deleteElementByID(id){
 
 export async function deleteUserById(id){
     const query_str = "MATCH (c:Contributor{id:$id_param}) " +
-	  "DETACH DELETE c";
+		"OPTIONAL MATCH (a:Alias)-[:ALIAS_OF]->(c) " +
+	  	"DETACH DELETE a,c";
     try {
 	const {_, summary} =
 	      await driver.executeQuery(query_str,
 					{id_param: id},
 					{database: process.env.NEO4J_DB});
-	if (summary.counters.updates()['nodesDeleted'] == 1){
+	if (summary.counters.updates()['nodesDeleted'] >= 1){
 	    return true;
 	}
     } catch(err){console.log('deleteUserByOpenId() - Error in query: '+ err);}
@@ -1257,6 +1259,48 @@ export async function registerContributor(contributor){
     return false;
 }
 
+export async function registerContributorV2(contributor){
+
+    // (1) generate id (UUID).
+    contributor['id'] = uuidv4();
+
+    // (2) assign roles for new contributor
+	contributor['role'] = fetchNewUserRole(contributor);
+    // (3) get avatar URL
+    //contributor['avatar_url'] = contributor['avatar_url']['original'];
+    const query_str = "CREATE (c: Contributor $contr_param) " +
+		"CREATE (a:Alias $alias_param) " +
+		"CREATE (a)-[:ALIAS_OF]->(c) " +
+		"RETURN c{.*} as contributor, a{.*} as alias";
+    try{
+		let alias_param = {
+			openid: contributor["openid"],
+			email: contributor["email"],
+			affiliation: contributor["affiliation"],
+			first_name: contributor["first_name"],
+			last_name: contributor["last_name"],
+			is_primary: true
+		};
+		let contr_param = {
+			id: contributor['id'],
+			display_first_name: contributor["first_name"],
+			display_last_name: contributor["last_name"],
+			bio: contributor["bio"],
+			role: contributor["role"],
+		};
+		const {_, summary} =
+	      	await driver.executeQuery(query_str,
+					{contr_param: contr_param, alias_param: alias_param},
+					{routing: 'WRITE', database: process.env.NEO4J_DB});
+		if (summary.counters.updates()['nodesCreated'] == 2){
+	    	return true;
+		}
+    } catch(err){
+		console.log('registerContributor() - Error in query: '+ err);
+	}
+    return false;
+}
+
 /**
  * Register new contributor for AUTH purposes
  * @param {Object} contributor Map with new contributor attributes (refer to schema)
@@ -1293,6 +1337,69 @@ export async function registerContributorAuth(contributor){
 	}
     // something went wrong
     return {};
+}
+
+/**
+ * Register new contributor for AUTH purposes V2
+ * @param {Object} contributor Map with new contributor attributes (refer to schema)
+ * @return {Object} user object for successful creation. empty object in case it fails
+ */
+export async function registerContributorAuthV2(contributor){
+
+	// (1) generate id (UUID).
+    contributor['id'] = uuidv4();
+
+    // (2) assign roles for new contributor
+	contributor['role'] = fetchNewUserRole(contributor);
+    // (3) get avatar URL
+    //contributor['avatar_url'] = contributor['avatar_url']['original'];
+    const query_str = "CREATE (c: Contributor $contr_param) " +
+		"CREATE (a:Alias $alias_param) " +
+		"CREATE (a)-[:ALIAS_OF]->(c) " +
+		"RETURN c{.*} as contributor, a{.*} as alias";
+    try{
+		let alias_param = {
+			openid: contributor["openid"],
+			email: contributor["email"],
+			affiliation: contributor["affiliation"],
+			first_name: contributor["first_name"],
+			last_name: contributor["last_name"],
+			is_primary: true
+		};
+		let contr_param = {
+			id: contributor['id'],
+			bio: contributor["bio"],
+			role: contributor["role"],
+			display_first_name: contributor["first_name"],
+			display_last_name: contributor["last_name"],
+		};
+		const {records, summary} =
+	      	await driver.executeQuery(query_str,
+					{contr_param: contr_param, alias_param: alias_param},
+					{routing: 'WRITE', database: process.env.NEO4J_DB});
+		if (summary.counters.updates()['nodesCreated'] == 2){
+	    	let response = {
+				Contributor: records[0]['_fields'][0],
+				Aliases: records[0]['_fields'][1]
+			};
+			let primary_alias = response?.Aliases;
+			let contributor = response?.Contributor;
+			contributor["openid"] = primary_alias["openid"];
+			contributor["email"] = primary_alias["email"];
+			contributor["first_name"] = primary_alias["first_name"];
+			contributor["last_name"] = primary_alias["last_name"];
+			contributor["affiliation"] = primary_alias["affiliation"];
+			contributor["aliases"] = [primary_alias];
+			contributor["role"] = utils.parse64BitNumber(contributor["role"]);
+			return makeFrontendCompatible(contributor);
+		}
+    } catch(err){
+		console.log('registerContributor() - Error in query: '+ err);
+	}
+
+	// something went wrong
+    return {};
+
 }
 
 /**
@@ -1380,26 +1487,291 @@ export async function getContributorByID(id){
     const query_str = contributorMatchQuery(id)+" " +
 	  "RETURN c{.*} ";
     try {
-	const {records, summary} =
-	      await driver.executeQuery(query_str,
-					{contrib_id: id},
-					{routing: 'READ', database: process.env.NEO4J_DB});
-	if (records.length <= 0){
-	    // Query returned no match for given ID
-	    return {};
-	} else if (records.length > 1){
-	    // should never reach here since ID is unique
-	    throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID:" + id);
-	}
-	const contributor = records[0]['_fields'][0];
-	contributor['role'] = utils.parse64BitNumber(contributor['role']);
-
-	return makeFrontendCompatible(contributor);
+		const {records, summary} =
+			  await driver.executeQuery(query_str,
+						{contrib_id: id},
+						{routing: 'READ', database: process.env.NEO4J_DB});
+		if (records.length <= 0){
+			// Query returned no match for given ID
+			return {};
+		} else if (records.length > 1){
+			// should never reach here since ID is unique
+			throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID:" + id);
+		}
+		const contributor = records[0]['_fields'][0];
+		contributor['role'] = utils.parse64BitNumber(contributor['role']);
+		/**
+		 * In future if API is used and there is no openid by default then we fetch the primary alias and attach the same
+		 */
+		if (contributor['openid'] === undefined) {
+			const primary_alias = await getPrimaryAliasById(id);
+			contributor['openid'] = primary_alias['openid']
+			contributor['email'] = primary_alias['email']
+			contributor['affiliation'] = primary_alias['affiliation']
+		}
+		return makeFrontendCompatible(contributor);
     } catch(err){console.log('getContributorByID() - Error in query: '+ err);}
     // something went wrong
     return {};
 }
 
+/**
+ * Updated getContributorByID logic to include Aliases
+ * @param id
+ * @returns {Promise<{}|{[p: string]: null|{}|undefined}>}
+ */
+export async function getContributorByIDv2(id) {
+	let query_str = "";
+	if (String(id).startsWith("http")) {
+		query_str = "MATCH (a1:Alias{openid: $id})-[:ALIAS_OF]->(c:Contributor) MATCH (a:Alias)-[:ALIAS_OF]->(c)"
+	} else {
+		query_str = "MATCH (a:Alias)-[:ALIAS_OF]->(c:Contributor{id: $id})"
+	}
+	query_str = query_str + " RETURN c{.*} AS contributor, collect(a{.*}) AS aliases";
+	try {
+		const {records, summary} =
+			await driver.executeQuery(query_str,
+				{id: id},
+				{routing: 'READ', database: process.env.NEO4J_DB});
+
+		if (records.length <= 0) {
+			return {};
+		} else if (records.length > 1) {
+			throw Error("Server Neo4j: ID should be unique, query returned multiple results for given ID:" + id);
+		}
+		let response = {
+			Contributor: records[0]['_fields'][0],
+			Aliases: records[0]['_fields'][1]
+		};
+		let primary_alias = {}
+		if (response?.Aliases) {
+			response?.Aliases.map((alias) => {
+				if (alias?.is_primary === true) {
+					primary_alias = alias;
+				}
+			});
+		}
+		let contributor = response?.Contributor;
+		contributor["openid"] = primary_alias["openid"];
+		contributor["email"] = primary_alias["email"];
+		contributor["affiliation"] = primary_alias["affiliation"];
+		contributor["first_name"] = primary_alias["first_name"];
+		contributor["last_name"] = primary_alias["last_name"];
+		contributor["aliases"] = response?.Aliases;
+		contributor["role"] = utils.parse64BitNumber(contributor["role"]);
+		return makeFrontendCompatible(contributor)
+	} catch (error) {
+		console.log("getContributorByIDv2 - Error in query: " + error);
+	}
+	return {};
+}
+
+/**
+ * Function to create an alias with is_primary as false (default) for a given user_id and open_id, email, affiliation
+ * @param id
+ * @param open_id
+ * @param email
+ * @param affiliation
+ * @param is_primary
+ * @returns {Promise<{}|*>}
+ */
+export async function createAliasById(id, open_id, email, affiliation, is_primary) {
+	const query_str = "MATCH (c:Contributor{id: $user_id})" +
+		"CREATE (a:Alias{openid: $open_id, email: $email, affiliation: $affiliation, is_primary: $is_primary})" +
+		"CREATE (a)-[:ALIAS_OF]->(c)" +
+		"RETURN a{.*}";
+	try {
+		const params = {
+			user_id: id,
+			open_id: open_id,
+			email: email,
+			affiliation: affiliation,
+			is_primary: is_primary
+		};
+		const {records, summary} =
+			await driver.executeQuery(query_str, params, {routing: 'WRITE', database: process.env.NEO4J_DB});
+
+		console.log(records);
+		console.log(summary);
+
+		return records[0]['_fields'][0]
+
+	} catch (error) {
+		console.log("createAliasById() - Error in query: " + error);
+	}
+	return {};
+}
+
+/**
+ * Function to delete the open_id alias for a given user id
+ * @param id
+ * @param open_id
+ * @returns {Promise<boolean>}
+ */
+export async function deleteAliasByOpenId(id, open_id) {
+	const query_str = "MATCH (a:Alias{openid: $open_id})-[:ALIAS_OF]->(c:Contributor{id: $user_id}) DETACH DELETE a";
+	try {
+		const params = {user_id: id, open_id: open_id}
+		const {records, summary} =
+			await driver.executeQuery(query_str, params, {routing: 'WRITE', database: process.env.NEO4J_DB});
+		return true;
+	} catch (error) {
+		console.log("deleteAliasByOpenId() - Error in query: " + error);
+		return false;
+	}
+}
+
+/**
+ * Function to get alias details for the given user's id and provided open_id
+ * @param id
+ * @param open_id
+ * @returns {Promise<*|null>}
+ */
+export async function getAliasByOpenId(id, open_id) {
+	const query_str = "MATCH (a:Alias{openid: $open_id})-[:ALIAS_OF]->(c:Contributor{id: $user_id}) return a{.*}";
+	try {
+		const params = {user_id: id, open_id: open_id};
+		const {records, summary} =
+			await driver.executeQuery(query_str, params, {routing: 'READ', database: process.env.NEO4J_DB});
+		if (records.length > 0) {
+			return records[0]['_fields'][0];
+		}
+		return null;
+	} catch (error) {
+		console.log("getAliasByOpenId() - Error in query: " + error);
+		return null;
+	}
+}
+
+/**
+ * Function check if the given open_id is the primary alias for the user id
+ * @param id
+ * @param open_id
+ * @returns {Promise<*|boolean>}
+ */
+export async function checkAliasIsPrimary(id, open_id){
+	try {
+		const alias_detail = await getAliasByOpenId(id, open_id);
+		if (alias_detail !== null) {
+			return alias_detail['is_primary']
+		}
+	} catch (error) {
+		console.log("checkAliasIsPrimary() - Error in query: " + error);
+	}
+	return false;
+}
+
+/**
+ * Function to get the primary alias for the given user id
+ * @param id
+ * @returns {Promise<*|null>}
+ */
+export async function getPrimaryAliasById(id) {
+	const query_str = "MATCH (a:Alias{is_primary: true})-[:ALIAS_OF]->(c:Contributor{id: $user_id}) return a{.*}";
+	try {
+		const params = {user_id: id};
+		const {records, summary} =
+			await driver.executeQuery(query_str, params, {routing: 'READ', database: process.env.NEO4J_DB});
+		if (records.length > 0) {
+			return records[0]['_fields'][0];
+		}
+		return null;
+	} catch (error) {
+		console.log("getPrimaryAliasById() - Error in Query: " + error);
+		return null;
+	}
+}
+
+/**
+ * Function to update the primary alias for id with open_id and replace curr_alias_open_id
+ * @param id
+ * @param curr_alias_open_id
+ * @param open_id
+ * @returns {Promise<null|{[p: string]: null|{}|undefined}>}
+ */
+export async function setAliasAsPrimary(id, curr_alias_open_id, open_id) {
+	const query_str = "MATCH (a1:Alias{openid: $curr_openid})-[:ALIAS_OF]->(c:Contributor{id: $user_id})<-[:ALIAS_OF]-(a2:Alias{openid: $new_openid}) " +
+		"SET a1.is_primary = false, a2.is_primary = true " +
+		"RETURN a2";
+	try {
+		const params = {user_id: id, curr_openid: curr_alias_open_id, new_openid: open_id}
+		const {records, summary} =
+			await driver.executeQuery(query_str, params, {routing: 'WRITE', database: process.env.NEO4J_DB});
+		if (records.length > 0) {
+			 let response = records[0]['_fields'][0]['properties'];
+			 if (response !== null) {
+				 return makeFrontendCompatible(response);
+			 } else {
+				 return null;
+			 }
+		}
+		return null;
+	} catch (error) {
+		console.log("setAliasAsPrimary() - Error in query: " + error);
+		return null;
+	}
+}
+
+/**
+ * Check if for the given id, the provided open_id exists as an alias
+ * @param id
+ * @param open_id
+ * @returns {Promise<boolean>}
+ */
+export async function checkIfAliasExists(id, open_id) {
+	try {
+		const alias_detail = await getAliasByOpenId(id, open_id)
+		if (alias_detail !== null) {
+			return true;
+		}
+	} catch (error) {
+		console.log("checkAliasIsPrimary() - Error in query: " + error);
+	}
+	return false;
+}
+
+export async function mergeUserAccountsByOpenId(primary_user_id, secondary_user_id) {
+	try {
+		/**
+		 * 1. Get the user details based on both openIds op1,op2 as a1-r1>u1,a2-r2>u2
+		 * 2. Get the greater role and set that as the new role for the u1
+		 * 3. While creating the new relation r3, set a2.is_primary = false
+		 * 4. Update the contributor_id for all the user's u2 contributions with u1's id
+		 * 5. Delete the u2 and r2
+		 */
+		const primary_user = await getContributorByIDv2(primary_user_id);
+		const secondary_user = await getContributorByIDv2(secondary_user_id);
+		const user_updated_role = Math.max(primary_user['role'], secondary_user['role'])
+		let update_query =
+			'match (c1:Contributor{id: $primary_userid})\n' +
+			'match (a2:Alias{is_primary: true})-[r2:ALIAS_OF]->(c2:Contributor{id: $secondary_userid})\n' +
+			'create (a2)-[r3:ALIAS_OF]->(c1)\n' +
+			'set a2.is_primary = false' +
+			'detach delete r2\n' +
+			'detach delete c2\n' +
+			'return a1,a2,c1;';
+
+	} catch (error) {
+		console.log("mergerUserAccountsByOpenId - Error in query: " + error);
+		return null;
+	}
+}
+
+export async function updateUserIdInElements(old_user_id, new_user_id) {
+	try {
+		let user_public_elements_count = await getElementsCountByContributor(old_user_id);
+		if (user_public_elements_count === 0) {
+			return true;
+		}
+		let update_contr_query = "";
+		let os_update_response =
+			await performReIndexElementsBasedOnUserId(new_user_id, user_public_elements_count)
+		return true;
+	} catch (error) {
+		console.log("updateUserIdInElements() - Error in query: " + error)
+		return false;
+	}
+}
 /**
  * Get all Contributors with all information based on a pagination criteria
  * from and size are optional parameters by default set to return 1st 100 records
@@ -1492,6 +1864,113 @@ export async function getAllContributors(
 }
 
 /**
+ * Get all Contributors with all information based on a pagination criteria
+ * from and size are optional parameters by default set to return 1st 100 records
+ * @returns {Object} Map of objects with serial Ids. If no users found returns empty
+ */
+export async function getAllContributorsV2(
+		from=0,
+		size=100,
+		sort_by=utils.SortBy.FIRST_NAME,
+		sort_order="asc",
+		filter_key='none',
+		filter_value=''){
+	let query_str = "MATCH (a:Alias)-[:ALIAS_OF]->(c:Contributor)";
+	let query_params = {};
+	/**
+	 * Set the filter by value if required
+	 */
+	switch (filter_key) {
+		case "role-no":
+			filter_key = "role"
+			filter_value = neo4j.int(filter_value)
+			query_str += " WHERE c." + filter_key + ' = $filter_val'
+			query_params['filter_val'] = filter_value
+			break
+		case "affiliation":
+			filter_key = "affiliation"
+			query_str += " WHERE toLower(a." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
+			break
+		case "first-name":
+			filter_key = "first_name"
+			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
+			break
+		case "last-name":
+			filter_key = "last_name"
+			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_params['filter_val'] = filter_value
+			break
+		default:
+			filter_key = "none"
+	}
+	/**
+	 * Set the return parameter
+	 */
+	let count_query_str = query_str + " return COUNT(c) AS count"
+	query_str += " WITH c, collect(a{.*}) AS aliases"
+	/**
+	 * Set the default value for sort_by parameter
+	 */
+	sort_by = utils.parseSortBy(sort_by)
+	if (sort_by && sort_by !== "") {
+		query_str += " ORDER BY c." + sort_by + " " + sort_order
+	}
+	/**
+	 * Set the pagination condition
+	 */
+	let pagination_str = " SKIP $from LIMIT $size";
+	query_str += pagination_str;
+	query_params['from'] = neo4j.int(from);
+	query_params['size'] = neo4j.int(size);
+
+	query_str += " RETURN c{.*} AS contributor, aliases";
+
+	try {
+		let records, summary;
+		({records, summary} = await driver.executeQuery(query_str,
+			query_params,
+			{routing: 'READ', database: process.env.NEO4J_DB}));
+		if (records?.length <= 0) {
+			return {"total-users":-1, "users": []};
+		}
+		let contributor_list = [];
+		records?.map((contributor) => {
+			if (contributor['_fields']?.length > 0) {
+				let temp_contributor = contributor['_fields'][0];
+				let aliases = contributor['_fields'][1];
+				let primary_alias = {}
+				if (aliases?.length > 0) {
+					aliases.map((alias) => {
+						if (alias?.is_primary) {
+							primary_alias = alias;
+						}
+					});
+					temp_contributor['openid'] = primary_alias['openid'];
+					temp_contributor['email'] = primary_alias['email'];
+					temp_contributor['affiliation'] = primary_alias['affiliation'];
+					temp_contributor['aliases'] = aliases;
+				}
+				//temp_contributor['role'] = utils.parse64BitNumber(temp_contributor['role']);
+				contributor_list.push(temp_contributor);
+			}
+		});
+		({records, summary} = await driver.executeQuery(
+				count_query_str,
+				query_params,
+				{routing: 'READ', database: process.env.NEO4J_DB}));
+		let total_count = utils.parse64BitNumber(records[0].get('count'));
+		let contributor_final_list = Object.values(makeFrontendCompatible(contributor_list));
+		return {"total-users": total_count, "users": contributor_final_list}
+
+	} catch (err) {
+		console.log('getAllContributors() - Error in query: ' + err);
+	}
+	return {"total-users": -1, "users": []};
+}
+
+/**
  * Update the given user id's role with the updated_role
  * @param id
  * @param updated_role
@@ -1538,6 +2017,31 @@ export async function checkContributorByID(id){
     return false;
 }
 
+export async function checkContributorByIDV2(id) {
+	let query_str = "OPTIONAL "
+    if (String(id).startsWith("http")) {
+        /**
+         * Provided id is an OpenID hence check aliases
+         */
+        query_str = query_str + "MATCH (a:Alias{openid: $id})-[:ALIAS_OF]->(c:Contributor)";
+    } else {
+        /**
+         * Provided id is a user-id hence check contributor
+         */
+        query_str = query_str + "MATCH (c:Contributor{id: $id})";
+    }
+	query_str = query_str + " RETURN c IS NOT NULL AS Predicate";
+	try {
+		const {records, _} =
+			await driver.executeQuery(query_str,
+				{id: id},
+				{routing: 'READ', database: process.env.NEO4J_DB});
+		return records[0]['_fields'][0];
+	} catch (error) {
+		console.log('checkContributorByIDV2() - Error in query: ' + error);
+		return false;
+	}
+}
 /**
  * Get contrib ID for the element
  * @param {string} e_id Element ID
