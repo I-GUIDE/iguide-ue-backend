@@ -886,7 +886,7 @@ router.post('/api/elements',
 		if (resource['resource-type'] === 'notebook' &&
 			resource['notebook-url'] && notebook_creation === false) {
 			console.log('Error registering resource: notebook conversion failed!');
-			res.status(500).json({ error: 'Error registering resource, notebook creation failed!' });
+			res.status(500).json({ error: 'Error registering resource, notebook creation failed!', notebookStatus: notebook_creation });
 			return;
 		}
 		// Handle notebook resource type
@@ -965,7 +965,12 @@ router.post('/api/elements',
 				let os_response = await performElementOpenSearchInsert(os_element, element_id);
 				console.log('OpenSearch Indexing result: ', os_response);
 			}
-            res.status(200).json({ message: 'Resource registered successfully', elementId: element_id });
+			if (resource && resource['resource-type'] && resource['resource-type'] === 'notebook' && notebook_creation) {
+				res.status(200).json({ message: 'Resource registered successfully',
+					elementId: element_id, notebookStatus: notebook_creation });
+			} else {
+				res.status(200).json({ message: 'Resource registered successfully', elementId: element_id });
+			}
         } else {
 			if (element_id) {
 			// registration failed because of duplicate element
