@@ -5,8 +5,13 @@ import * as utils from '../utils.js';
 import * as n4j from '../backend_neo4j.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
+import {privateElementsRateLimiter} from "../ip_policy.js";
 
 const router = express.Router();
+
+//Addition of rate limiter
+router.use(privateElementsRateLimiter);
+
 /**
  * @swagger
  * /api/elements/private/{elementId}:

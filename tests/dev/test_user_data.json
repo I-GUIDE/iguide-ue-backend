@@ -9,7 +9,34 @@
     "last_name": "DevLast",
     "bio": "Test bio",
     "openid": "http://cilogon.org/serverTest/users/293121",
-    "affiliation": "University of Illinois, Urbana-Champaign",
+    "affiliation": "I-GUIDE",
+    "version": "1"
+  },
+  "gov_user": {
+    "email": "test.dev.doc@nsf.gov",
+    "first_name": "TestFirst",
+    "last_name": "DevLast",
+    "bio": "Test bio",
+    "openid": "http://cilogon.org/serverTestB/users/20913",
+    "affiliation": "I-GUIDE",
+    "version": "1"
+  },
+  "foreign_edu_user": {
+    "email": "test.dev.doc@university.edu.au",
+    "first_name": "TestFirst",
+    "last_name": "DevLast",
+    "bio": "Test bio",
+    "openid": "http://cilogon.org/serverTestC/users/092813",
+    "affiliation": "Foreign University",
+    "version": "1"
+  },
+  "untrusted_user_2": {
+    "email": "test.dev.doc@iguide.edu-haha.com",
+    "first_name": "TestFirst",
+    "last_name": "DevLast",
+    "bio": "Test bio",
+    "openid": "http://cilogon.org/serverTestA/users/213182",
+    "affiliation": "I-GUIDE",
     "version": "1"
   },
   "elements_trusted_user": {
@@ -18,7 +45,25 @@
     "last_name": "DevLast",
     "bio": "Test bio",
     "openid": "http://cilogon.org/serverTest/users/12312",
-    "affiliation": "University of Illinois, Urbana-Champaign",
+    "affiliation": "I-GUIDE",
+    "version": "1"
+  },
+  "minio_trusted_user": {
+    "email": "test.dev.minio@iguide.edu",
+    "first_name": "TestFirst",
+    "last_name": "DevLast",
+    "bio": "Test bio",
+    "openid": "http://cilogon.org/serverTestM/users/70321",
+    "affiliation": "I-GUIDE",
+    "version": "1"
+  },
+  "access_trusted_user": {
+    "email": "test.access.ci@access.edu",
+    "first_name": "TestAccess",
+    "last_name": "DevCI",
+    "bio": "Test bio",
+    "openid": "http://cilogon.org/serverTestA/users/213890",
+    "affiliation": "ACCESS",
     "version": "1"
   },
   "private_trusted_user": {
@@ -27,7 +72,7 @@
     "last_name": "DevLast",
     "bio": "Test bio",
     "openid": "http://cilogon.org/serverTest/users/241213",
-    "affiliation": "University of Illinois, Urbana-Champaign",
+    "affiliation": "I-GUIDE",
     "version": "1"
   },
   "trusted_user_updated_first_name": "TestUpdatedName",
@@ -51,6 +96,7 @@
     "external-link":"https://testDataset.com/link-to-dataset/data",
     "direct-download-link":"https://testDataset.com/link-to-dataset/data.zip",
     "size":"100Mb",
+    "user-uploaded-dataset": false,
     "spatial-index-year":[""],
     "funding-agency":"",
     "visibility":"public",
@@ -76,5 +122,41 @@
       "medium":"https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/1739418467098-test_cover_image-765px.jpg",
       "high":"https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/1739418467098-test_cover_image-1024px.jpg"}
   },
-  "element_update_title": "Test Updated Dataset"
+  "element_update_title": "Test Updated Dataset",
+  "notebook_update_title": "Test Updated Notebook",
+  "test_notebook_repo_name": "https://github.com/I-GUIDE/iguide-ue-backend",
+  "test_notebook_file_name": "tests/dev/cybergis_test_notebook.ipynb",
+  "test_notebook_details_json": {
+    "title":"Test notebook",
+    "authors":["Test Dev","I-GUIDE Dev"],
+    "tags":["Testing","Notebook"],
+    "contents":"This is a test notebook being created",
+    "thumbnail-credit":"Screenshot",
+    "notebook-url":"https://github.com/I-GUIDE/iguide-ue-backend/blob/dev-candidate/tests/dev/cybergis_test_notebook.ipynb",
+    "spatial-index-year":[""],
+    "funding-agency":"",
+    "visibility":"public",
+    "resource-type":"notebook",
+    "metadata": {
+      "created_by":"60b54804-980c-4774-974a-ec27bf7954f2"
+    },
+    "related-resources":[],
+    "external-link-publication":"",
+    "spatial-coverage":[],
+    "spatial-geometry":"",
+    "spatial-bounding-box":"",
+    "spatial-centroid":"",
+    "spatial-georeferenced":"",
+    "spatial-temporal-coverage": [],
+    "license-id": "",
+    "license-name": "",
+    "license-statement": "",
+    "license-url": "",
+    "thumbnail-image": {
+      "original": "https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/1752718006800-image.png",
+      "low": "https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/1752718006800-image-300px.png",
+      "medium": "https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/1752718006800-image-765px.png",
+      "high": "https://backend-dev.i-guide.io:3500/user-uploads/thumbnails/1752718006800-image-1024px.png"
+    }
+  }
 }
