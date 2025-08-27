@@ -82,6 +82,15 @@ async function fetchNotebookContent(url) {
     throw Error('Failed to fetch the notebook');
 }
 
+function sanitizeFilename(filename) {
+  // Decode URL-encoded characters first
+  let decoded = decodeURIComponent(filename);
+
+  // Replace anything weird with underscores (spaces, special chars, etc.)
+  return decoded.replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+
 function parseGitHubNotebookUrl(url) {
   const GITHUB_BLOB_PREFIX = 'https://github.com/';
 
@@ -116,8 +125,11 @@ function parseGitHubNotebookUrl(url) {
 async function convertNotebookToHtmlV2(githubUrl, outputDir) {
 	const fileDetails = parseGitHubNotebookUrl(githubUrl)
 	const notebookName = fileDetails.filename;
+	// ✅ sanitize filename
+    const safeNotebookName = sanitizeFilename(notebookName);
+
 	const timestamp = Date.now();
-	const htmlOutputPath = path.join(outputDir, `${timestamp}-${notebookName}.html`);
+	const htmlOutputPath = path.join(outputDir, `${timestamp}-${safeNotebookName}.html`);
 	let notebookContent;
 	try {
 		notebookContent = await fetchNotebookContent(fileDetails.raw_url)
@@ -128,12 +140,12 @@ async function convertNotebookToHtmlV2(githubUrl, outputDir) {
 		console.log('Failed to fetch the notebook from the provided branch');
 		return null;
     }
-	const notebookFilePath = path.join(outputDir, `${timestamp}-${notebookName}.ipynb`);
+	const notebookFilePath = path.join(outputDir, `${timestamp}-${safeNotebookName}.ipynb`);
     fs.writeFileSync(notebookFilePath, notebookContent);
 
 	try {
 		await new Promise((resolve, reject) => {
-	    	exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${timestamp}-${notebookName}.html" --output-dir "${outputDir}"`,
+	    	exec(`jupyter nbconvert --to html "${notebookFilePath}" --output "${timestamp}-${safeNotebookName}.html" --output-dir "${outputDir}"`,
 		 	(error, stdout, stderr) => {
 		    	 if (error) {
 			 		reject(`Error converting notebook: ${stderr}`);
