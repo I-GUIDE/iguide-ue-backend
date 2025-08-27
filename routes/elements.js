@@ -869,6 +869,7 @@ router.post('/api/elements',
 		 * 		resource['html-notebook'] => generated
 		 * 		resource['notebook-url'] => new additions (if not present in the resource )
 		 */
+		let notebook_creation = false
 		if (resource['resource-type'] === 'notebook' &&
 			resource['notebook-url']) {
 			const notebookDetails = await convertNotebookToHtmlV2(resource['notebook-url'], notebook_html_dir);
@@ -878,7 +879,15 @@ router.post('/api/elements',
 					`https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(notebookDetails.htmlOutputPath)}`
 				resource['notebook-repo'] = notebookDetails["notebook-repo"];
 				resource['notebook-file'] = notebookDetails['notebook-file'];
+				notebook_creation = true;
 			}
+		}
+
+		if (resource['resource-type'] === 'notebook' &&
+			resource['notebook-url'] && notebook_creation === false) {
+			console.log('Error registering resource: notebook conversion failed!');
+			res.status(500).json({ error: 'Error registering resource, notebook creation failed!' });
+			return;
 		}
 		// Handle notebook resource type
 		// if (resource['resource-type'] === 'notebook' &&
@@ -1114,14 +1123,23 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 		 *        resource['html-notebook'] => generated
 		 *        resource['notebook-url'] => new additions (if not present in the resource )
 		 */
+		let notebook_status = false;
 		if (updates['resource-type'] === 'notebook' &&
 			updates['notebook-url']) {
 			const notebookDetails = await convertNotebookToHtmlV2(updates['notebook-url'], notebook_html_dir);
+			console.log("notebook details post update: ", notebookDetails);
 			if (notebookDetails) {
 				updates['html-notebook'] =
 					`https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(notebookDetails.htmlOutputPath)}`
 				updates['notebook-repo'] = notebookDetails["notebook-repo"];
 				updates['notebook-file'] = notebookDetails['notebook-file'];
+				notebook_status = true;
+			} else {
+				const element_details = await n4j.getElementByID(id, req.user.id);
+				updates['html-notebook'] = element_details['html-notebook']
+				updates['notebook-repo'] = element_details['notebook-repo']
+				updates['notebook-file'] = element_details['notebook-file']
+				notebook_status = false;
 			}
 		}
 		// if (updates['resource-type'] === 'notebook' &&
@@ -1216,10 +1234,10 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 				default:
 					break;
 			}
-			res.status(200).json({message: 'Element updated successfully', result: response});
+			res.status(200).json({message: 'Element updated successfully', result: response, notebookStatus: notebook_status});
 		} else {
 			console.log('Error updating element');
-			res.status(500).json({message: 'Error updating element', result: response});
+			res.status(500).json({message: 'Error updating element', result: response, notebookStatus: notebook_status});
 		}
     } catch (error) {
 		console.error('Error updating element:', error);
