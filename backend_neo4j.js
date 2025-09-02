@@ -44,7 +44,7 @@ export async function testServerConnection() {
  * Frontend expects data in a particular format which may or may not be the same when
  * returned from DB. This function is to post process all data before returning to frontend
  */
-function makeFrontendCompatible(element) {
+export function makeFrontendCompatible(element) {
     // frontend expects key names with '-', convert all '_' to '-'
 
     // let ret = Object.fromEntries(

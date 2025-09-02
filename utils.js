@@ -448,3 +448,21 @@ export async function checkHPCAccessGrant(user_id) {
         return false;
     }
 }
+
+export function getUserDetailsFromRequest(req) {
+    const {user_id, user_role} = (() => {
+	    if (!req.user || typeof req.user === 'undefined'){
+	        return {user_id:null, user_role:null};
+	    }
+	    return {user_id:req.user.id, user_role:req.user.role}
+    })();
+    return {user_id: user_id, user_role: user_role};
+}
+
+export function performUserCheck(req, user_id) {
+    const user_details = getUserDetailsFromRequest(req);
+    if (user_details?.user_id === user_id || user_details?.user_role === Role.SUPER_ADMIN) {
+        return true;
+    }
+    return false;
+}
