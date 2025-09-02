@@ -167,7 +167,14 @@ export async function getPdfUrlFromDoi(doi) {
 
 // Download and extract text from PDF
 export async function extractTextFromPdfUrl(pdfUrl) {
-    const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
+    const response = await axios.get(pdfUrl, {
+        responseType: 'arraybuffer',
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'Accept': 'application/pdf',
+            'Referer': pdfUrl // Sometimes needed for publisher sites
+        }
+    });
     const data = await pdfParse(response.data);
     return data.text;
 }
