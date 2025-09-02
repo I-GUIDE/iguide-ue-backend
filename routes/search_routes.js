@@ -3,7 +3,6 @@ import { Client } from '@opensearch-project/opensearch';
 import axios from 'axios';
 import cors from 'cors';
 import { Filter } from 'bad-words'
-const customFilter = new Filter();
 
 // local imports
 import * as utils from '../utils/utils.js';
