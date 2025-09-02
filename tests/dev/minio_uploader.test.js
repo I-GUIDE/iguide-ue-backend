@@ -1,13 +1,13 @@
 import request from "supertest";
 import app from "../../server.js";
 import testData from "./test_user_data.json";
-import {generateAccessToken} from "../../jwtUtils.js";
-import {ElementType, Role} from "../../utils.js";
+import {ElementType, Role} from "../../utils/utils.js";
 import path from "path";
 import url from "node:url";
 import fs from "fs";
 import axios from "axios";
 import * as crypto from "node:crypto";
+import {generateAccessToken} from "../../utils/jwtUtils.js";
 
 /**
  * As the APIs involve the usage of JWT Token for the purposes of the testing we will create 2 test suites with 2 different access
