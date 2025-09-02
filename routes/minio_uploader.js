@@ -3,12 +3,14 @@ import {
     CompleteMultipartUploadCommand,
     CreateMultipartUploadCommand, DeleteObjectCommand,
     S3Client,
-    UploadPartCommand
+    UploadPartCommand, ListObjectsV2Command,
+    CopyObjectCommand
 } from '@aws-sdk/client-s3';
 import multerS3 from 'multer-s3';
 import multer from 'multer';
 import dotenv from 'dotenv';
 import {ElementType, parseElementType} from "../utils/utils.js";
+import * as crypto from "node:crypto";
 
 dotenv.config();
 /****************************************************************************
@@ -19,7 +21,24 @@ export const MAX_FILE_SIZE = 2 * 1024 * 1025 * 1024; // 2 GB
 const CHUNK_SIZE = 5 * 1024 * 1024; // 50 MB
 const BUFFER_CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB
 const MIN_CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
-
+export const ALLOWED_MIME_TYPES = [
+    "application/x-shapefile",              // .shp
+    "application/octet-stream",             // .shx
+    "application/dbf",                      // .dbf
+    "application/x-prj",                    // .prj (no official standard; fallback to octet-stream if needed)
+    "application/geo+json",                 // .geojson
+    "application/json",                     // .json
+    "application/vnd.google-earth.kml+xml", // .kml
+    "application/vnd.google-earth.kmz",     // .kmz
+    "application/geopackage+sqlite3",       // .gpkg (sometimes application/x-sqlite3)
+    "application/x-filegdb",                // .gdb (Esri File Geodatabase)
+    "image/vnd.dxf",                        // .dxf
+    "image/vnd.dwg",                        // .dwg
+    "text/csv",                             // .csv
+    "application/zip",                      // .zip
+    "application/x-zip-compressed"          // Compressed .zip
+];
+const FILE_SEPARATOR = "---"
 /**
  * In-memory store for multipart uploads [Use Database or other Redis later]
  * @type {Map<any, any>}
@@ -52,8 +71,7 @@ export const upload = multer({
         key: (req, file, cb) => cb(null, file.originalname),
     }),
     fileFilter(req, file, cb) {
-        const allowed = ['text/csv', 'application/zip', 'application/x-zip-compressed'];
-        if (!allowed.includes(file.mimetype)) {
+        if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
             return cb(new Error('Invalid file type'), false);
         }
         cb(null, true);
@@ -70,8 +88,7 @@ export const multiChunkUpload = multer({
        fileSize: CHUNK_SIZE + BUFFER_CHUNK_SIZE,
     },
     fileFilter(req, file, cb) {
-    const allowed = ['text/csv', 'application/zip', 'application/x-zip-compressed', 'application/octet-stream'];
-    if (!allowed.includes(file.mimetype)) {
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
       return cb(new Error('Invalid file type'), false);
     }
     cb(null, true);
@@ -155,8 +172,17 @@ export async function completeMultipartUpload(uploadId) {
         .map(part => ({
             ETag: part.ETag,
             PartNumber: part.PartNumber,
+            buffer: part.buffer,
         }))
         .sort((a, b) => a.PartNumber - b.PartNumber);
+
+    // Checksum generation
+    const hash = crypto.createHash('sha256');
+    for(const part of parts) {
+        hash.update(part.buffer);
+    }
+
+    const checksum = hash.digest('hex');
 
     // Complete multipart upload
     const completeCommand = new CompleteMultipartUploadCommand({
@@ -174,11 +200,12 @@ export async function completeMultipartUpload(uploadId) {
     multipartUploads.delete(uploadId);
 
     return {
-      message: 'Dataset uploaded successfully',
-      url: result.Location,
-      bucket: process.env.MINIO_AWS_BUCKET_NAME,
-      key: uploadData.key,
-      filename: uploadData.filename,
+        message: 'Dataset uploaded successfully',
+        url: result.Location,
+        bucket: process.env.MINIO_AWS_BUCKET_NAME,
+        key: uploadData.key,
+        filename: uploadData.filename,
+        checksum: checksum,
     };
 }
 
@@ -237,8 +264,9 @@ export async function processChunkBasedOnUploadId(uploadId, uploadData, chunkNum
 
       // Store part info
       uploadData.parts[parseInt(chunkNumber)] = {
-        ETag: result.ETag,
-        PartNumber: partNumber,
+          ETag: result.ETag,
+          PartNumber: partNumber,
+          buffer: request.file.buffer,
       };
 
       multipartUploads.set(uploadId, uploadData);
@@ -255,17 +283,21 @@ export async function processChunkBasedOnUploadId(uploadId, uploadData, chunkNum
  * @param fileName
  * @param fileSize
  * @param mimeType
+ * @param userId
  * @returns {Promise<{result: boolean, uploadId: `${string}-${string}-${string}-${string}-${string}`, chunkSize: number, s3UploadId, key: string}>}
  */
-export async function initializeChunkUpload(fileName, fileSize, mimeType) {
+export async function initializeChunkUpload(fileName, fileSize, mimeType, userId) {
     const uploadId = crypto.randomUUID();
-    const fileKey = `${uploadId}-${fileName}`;
+    const fileKey = `temp/${uploadId}${FILE_SEPARATOR}${fileName}`;
 
     const multiPartCommand = new CreateMultipartUploadCommand({
         Bucket: process.env.MINIO_AWS_BUCKET_NAME,
         Key: fileKey,
         ContentType: mimeType,
-        ACL: 'public-read'
+        ACL: 'public-read',
+        Metadata: {
+            'uploaded-by': userId,
+        }
     });
 
     const result = await s3.send(multiPartCommand);
@@ -341,6 +373,42 @@ export async function deleteElementData(datasetUrl) {
     }
 }
 
+export function getRawFileNameFromUrl(dataset_url) {
+    let fileKey = extractFileKeyFromUrl(dataset_url);
+    let fileKeyArray = fileKey.split("/");
+    let rawFileName = fileKeyArray[fileKeyArray.length - 1].split(FILE_SEPARATOR)[1];
+    return rawFileName;
+}
+
+export async function moveDatasetToElement(dataset_url, element_id) {
+    try {
+        const rawFileName = getRawFileNameFromUrl(dataset_url);
+        const currentFileKey = extractFileKeyFromUrl(dataset_url);
+        const newFileKey = `${element_id}/${rawFileName}`;
+        const bucketName = process.env.MINIO_AWS_BUCKET_NAME;
+        const copyFileCommand = new CopyObjectCommand({
+            Bucket: bucketName,
+            CopySource: `/${bucketName}/${currentFileKey}`,
+            Key: newFileKey,
+            ACL: 'public-read',
+        });
+
+        await s3.send(copyFileCommand);
+
+        const deleteFileCommand = new DeleteObjectCommand({
+            Bucket: bucketName,
+            Key: currentFileKey,
+        });
+
+        await s3.send(deleteFileCommand);
+
+        let newFilePath = `${process.env.MINIO_ENDPOINT}/${process.env.MINIO_AWS_BUCKET_NAME}/${newFileKey}`
+        return newFilePath;
+    } catch (error) {
+        console.log('moveDatasetToElement() - Error: ', error);
+        return "";
+    }
+}
 /**
  * Function to clean up old uploads periodically
  */
@@ -363,6 +431,42 @@ function cleanupOldUploads() {
 }
 
 /**
- * Running the cleanup every hour
+ * Function to clean up all files in the `temp/` directory
+ */
+async function cleanupTempDirectory() {
+  try {
+    const listCommand = new ListObjectsV2Command({
+      Bucket: process.env.MINIO_AWS_BUCKET_NAME,
+      Prefix: "temp/",
+    });
+
+    const response = await s3.send(listCommand);
+
+    if (!response?.Contents || response?.Contents?.length === 0) {
+      console.log("No files found in temp/ directory.");
+      return;
+    }
+
+    for (const object of response.Contents) {
+      const deleteCommand = new DeleteObjectCommand({
+        Bucket: process.env.MINIO_AWS_BUCKET_NAME,
+        Key: object.Key,
+      });
+
+      await s3.send(deleteCommand);
+      console.log(`Deleted: ${object.Key}`);
+    }
+  } catch (err) {
+    console.error("Error cleaning temp directory:", err);
+  }
+}
+
+/**
+ * Run cleanup for /temp folder every 3 hours
+ */
+setInterval(cleanupTempDirectory, 3 * 60 * 60 * 1000);
+
+/**
+ * Running the cleanup of hashmap every hour
  */
 setInterval(cleanupOldUploads, 60 * 60 * 1000);

@@ -2,12 +2,19 @@ import express from 'express';
 import { Client } from '@opensearch-project/opensearch';
 import axios from 'axios';
 import cors from 'cors';
-const router = express.Router();
 import { Filter } from 'bad-words'
 const customFilter = new Filter();
 
 // local imports
 import * as utils from '../utils/utils.js';
+import {searchRoutesRateLimiter} from "../ip_policy.js";
+
+const router = express.Router();
+
+//Addition of rate limiter
+router.use(searchRoutesRateLimiter);
+
+const customFilter = new Filter();
 
 // Override the replace method to replace bad words with an empty string
 customFilter.replaceWord = (word) => '';
