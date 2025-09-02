@@ -76,7 +76,28 @@ export async function getSemanticSearchResults(userQuery) {
         }
       }
     });
-    return response.body.hits.hits;
+
+    // Map results: if inner_hits.pdf_chunk_hits exists, return the chunk, else the whole doc
+    return response.body.hits.hits.map(hit => {
+      if (hit.inner_hits && hit.inner_hits.pdf_chunk_hits && hit.inner_hits.pdf_chunk_hits.hits.hits.length > 0) {
+        // Return the matching chunk(s) with parent doc info
+        const chunkHit = hit.inner_hits.pdf_chunk_hits.hits.hits[0];
+        return {
+          _id: hit._id,
+          _score: hit._score,
+          _source: {
+            ...hit._source,
+            pdf_chunk: {
+              chunk_id: chunkHit._source.pdf_chunks.chunk_id,
+              text: chunkHit._source.pdf_chunks.text
+            }
+          }
+        };
+      } else {
+        // Fallback: return the whole doc
+        return hit;
+      }
+    });
   } catch (error) {
     console.error("Error connecting to OpenSearch:", error);
     return [];
