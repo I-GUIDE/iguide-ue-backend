@@ -170,7 +170,9 @@ export async function getContributorByIDv2(id) {
 		contributor["first_name"] = primary_alias["first_name"];
 		contributor["last_name"] = primary_alias["last_name"];
 		contributor["aliases"] = response?.Aliases;
-		contributor["role"] = utils.parse64BitNumber(contributor["role"]);
+		if (contributor["role"] !== undefined && contributor["role"]?.low) { // to only convert from neo4jInt when the same is returned
+			contributor["role"] = utils.parse64BitNumber(contributor["role"]);
+		}
 		contributor["total_contributions"] = utils.parse64BitNumber(response?.TotalContributions);
 		return makeFrontendCompatible(contributor)
 	} catch (error) {
@@ -451,7 +453,10 @@ export async function mergeSecondaryAliasesToPrimary(primary_user_id, secondary_
 	// convert [a1]-r1->[u1] , [a2]-r2->[u2] to [a1]-r1->[u1]<-r3-[a2]-r2->[u2]
 	try {
 		let query_str =
-			"MATCH (c1:Contributor{id: $primary_user_id})<-[r1:ALIAS_OF]-(a1:Alias)"
+			"MATCH (c1:Contributor{id: $primary_user_id})<-[r1:ALIAS_OF]-(a1:Alias) " +
+			"MATCH (c2:Contributor{id: $secondary_user_id})<-[r2:ALIAS_OF]-(a2:Alias) " +
+			"CREATE (a2)-[r3:ALIAS_OF]->(c1) " +
+			"SET a2.is_primary = false"
 	} catch (error) {
 		console.log('mergeSecondaryAliasesToPrimary() - Error in query: ' + error);
 		return false;
@@ -461,4 +466,11 @@ export async function mergeSecondaryAliasesToPrimary(primary_user_id, secondary_
 export async function revertMergeSecondaryAliasesToPrimary(primary_user_id, secondary_user_id) {
 	// convert [a1]-r1->[u1]<-r3-[a2]-r2->[u2] to [a1]-r1->[u1] , [a2]-r2->[u2]
 	// Just delete the newly created r3..n
+	try {
+		let query_str =
+			"MATCH"
+	} catch (error) {
+		console.log('revertMergeSecondaryAliasesToPrimary() - Error in query: ' + error);
+		return false;
+	}
 }
