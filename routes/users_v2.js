@@ -123,6 +123,44 @@ router.get('/api/users',
 
 /**
  * @swagger
+ * /api/users/{userId}:
+ *   get:
+ *     summary: Get user information with aliases
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The userId of the user
+ *     responses:
+ *       200:
+ *         description: Return the user document with all aliases
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
+router.options('api/users/:id', cors());
+router.get('/api/users/:id', cors(), async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
+    try {
+		const response = await getContributorByIDv2(id);
+		if (response.size === 0){
+	    	return res.status(404).json({ message: 'User not found' });
+		}
+		// remove role attribute
+		// delete response['role'];
+		res.status(200).json(response);
+    } catch (error) {
+		console.error('Error fetching user:', error);
+		res.status(500).json({ message: 'Error fetching the user' });
+    }
+});
+
+/**
+ * @swagger
  * /api/users/{id}/role:
  *   get:
  *     summary: Return the user role given the id
@@ -142,7 +180,7 @@ router.get('/api/users',
  *       500:
  *         description: Error fetching the user
  */
-router.options('/api/users/:id/role', cors());
+router.options('/api/users/:id/role', jwtCorsMiddleware);
 router.get('/api/users/:id/role',
 		jwtCorsMiddleware,
 		authenticateJWT,
@@ -317,43 +355,6 @@ router.post('/api/users',
     }
 });
 
-/**
- * @swagger
- * /api/users/{userId}:
- *   get:
- *     summary: Get user information with aliases
- *     tags: ['users']
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *         description: The userId of the user
- *     responses:
- *       200:
- *         description: Return the user document with all aliases
- *       404:
- *         description: User not found
- *       500:
- *         description: Internal server error
- */
-router.options('api/users/:id', cors());
-router.get('/api/users/:id', cors(), async (req, res) => {
-    const id = decodeURIComponent(req.params.id);
-    try {
-		const response = await getContributorByIDv2(id);
-		if (response.size === 0){
-	    	return res.status(404).json({ message: 'User not found' });
-		}
-		// remove role attribute
-		// delete response['role'];
-		res.status(200).json(response);
-    } catch (error) {
-		console.error('Error fetching user:', error);
-		res.status(500).json({ message: 'Error fetching the user' });
-    }
-});
 
 /**
  * @swagger
