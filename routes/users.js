@@ -47,7 +47,6 @@ const uploadAvatar = multer({ storage: avatarStorage });
  *   get:
  *     summary: Return the user document given the id
  *     deprecated: true
- *     deprecated: true
  *     tags: ['users']
  *     parameters:
  *       - in: path
