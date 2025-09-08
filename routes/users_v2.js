@@ -42,6 +42,45 @@ const avatarStorage = multer.diskStorage({
 	}
 });
 const uploadAvatar = multer({ storage: avatarStorage });
+
+/**
+ * @swagger
+ * /api/users/{userId}:
+ *   get:
+ *     summary: Get user information with aliases
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The userId of the user
+ *     responses:
+ *       200:
+ *         description: Return the user document with all aliases
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
+router.options('api/users/:id', cors());
+router.get('/api/users/:id', cors(), async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
+    try {
+		const response = await getContributorByIDv2(id);
+		if (response.size === 0){
+	    	return res.status(404).json({ message: 'User not found' });
+		}
+		// remove role attribute
+		// delete response['role'];
+		res.status(200).json(response);
+    } catch (error) {
+		console.error('Error fetching user:', error);
+		res.status(500).json({ message: 'Error fetching the user' });
+    }
+});
+
 /**
  * @swagger
  * /api/users:
@@ -123,41 +162,103 @@ router.get('/api/users',
 
 /**
  * @swagger
- * /api/users/{userId}:
- *   get:
- *     summary: Get user information with aliases
+ * /api/users/{id}/role:
+ *   put:
+ *     summary: Update the user's role
  *     tags: ['users']
  *     parameters:
  *       - in: path
- *         name: userId
+ *         name: id
  *         required: true
  *         schema:
  *           type: string
- *         description: The userId of the user
+ *         description: The ID of the user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *            properties:
+ *               role:
+ *                 type: integer
  *     responses:
  *       200:
- *         description: Return the user document with all aliases
+ *         description: User role updated successfully
  *       404:
- *         description: User not found
+ *         description: Provided role id or user id does not exist
  *       500:
- *         description: Internal server error
+ *         description: Error in updating user role
  */
-router.options('api/users/:id', cors());
-router.get('/api/users/:id', cors(), async (req, res) => {
-    const id = decodeURIComponent(req.params.id);
-    try {
-		const response = await getContributorByIDv2(id);
-		if (response.size === 0){
-	    	return res.status(404).json({ message: 'User not found' });
-		}
-		// remove role attribute
-		// delete response['role'];
-		res.status(200).json(response);
-    } catch (error) {
-		console.error('Error fetching user:', error);
-		res.status(500).json({ message: 'Error fetching the user' });
-    }
+// Handle OPTIONS requests for both methods
+router.options('/api/users/:id/role', (req, res) => {
+	const method = req.header('Access-Control-Request-Method');
+	if (method === 'PUT') {
+		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+		res.header('Access-Control-Allow-Methods', 'PUT');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+		res.header('Access-Control-Allow-Credentials', 'true');
+	} else if (method === 'GET') {
+		res.header('Access-Control-Allow-Origin', '*');
+		res.header('Access-Control-Allow-Methods', 'GET');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
+	}
+	res.sendStatus(204); // No content
 });
+router.put('/api/users/:id/role',
+		jwtCorsMiddleware,
+		authenticateJWT,
+		authorizeRole(Role.SUPER_ADMIN),
+		async (req, res) => {
+	try {
+		const id = decodeURIComponent(req.params.id);
+		const updated_role_body = req.body;
+
+		if (updated_role_body['role'] !== undefined) {
+			console.log('Updating user role for userId: ' + id);
+			//Check if the new role is a valid role and if the role is till the TRUSTED USER
+			let valid_role = true
+			let allowed_role = true
+			let parsed_role = 0
+			try {
+				parsed_role = parseRole(updated_role_body['role']);
+			} catch (err) {
+				console.log('Unrecognized Role found: ', updated_role_body['role']);
+				valid_role = false;
+			}
+			if (parsed_role <= Role.ADMIN) {
+				allowed_role = false
+			}
+			if (parsed_role === Role.TRUSTED_USER_PLUS) {
+				allowed_role = await checkHPCAccessGrantV2(id);
+				if (!allowed_role) {
+					res.status(404).json(
+						{message: 'Cannot update user role for TRUSTED_USER_PLUS, user should be ACCESS CI (XSEDE) logged in'});
+					return;
+				}
+			}
+			if (valid_role && allowed_role) {
+				const response = await n4j.updateRoleById(id, parsed_role);
+				if (response) {
+					res.status(200).json({message: 'User role updated successfully'});
+				} else {
+					res.status(500).json({message: 'Error in updating user role'});
+				}
+			} else {
+				if (valid_role === false) {
+					res.status(404).json({message: 'Provided role id does not exist'});
+				} else {
+					res.status(404).json({message: 'Cannot update user role above TRUSTED USER'});
+				}
+			}
+		} else {
+			res.status(404).json({message: 'User body not containing required attribute'});
+		}
+	} catch (error) {
+		console.error('Error in updating user role: ', error);
+		res.status(500).json({message: 'Error in updating user role'});
+	}
+});
+
 
 /**
  * @swagger
@@ -180,16 +281,17 @@ router.get('/api/users/:id', cors(), async (req, res) => {
  *       500:
  *         description: Error fetching the user
  */
-router.options('/api/users/:id/role', jwtCorsMiddleware);
+router.options('/api/users/:id/role', cors());
 router.get('/api/users/:id/role',
-		jwtCorsMiddleware,
-		authenticateJWT,
+		cors(),
+		// jwtCorsMiddleware,
+		// authenticateJWT,
 		async (req, res) => {
     const id = decodeURIComponent(req.params.id);
-	if (performUserCheck(req, id) === false) {
-		res.status(403).json({message: 'User is not permitted to perform this action.'});
-		return;
-	}
+	// if (performUserCheck(req, id) === false) {
+	// 	res.status(403).json({message: 'User is not permitted to perform this action.'});
+	// 	return;
+	// }
     try {
 		const response = await getContributorByIDv2(id);
 		if (response?.size){
@@ -974,105 +1076,6 @@ router.post('/api/users/merge',
 		res.status(500).json({message: 'Error in merging accounts'});
 	}
 
-});
-
-/**
- * @swagger
- * /api/users/{id}/role:
- *   put:
- *     summary: Update the user's role
- *     tags: ['users']
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: The ID of the user
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *            properties:
- *               role:
- *                 type: integer
- *     responses:
- *       200:
- *         description: User role updated successfully
- *       404:
- *         description: Provided role id or user id does not exist
- *       500:
- *         description: Error in updating user role
- */
-// Handle OPTIONS requests for both methods
-router.options('/api/users/:id/role', (req, res) => {
-	const method = req.header('Access-Control-Request-Method');
-	if (method === 'PUT') {
-		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
-		res.header('Access-Control-Allow-Methods', 'PUT');
-		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
-		res.header('Access-Control-Allow-Credentials', 'true');
-	} else if (method === 'GET') {
-		res.header('Access-Control-Allow-Origin', '*');
-		res.header('Access-Control-Allow-Methods', 'GET');
-		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
-	}
-	res.sendStatus(204); // No content
-});
-router.put('/api/users/:id/role',
-		jwtCorsMiddleware,
-		authenticateJWT,
-		authorizeRole(Role.SUPER_ADMIN),
-		async (req, res) => {
-	try {
-		const id = decodeURIComponent(req.params.id);
-		const updated_role_body = req.body;
-
-		if (updated_role_body['role'] !== undefined) {
-			console.log('Updating user role for userId: ' + id);
-			//Check if the new role is a valid role and if the role is till the TRUSTED USER
-			let valid_role = true
-			let allowed_role = true
-			let parsed_role = 0
-			try {
-				parsed_role = parseRole(updated_role_body['role']);
-			} catch (err) {
-				console.log('Unrecognized Role found: ', updated_role_body['role']);
-				valid_role = false;
-			}
-			if (parsed_role <= Role.ADMIN) {
-				allowed_role = false
-			}
-			if (parsed_role === Role.TRUSTED_USER_PLUS) {
-				allowed_role = await checkHPCAccessGrantV2(id);
-				if (!allowed_role) {
-					res.status(404).json(
-						{message: 'Cannot update user role for TRUSTED_USER_PLUS, user should be ACCESS CI (XSEDE) logged in'});
-					return;
-				}
-			}
-			if (valid_role && allowed_role) {
-				const response = await n4j.updateRoleById(id, parsed_role);
-				if (response) {
-					res.status(200).json({message: 'User role updated successfully'});
-				} else {
-					res.status(500).json({message: 'Error in updating user role'});
-				}
-			} else {
-				if (valid_role === false) {
-					res.status(404).json({message: 'Provided role id does not exist'});
-				} else {
-					res.status(404).json({message: 'Cannot update user role above TRUSTED USER'});
-				}
-			}
-		} else {
-			res.status(404).json({message: 'User body not containing required attribute'});
-		}
-	} catch (error) {
-		console.error('Error in updating user role: ', error);
-		res.status(500).json({message: 'Error in updating user role'});
-	}
 });
 
 // Commenting the swagger definition makes sure the API is not visible in the Swagger Definition
