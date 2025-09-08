@@ -29,7 +29,7 @@ const options = {
       //, './routes/*.js'
       , './routes/search_routes.js'
       , './routes/private_elements.js'
-      , './routes/users.js'
+      // , './routes/users.js'
       , './routes/documentation.js'
       , './routes/elements.js'
       , './routes/spatial_search_routes.js'

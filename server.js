@@ -62,9 +62,9 @@ app.use('/api', spatial_routes);
 app.use('/api', private_elements);
 // Use documentation route
 app.use('/api', documentation);
-// Use users/contributors route
-app.use(users);
-// Use users/contributors route
+// // Use users/contributors route
+// app.use(users);
+// Use users/contributors route (v2 version)
 app.use(users_v2);
 // Use elements route
 app.use(elements);

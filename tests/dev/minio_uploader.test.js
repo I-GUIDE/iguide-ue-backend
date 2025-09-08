@@ -53,7 +53,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
         let user_body = testData.minio_trusted_user
         const res = await request(app)
-            .post('/api/v2/users')
+            .post('/api/users')
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -65,7 +65,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
         let user_open_id_encoded = encodeURIComponent(testData.minio_trusted_user.openid);
         const res = await request(app)
-            .get('/api/v2/users/' + user_open_id_encoded)
+            .get('/api/users/' + user_open_id_encoded)
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
@@ -346,7 +346,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
     // });
     it("(External) Should allow only SUPER_ADMIN to delete temp user", async () => {
         const res = await request(app)
-            .delete("/api/v2/users/" + generated_user_id)
+            .delete("/api/users/" + generated_user_id)
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set('Content-Type', "application/json");

@@ -43,7 +43,7 @@ const uploadAvatar = multer({ storage: avatarStorage });
 //DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/users/{id}:
+ * /api/v1/users/{id}:
  *   get:
  *     summary: Return the user document given the id
  *     deprecated: true
@@ -64,7 +64,7 @@ const uploadAvatar = multer({ storage: avatarStorage });
  *         description: Error fetching the user
  */
 //router.options('/users/:id', cors());
-router.get('/api/users/:id', cors(), async (req, res) => {
+router.get('/api/v1/users/:id', cors(), async (req, res) => {
 	const id = decodeURIComponent(req.params.id);
 	try {
 	const response = await n4j.getContributorByID(id);
@@ -83,7 +83,7 @@ router.get('/api/users/:id', cors(), async (req, res) => {
 //DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/users:
+ * /api/v1/users:
  *   get:
  *     summary: Return all users
  *     deprecated: true
@@ -137,7 +137,7 @@ router.get('/api/users/:id', cors(), async (req, res) => {
  *       500:
  *         description: Error fetching the user list
  */
-router.get('/api/users',
+router.get('/api/v1/users',
 		jwtCorsMiddleware,
 		authenticateJWT,
 		authorizeRole(Role.SUPER_ADMIN),
@@ -163,7 +163,7 @@ router.get('/api/users',
 //DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/users/{id}/role:
+ * /api/v1/users/{id}/role:
  *   put:
  *     summary: Update the user's role
  *     deprecated: true
@@ -192,7 +192,7 @@ router.get('/api/users',
  *         description: Error in updating user role
  */
 // Handle OPTIONS requests for both methods
-router.options('/api/users/:id/role', (req, res) => {
+router.options('/api/v1/users/:id/role', (req, res) => {
 	const method = req.header('Access-Control-Request-Method');
 	if (method === 'PUT') {
 		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
@@ -206,7 +206,7 @@ router.options('/api/users/:id/role', (req, res) => {
 	}
 	res.sendStatus(204); // No content
 });
-router.put('/api/users/:id/role',
+router.put('/api/v1/users/:id/role',
 		jwtCorsMiddleware,
 		authenticateJWT,
 		authorizeRole(Role.SUPER_ADMIN),
@@ -264,7 +264,7 @@ router.put('/api/users/:id/role',
 //DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/users/{id}/role:
+ * /api/v1/users/{id}/role:
  *   get:
  *     summary: Return the user role given the id
  *     deprecated: true
@@ -284,8 +284,8 @@ router.put('/api/users/:id/role',
  *       500:
  *         description: Error fetching the user
  */
-router.options('/api/users/:id/role', cors());
-router.get('/api/users/:id/role', cors(), async (req, res) => {
+router.options('/api/v1/users/:id/role', cors());
+router.get('/api/v1/users/:id/role', cors(), async (req, res) => {
 	const id = decodeURIComponent(req.params.id);
 	try {
 	const response = await n4j.getContributorByID(id);
@@ -303,7 +303,7 @@ router.get('/api/users/:id/role', cors(), async (req, res) => {
 //DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/users/{id}/valid:
+ * /api/v1/users/{id}/valid:
  *   get:
  *     summary: Check if a user exists given the id
  *     deprecated: true
@@ -321,8 +321,8 @@ router.get('/api/users/:id/role', cors(), async (req, res) => {
  *       500:
  *         description: Error checking the user
  */
-router.options('/api/users/:id/valid', cors());
-router.get('/api/users/:id/valid', cors(), async (req, res) => {
+router.options('/api/v1/users/:id/valid', cors());
+router.get('/api/v1/users/:id/valid', cors(), async (req, res) => {
 	const id = decodeURIComponent(req.params.id);
 
 	console.log('Check user ...' + id);
@@ -339,7 +339,7 @@ router.get('/api/users/:id/valid', cors(), async (req, res) => {
 //DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/users/avatar:
+ * /api/v1/users/avatar:
  *   post:
  *     summary: Upload/update an avatar image for the user profile
  *     deprecated: true
@@ -361,8 +361,8 @@ router.get('/api/users/:id/valid', cors(), async (req, res) => {
  *       400:
  *         description: No file uploaded
  */
-router.options('/api/users/avatar', jwtCorsMiddleware);
-router.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
+router.options('/api/v1/users/avatar', jwtCorsMiddleware);
+router.post('/api/v1/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
 	// if (!req.file) {
 	// 	return res.status(400).json({ message: 'No file uploaded' });
 	// }
@@ -426,7 +426,7 @@ router.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvata
 //DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/users:
+ * /api/v1/users:
  *   post:
  *     summary: Add a new user document
  *     deprecated: true
@@ -450,8 +450,8 @@ router.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvata
  *       500:
  *         description: Internal server error
  */
-router.options('/api/users', jwtCorsMiddleware);
-router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.options('/api/v1/users', jwtCorsMiddleware);
+router.post('/api/v1/users', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
 	const user = req.body;
 	console.log('Adding new user');
 	//console.log(user);
@@ -484,7 +484,7 @@ router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) =
 //DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/auth/users:
+ * /api/v1/auth/users:
  *   post:
  *     summary: Add a new user document for authorized server
  *     deprecated: true
@@ -508,8 +508,8 @@ router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) =
  *       500:
  *         description: Internal server error
  */
-router.options('/api/auth/users', jwtCorsMiddleware);
-router.post('/api/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, res) => {
+router.options('/api/v1/auth/users', jwtCorsMiddleware);
+router.post('/api/v1/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, res) => {
 
 	const user = req.body;
 	console.log('Adding new user through auth API');
@@ -541,7 +541,7 @@ router.post('/api/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, 
 //DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/users/{id}:
+ * /api/v1/users/{id}:
  *   put:
  *     summary: Update the user document
  *     deprecated: true
@@ -570,7 +570,7 @@ router.post('/api/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, 
  *         description: Internal server error
  */
 // Handle OPTIONS requests for both methods
-router.options('/api/users/:id', (req, res) => {
+router.options('/api/v1/users/:id', (req, res) => {
 	const method = req.header('Access-Control-Request-Method');
 	if (method === 'PUT') {
 		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
@@ -589,7 +589,7 @@ router.options('/api/users/:id', (req, res) => {
 	}
 	res.sendStatus(204); // No content
 });
-router.put('/api/users/:id',
+router.put('/api/v1/users/:id',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	async (req, res) => {
@@ -661,7 +661,7 @@ router.put('/api/users/:id',
 
 /**
  * @swagger
- * /api/users/bookmark/{elementId}:
+ * /api/v1/users/bookmark/{elementId}:
  *   put:
  *     summary: Toggle element bookmark by logged-in user
  *     tags: ['users']
@@ -693,8 +693,8 @@ router.put('/api/users/:id',
  *       500:
  *         description: Internal server error
  */
-router.options('/api/users/bookmark/:elementId', jwtCorsMiddleware);
-router.put('/api/users/bookmark/:elementId',
+router.options('/api/v1/users/bookmark/:elementId', jwtCorsMiddleware);
+router.put('/api/v1/users/bookmark/:elementId',
 	   jwtCorsMiddleware,
 	   authenticateJWT,
 	   async (req, res) => {
@@ -766,8 +766,8 @@ router.put('/api/users/bookmark/:elementId',
  *       500:
  *         description: Internal server error
  */
-router.options('/api/users/bookmark/:elementId', jwtCorsMiddleware);
-router.get('/api/users/bookmark/:elementId',
+router.options('/api/v1/users/bookmark/:elementId', jwtCorsMiddleware);
+router.get('/api/v1/users/bookmark/:elementId',
 	   jwtCorsMiddleware,
 	   authenticateJWT,
 	   async (req, res) => {
@@ -806,7 +806,7 @@ router.get('/api/users/bookmark/:elementId',
 // Commenting the swagger definition makes sure the API is not visible in the Swagger Definition
 // /**
 //  * @swagger
-//  * /api/users/{id}:
+//  * /api/v1/users/{id}:
 //  *   delete:
 //  *     summary: Delete the user document
 //  *     tags: ['users']
@@ -827,7 +827,7 @@ router.get('/api/users/bookmark/:elementId',
 //  *       500:
 //  *         description: Internal server error
 //  */
-router.delete('/api/users/:id',
+router.delete('/api/v1/users/:id',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	authorizeRole(utils.Role.SUPER_ADMIN),

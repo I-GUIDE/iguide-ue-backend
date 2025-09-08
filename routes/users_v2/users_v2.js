@@ -8,7 +8,7 @@ import {
 	checkUpdateParameters,
 	EditableParameters,
 	generateMultipleResolutionImagesFor,
-	parse64BitNumber, parseRole,
+	parse64BitNumber, parseElementType, parseRole,
 	performUserCheck,
 	Role
 } from "../../utils/utils.js"
@@ -27,6 +27,8 @@ const router = express.Router();
 
 // Ensure required directories exist
 const avatar_dir = path.join(process.env.UPLOAD_FOLDER, 'avatars');
+// Serve static files from the thumbnails directory
+router.use('/user-uploads/avatars', express.static(avatar_dir));
 fs.mkdirSync(avatar_dir, { recursive: true });
 // Configure storage for avatars
 const avatarStorage = multer.diskStorage({
@@ -42,7 +44,7 @@ const avatarStorage = multer.diskStorage({
 const uploadAvatar = multer({ storage: avatarStorage });
 /**
  * @swagger
- * /api/v2/users:
+ * /api/users:
  *   get:
  *     summary: Return all users
  *     tags: ['users']
@@ -95,8 +97,8 @@ const uploadAvatar = multer({ storage: avatarStorage });
  *       500:
  *         description: Error fetching the user list
  */
-router.options('/api/v2/users', cors());
-router.get('/api/v2/users',
+router.options('/api/users', cors());
+router.get('/api/users',
 		jwtCorsMiddleware,
 		authenticateJWT,
 		authorizeRole(Role.SUPER_ADMIN),
@@ -121,7 +123,7 @@ router.get('/api/v2/users',
 
 /**
  * @swagger
- * /api/v2/users/{id}/role:
+ * /api/users/{id}/role:
  *   get:
  *     summary: Return the user role given the id
  *     tags: ['users']
@@ -140,8 +142,8 @@ router.get('/api/v2/users',
  *       500:
  *         description: Error fetching the user
  */
-router.options('/api/v2/users/:id/role', cors());
-router.get('/api/v2/users/:id/role',
+router.options('/api/users/:id/role', cors());
+router.get('/api/users/:id/role',
 		jwtCorsMiddleware,
 		authenticateJWT,
 		async (req, res) => {
@@ -165,7 +167,7 @@ router.get('/api/v2/users/:id/role',
 
 /**
  * @swagger
- * /api/v2/users/{id}/valid:
+ * /api/users/{id}/valid:
  *   get:
  *     summary: Check if a user exists given the id/openId
  *     tags: ['users']
@@ -182,8 +184,8 @@ router.get('/api/v2/users/:id/role',
  *       500:
  *         description: Error checking the user
  */
-router.options('/api/v2/users/:id/valid', cors());
-router.get('/api/v2/users/:id/valid', cors(), async (req, res) => {
+router.options('/api/users/:id/valid', cors());
+router.get('/api/users/:id/valid', cors(), async (req, res) => {
     const id = decodeURIComponent(req.params.id);
 
     console.log('Check user ...' + id);
@@ -198,7 +200,7 @@ router.get('/api/v2/users/:id/valid', cors(), async (req, res) => {
 
 /**
  * @swagger
- * /api/v2/auth/users:
+ * /api/auth/users:
  *   post:
  *     summary: Add a new user document for authorized server
  *     tags: ['users']
@@ -221,8 +223,8 @@ router.get('/api/v2/users/:id/valid', cors(), async (req, res) => {
  *       500:
  *         description: Internal server error
  */
-router.options('/api/v2/auth/users', jwtCorsMiddleware);
-router.post('/api/v2/auth/users',
+router.options('/api/auth/users', jwtCorsMiddleware);
+router.post('/api/auth/users',
 	jwtCorsMiddleware,
 	authenticateAuth,
 	async (req, res) => {
@@ -256,7 +258,7 @@ router.post('/api/v2/auth/users',
 
 /**
  * @swagger
- * /api/v2/users:
+ * /api/users:
  *   post:
  *     summary: Add a new user document version 2 with Alias
  *     tags: ['users']
@@ -279,10 +281,10 @@ router.post('/api/v2/auth/users',
  *       500:
  *         description: Internal server error
  */
-router.options('/api/v2/users',
+router.options('/api/users',
 	jwtCorsMiddleware
 );
-router.post('/api/v2/users',
+router.post('/api/users',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	async (req, res) => {
@@ -317,7 +319,7 @@ router.post('/api/v2/users',
 
 /**
  * @swagger
- * /api/v2/users/{userId}:
+ * /api/users/{userId}:
  *   get:
  *     summary: Get user information with aliases
  *     tags: ['users']
@@ -336,8 +338,8 @@ router.post('/api/v2/users',
  *       500:
  *         description: Internal server error
  */
-router.options('api/v2/users/:id', cors());
-router.get('/api/v2/users/:id', cors(), async (req, res) => {
+router.options('api/users/:id', cors());
+router.get('/api/users/:id', cors(), async (req, res) => {
     const id = decodeURIComponent(req.params.id);
     try {
 		const response = await getContributorByIDv2(id);
@@ -345,7 +347,7 @@ router.get('/api/v2/users/:id', cors(), async (req, res) => {
 	    	return res.status(404).json({ message: 'User not found' });
 		}
 		// remove role attribute
-		delete response['role'];
+		// delete response['role'];
 		res.status(200).json(response);
     } catch (error) {
 		console.error('Error fetching user:', error);
@@ -355,7 +357,7 @@ router.get('/api/v2/users/:id', cors(), async (req, res) => {
 
 /**
  * @swagger
- * /api/v2/users/{id}:
+ * /api/users/{id}:
  *   put:
  *     summary: Update the user document
  *     tags: ['users']
@@ -383,7 +385,7 @@ router.get('/api/v2/users/:id', cors(), async (req, res) => {
  *         description: Internal server error
  */
 // Handle OPTIONS requests for both methods
-router.options('/api/v2/users/:id', (req, res) => {
+router.options('/api/users/:id', (req, res) => {
 	const method = req.header('Access-Control-Request-Method');
 	if (method === 'PUT') {
 		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
@@ -402,7 +404,7 @@ router.options('/api/v2/users/:id', (req, res) => {
 	}
 	res.sendStatus(204); // No content
 });
-router.put('/api/v2/users/:id',
+router.put('/api/users/:id',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	async (req, res) => {
@@ -474,7 +476,7 @@ router.put('/api/v2/users/:id',
 
 /**
  * @swagger
- * /api/v2/users/avatar:
+ * /api/users/avatar:
  *   post:
  *     summary: Upload/update an avatar image for the user profile
  *     tags: ['users']
@@ -495,8 +497,8 @@ router.put('/api/v2/users/:id',
  *       400:
  *         description: No file uploaded
  */
-router.options('/api/v2/users/avatar', jwtCorsMiddleware);
-router.post('/api/v2/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
+router.options('/api/users/avatar', jwtCorsMiddleware);
+router.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
 	// if (!req.file) {
 	// 	return res.status(400).json({ message: 'No file uploaded' });
 	// }
@@ -794,7 +796,150 @@ router.post('/api/v2/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAv
 // 	}
 // });
 
-router.post('/api/v2/users/merge',
+/**
+ * @swagger
+ * /api/users/bookmark/{elementId}:
+ *   put:
+ *     summary: Toggle element bookmark by logged-in user
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: elementId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the element user is trying to (un)bookmark
+ *       - in: query
+ *         name: bookmark
+ *         required: true
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: elementType
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [dataset, notebook, publication, oer, map]
+ *         description: Type of the element to bookmark. Will make DB querying efficient
+
+ *     responses:
+ *       200:
+ *         description: Element bookmark set by user successfully
+ *       401:
+ *         description: Error setting element bookmark. Can be due to multiple reasons i.e. (1) Element does not exists, (2) Invalid contributor ID, (3) Bookamrked relation already exists.
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/api/users/bookmark/:elementId', jwtCorsMiddleware);
+router.put('/api/users/bookmark/:elementId',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
+		const element_id = decodeURIComponent(req.params['elementId']);
+		const bookmark = req.query['bookmark'];
+		const element_type = (() => {
+			if (req.query['elementType']) {
+				return parseElementType(req.query['elementType']);
+			}
+			return null;
+		})();
+
+		const {user_id, user_role} = (() => {
+			if (!req.user || req.user == null || typeof req.user === 'undefined') {
+				return {user_id: null, user_role: null};
+			}
+			return {user_id: req.user.id, user_role: req.user.role}
+		})();
+
+		// 'http://cilogon.org/serverA/users/48835826'
+		// const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
+		// 				  user_role: utils.Role.TRUSTED_USER};
+
+		console.log('User: ' + user_id +
+			' setting element: ' + element_id +
+			' bookmark: ' + bookmark);
+		try {
+			const response = await n4j.toggleElementBookmarkByContributor(user_id,
+				element_id,
+				element_type,
+				bookmark);
+			if (response) {
+				//res.status(200).json({ message: 'Toggle element bookmark success' });
+				res.json({message: 'Toggle element bookmark success'});
+			} else {
+				console.log('Error setting element bookmark');
+				res.status(401).json({message: 'Error setting element bookmark'});
+			}
+		} catch (error) {
+			console.error('Error setting element bookmark:', error);
+			res.status(500).json({message: 'Internal server error'});
+		}
+	});
+
+/**
+ * @swagger
+ * /api/users/bookmark/{elementId}:
+ *   get:
+ *     summary: Get whether element is bookmarked by the user or not
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: elementId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the bookmark element
+ *       - in: query
+ *         name: elementType
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [dataset, notebook, publication, oer, map]
+ *         description: Type of the element to bookmark. Will make DB querying efficient
+
+ *     responses:
+ *       200:
+ *         description: True if element bookmarked by user, False otherwise
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/api/users/bookmark/:elementId', jwtCorsMiddleware);
+router.get('/api/users/bookmark/:elementId',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
+		const element_id = decodeURIComponent(req.params['elementId']);
+		//const user_id = decodeURIComponent(req.params['userId']);
+		const element_type = (() => {
+			if (req.query['elementType']) {
+				return parseElementType(req.query['elementType']);
+			}
+			return null;
+		})();
+
+		const {user_id, user_role} = (() => {
+			if (!req.user || req.user == null || typeof req.user === 'undefined') {
+				return {user_id: null, user_role: null};
+			}
+			return {user_id: req.user.id, user_role: req.user.role}
+		})();
+
+		// // 'http://cilogon.org/serverA/users/48835826'
+		// const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
+		// 				  user_role: utils.Role.TRUSTED_USER};
+
+		try {
+			const response = await n4j.getIfElementBookmarkedByContributor(user_id,
+				element_id,
+				element_type);
+			res.status(200).json(response);
+		} catch (error) {
+			console.error('Error updating user:', error);
+			res.status(500).json({message: 'Internal server error'});
+		}
+	});
+
+router.post('/api/users/merge',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	authorizeRole(Role.SUPER_ADMIN),
@@ -832,7 +977,7 @@ router.post('/api/v2/users/merge',
 
 /**
  * @swagger
- * /api/v2/users/{id}/role:
+ * /api/users/{id}/role:
  *   put:
  *     summary: Update the user's role
  *     tags: ['users']
@@ -860,7 +1005,7 @@ router.post('/api/v2/users/merge',
  *         description: Error in updating user role
  */
 // Handle OPTIONS requests for both methods
-router.options('/api/v2/users/:id/role', (req, res) => {
+router.options('/api/users/:id/role', (req, res) => {
 	const method = req.header('Access-Control-Request-Method');
 	if (method === 'PUT') {
 		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
@@ -874,7 +1019,7 @@ router.options('/api/v2/users/:id/role', (req, res) => {
 	}
 	res.sendStatus(204); // No content
 });
-router.put('/api/v2/users/:id/role',
+router.put('/api/users/:id/role',
 		jwtCorsMiddleware,
 		authenticateJWT,
 		authorizeRole(Role.SUPER_ADMIN),
@@ -953,7 +1098,7 @@ router.put('/api/v2/users/:id/role',
 //  *       500:
 //  *         description: Internal server error
 //  */
-router.delete('/api/v2/users/:id',
+router.delete('/api/users/:id',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	authorizeRole(Role.SUPER_ADMIN),

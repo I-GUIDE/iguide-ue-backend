@@ -1,11 +1,11 @@
 /**
- * 1. POST /api/v2/users => Add a new user document version 2 with Alias
- * 2. GET /api/v2/users/{userId} => Get user information with aliases
- * 3. GET /api/v2/users/{id}/role => Return the user role given the id
- * 4. GET /api/v2/users/{id}/valid => Check if a user exists given the id/openId
- * 5. GET /api/v2/users/alias/{userId}/primary => get user's primary alias for the given user_id
- * 6. GET /api/v2/users => Return all users (with filter for user)
- * 7. POST /api/v2/auth/users => Add a new user document for authorized server
+ * 1. POST /api/users => Add a new user document version 2 with Alias
+ * 2. GET /api/users/{userId} => Get user information with aliases
+ * 3. GET /api/users/{id}/role => Return the user role given the id
+ * 4. GET /api/users/{id}/valid => Check if a user exists given the id/openId
+ * 5. GET /api/users/alias/{userId}/primary => get user's primary alias for the given user_id
+ * 6. GET /api/users => Return all users (with filter for user)
+ * 7. POST /api/auth/users => Add a new user document for authorized server
  * 8. DELETE /api/users => Delete user document created through authorized server
  * 9. MERGE 2 users
  */
@@ -46,7 +46,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let user_body = testData.trusted_user
         let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         const res = await request(app)
-            .post('/api/v2/users')
+            .post('/api/users')
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -58,7 +58,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
         let encoded_openid = encodeURIComponent(testData.trusted_user.openid);
         const res = await request(app)
-            .get('/api/v2/users/' + encoded_openid)
+            .get('/api/users/' + encoded_openid)
             .set('Cookie', generated_auth_cookie)
            .set('Accept', '*/*')
            .set('Content-Type',"application/json");
@@ -75,7 +75,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let encoded_id = encodeURIComponent(testData.trusted_user.openid);
         let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         const res = await request(app)
-            .get('/api/v2/users/' + encoded_id + '/role')
+            .get('/api/users/' + encoded_id + '/role')
             .set('Cookie', generated_auth_cookie)
             .set('Accept', '*/*')
             .set('Content-Type',"application/json");
@@ -86,7 +86,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let encoded_id = encodeURIComponent(testData.trusted_user.openid);
         let generated_auth_cookie = createAuthCookie({id: "radnom-e123-user", role: Role.TRUSTED_USER});
         const res = await request(app)
-            .get('/api/v2/users/' + encoded_id + '/role')
+            .get('/api/users/' + encoded_id + '/role')
             .set('Cookie', generated_auth_cookie)
             .set('Accept', '*/*')
             .set('Content-Type',"application/json");
@@ -97,7 +97,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let encoded_id = encodeURIComponent(testData.trusted_user.openid);
         let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         const res = await request(app)
-            .get('/api/v2/users/' + encoded_id + '/valid')
+            .get('/api/users/' + encoded_id + '/valid')
             .set('Cookie', generated_auth_cookie)
             .set('Accept', '*/*')
             .set('Content-Type',"application/json");
@@ -112,7 +112,7 @@ describe("Users V2 Endpoint API Testing", () => {
             role: 1,
         }
         const res = await request(app)
-            .put('/api/v2/users/' + user_id)
+            .put('/api/users/' + user_id)
             .set('Cookie', updated_generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -128,7 +128,7 @@ describe("Users V2 Endpoint API Testing", () => {
             display_first_name: testData.trusted_user_updated_first_name,
         }
         const res = await request(app)
-            .put('/api/v2/users/' + user_id)
+            .put('/api/users/' + user_id)
             .set('Cookie', updated_generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -145,7 +145,7 @@ describe("Users V2 Endpoint API Testing", () => {
             bio: testData.trusted_user_updated_bio,
         }
         const res = await request(app)
-            .put('/api/v2/users/' + user_id)
+            .put('/api/users/' + user_id)
             .set('Cookie', updated_generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -158,7 +158,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let user_open_id_encoded = encodeURIComponent(testData.trusted_user.openid);
         let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         const res = await request(app)
-            .get('/api/v2/users/' + user_open_id_encoded)
+            .get('/api/users/' + user_open_id_encoded)
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
@@ -174,7 +174,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         const file_path = path.join(__dirname, "test_avatar_image.jpg");
         const res = await request(app)
-            .post('/api/v2/users/avatar')
+            .post('/api/users/avatar')
             .set('Cookie', generated_auth_cookie)
             .set('Content-Type', 'multipart/form-data; boundary=----WebKitFormBoundaryotgYSdiIybBwVdSB')
             .attach('file', file_path) // Use .attach() instead of FormData
@@ -235,7 +235,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let user_body = testData.trusted_user
         user_body['id'] = generated_user_id;
         const res = await request(app)
-            .post('/api/v2/auth/users')
+            .post('/api/auth/users')
             .set(process.env.AUTH_API_KEY, process.env.AUTH_API_KEY_VALUE)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -248,7 +248,7 @@ describe("Users V2 Endpoint API Testing", () => {
     it("14. Should create user details if it does not exist in /auth/users API", async () => {
         let user_body = testData.elements_trusted_user
         const res = await request(app)
-            .post('/api/v2/auth/users')
+            .post('/api/auth/users')
             .set(process.env.AUTH_API_KEY, process.env.AUTH_API_KEY_VALUE)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -261,7 +261,7 @@ describe("Users V2 Endpoint API Testing", () => {
     it("(External) Delete the newly created user through SUPER_ADMIN", async () => {
         let generated_auth_super_admin_cookie = createAuthCookie({id: 1, role: Role.SUPER_ADMIN});
         const res = await request(app)
-            .delete("/api/v2/users/" + temp_created_user_id)
+            .delete("/api/users/" + temp_created_user_id)
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set('Content-Type', "application/json");
@@ -270,7 +270,7 @@ describe("Users V2 Endpoint API Testing", () => {
     });
     it("15. Should allow only SUPER_ADMIN to delete user", async () => {
         const res = await request(app)
-            .delete("/api/v2/users/" + generated_user_id)
+            .delete("/api/users/" + generated_user_id)
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set('Content-Type', "application/json");
@@ -281,7 +281,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let user_body = testData.untrusted_user_2
         let generated_auth_cookie = createAuthCookie({id: testData.untrusted_user_2.openid, role: Role.UNTRUSTED_USER});
         const res = await request(app)
-            .post('/api/v2/users')
+            .post('/api/users')
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -293,7 +293,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let user_open_id_encoded = encodeURIComponent(testData.untrusted_user_2.openid);
         let generated_auth_cookie = createAuthCookie({id: testData.untrusted_user_2.openid, role: Role.UNTRUSTED_USER});
         const res = await request(app)
-            .get('/api/v2/users/' + user_open_id_encoded + "/role")
+            .get('/api/users/' + user_open_id_encoded + "/role")
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
@@ -303,7 +303,7 @@ describe("Users V2 Endpoint API Testing", () => {
     it("15.3. Should allow only SUPER_ADMIN to delete untrusted user", async () => {
         let user_open_id_encoded = encodeURIComponent(testData.untrusted_user_2.openid);
         const res = await request(app)
-            .delete("/api/v2/users/" + user_open_id_encoded)
+            .delete("/api/users/" + user_open_id_encoded)
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set('Content-Type', "application/json");
@@ -314,7 +314,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let user_body = testData.gov_user
         let generated_auth_cookie = createAuthCookie({id: testData.gov_user.openid, role: Role.TRUSTED_USER});
         const res = await request(app)
-            .post('/api/v2/users')
+            .post('/api/users')
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -326,7 +326,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let user_open_id_encoded = encodeURIComponent(testData.gov_user.openid);
         let generated_auth_cookie = createAuthCookie({id: testData.gov_user.openid, role: Role.TRUSTED_USER});
         const res = await request(app)
-            .get('/api/v2/users/' + user_open_id_encoded + "/role")
+            .get('/api/users/' + user_open_id_encoded + "/role")
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
@@ -336,7 +336,7 @@ describe("Users V2 Endpoint API Testing", () => {
     it("16.3. Should allow only SUPER_ADMIN to delete .gov user", async () => {
         let user_open_id_encoded = encodeURIComponent(testData.gov_user.openid);
         const res = await request(app)
-            .delete("/api/v2/users/" + user_open_id_encoded)
+            .delete("/api/users/" + user_open_id_encoded)
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set('Content-Type', "application/json");
@@ -347,7 +347,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let user_body = testData.foreign_edu_user
         let generated_auth_cookie = createAuthCookie({id: testData.foreign_edu_user.openid, role: Role.TRUSTED_USER});
         const res = await request(app)
-            .post('/api/v2/users')
+            .post('/api/users')
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -359,7 +359,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let user_open_id_encoded = encodeURIComponent(testData.foreign_edu_user.openid);
         let generated_auth_cookie = createAuthCookie({id: testData.foreign_edu_user.openid, role: Role.TRUSTED_USER});
         const res = await request(app)
-            .get('/api/v2/users/' + user_open_id_encoded + "/role")
+            .get('/api/users/' + user_open_id_encoded + "/role")
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
@@ -369,7 +369,7 @@ describe("Users V2 Endpoint API Testing", () => {
     it("17.3. Should allow only SUPER_ADMIN to delete foreign .edu user", async () => {
         let user_open_id_encoded = encodeURIComponent(testData.foreign_edu_user.openid);
         const res = await request(app)
-            .delete("/api/v2/users/" + user_open_id_encoded)
+            .delete("/api/users/" + user_open_id_encoded)
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set('Content-Type', "application/json");
@@ -380,7 +380,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let user_body = testData.trusted_user
         let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         const res = await request(app)
-            .post('/api/v2/users')
+            .post('/api/users')
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -389,7 +389,7 @@ describe("Users V2 Endpoint API Testing", () => {
         expect(res.body).toHaveProperty("message", 'User added successfully');
         let user_open_id_encoded = encodeURIComponent(testData.trusted_user.openid);
         const res_detail = await request(app)
-            .get('/api/v2/users/' + user_open_id_encoded)
+            .get('/api/users/' + user_open_id_encoded)
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
@@ -401,7 +401,7 @@ describe("Users V2 Endpoint API Testing", () => {
         let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
         const file_path = path.join(__dirname, "test_avatar_image.jpg");
         const res = await request(app)
-            .post('/api/v2/users/avatar')
+            .post('/api/users/avatar')
             .set('Cookie', generated_auth_cookie)
             .set('Content-Type', 'multipart/form-data; boundary=----WebKitFormBoundaryotgYSdiIybBwVdSB')
             .attach('file', file_path) // Use .attach() instead of FormData
@@ -410,7 +410,7 @@ describe("Users V2 Endpoint API Testing", () => {
         expect(res.body).toHaveProperty("message", "Avatar uploaded successfully");
         let user_open_id_encoded = encodeURIComponent(testData.trusted_user.openid);
         const res_detail = await request(app)
-            .get('/api/v2/users/' + user_open_id_encoded)
+            .get('/api/users/' + user_open_id_encoded)
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
@@ -419,7 +419,7 @@ describe("Users V2 Endpoint API Testing", () => {
     });
     it("18.3. Delete the user as a SUPER_ADMIN and check if the files still exist", async () => {
         const res = await request(app)
-            .delete("/api/v2/users/" + generated_user_id)
+            .delete("/api/users/" + generated_user_id)
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set('Content-Type', "application/json");
@@ -438,7 +438,7 @@ describe("Users V2 Endpoint API Testing", () => {
        let generated_auth_cookie = createAuthCookie({id: 1, role: Role.SUPER_ADMIN});
        let request_params = '?from=0&size=10'
        const res = await request(app)
-           .get('/api/v2/users' + request_params)
+           .get('/api/users' + request_params)
            .set('Cookie', generated_auth_cookie)
            .set('Accept', '*/*')
            .set('Content-Type',"application/json");
@@ -456,7 +456,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
     it("(External) Should allow to create a new user", async () => {
         let user_body = testData.trusted_user
         const res = await request(app)
-            .post('/api/v2/users')
+            .post('/api/users')
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -465,7 +465,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
         expect(res.body).toHaveProperty("message", 'User added successfully');
         let user_open_id_encoded = encodeURIComponent(testData.trusted_user.openid);
         const res_detail = await request(app)
-            .get('/api/v2/users/' + user_open_id_encoded)
+            .get('/api/users/' + user_open_id_encoded)
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
@@ -481,7 +481,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
             role: Role.TRUSTED_USER_PLUS
         };
         const res = await request(app)
-            .put('/api/v2/users/' + encoded_user_id + "/role")
+            .put('/api/users/' + encoded_user_id + "/role")
             .set('Cookie', updated_generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -495,7 +495,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
             role: Role.SUPER_ADMIN
         };
         const res = await request(app)
-            .put('/api/v2/users/' + encoded_user_id + "/role")
+            .put('/api/users/' + encoded_user_id + "/role")
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -509,7 +509,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
             role: 12
         };
         const res = await request(app)
-            .put('/api/v2/users/' + encoded_user_id + "/role")
+            .put('/api/users/' + encoded_user_id + "/role")
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -523,7 +523,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
             random_value: '123random'
         };
         const res = await request(app)
-            .put('/api/v2/users/' + encoded_user_id + "/role")
+            .put('/api/users/' + encoded_user_id + "/role")
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -537,7 +537,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
             role: Role.CONTENT_MODERATOR,
         };
         const res = await request(app)
-            .put('/api/v2/users/' + encoded_user_id + "/role")
+            .put('/api/users/' + encoded_user_id + "/role")
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -551,7 +551,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
             role: Role.TRUSTED_USER_PLUS,
         };
         const res = await request(app)
-            .put('/api/v2/users/' + encoded_user_id + "/role")
+            .put('/api/users/' + encoded_user_id + "/role")
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -562,7 +562,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
     it("(External) Should allow only SUPER_ADMIN to delete trusted user", async () => {
         let user_open_id_encoded = encodeURIComponent(generated_user_id);
         const res = await request(app)
-            .delete("/api/v2/users/" + user_open_id_encoded)
+            .delete("/api/users/" + user_open_id_encoded)
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set('Content-Type', "application/json");
@@ -572,7 +572,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
     it("(External) Should allow to create a new access user", async () => {
         let user_body = testData.access_trusted_user
         const res = await request(app)
-            .post('/api/v2/users')
+            .post('/api/users')
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -582,7 +582,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
         let user_open_id_encoded = encodeURIComponent(testData.access_trusted_user.openid);
         generated_auth_cookie = createAuthCookie({id: testData.access_trusted_user.openid, role: Role.TRUSTED_USER});
         const res_detail = await request(app)
-            .get('/api/v2/users/' + user_open_id_encoded)
+            .get('/api/users/' + user_open_id_encoded)
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
@@ -599,7 +599,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
             role: Role.TRUSTED_USER_PLUS,
         };
         const res = await request(app)
-            .put('/api/v2/users/' + encoded_user_id + "/role")
+            .put('/api/users/' + encoded_user_id + "/role")
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -610,7 +610,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
      it("(External) Should allow only SUPER_ADMIN to delete access .edu user", async () => {
         let user_open_id_encoded = encodeURIComponent(generated_user_id);
         const res = await request(app)
-            .delete("/api/v2/users/" + user_open_id_encoded)
+            .delete("/api/users/" + user_open_id_encoded)
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set('Content-Type', "application/json");
