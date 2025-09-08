@@ -28,7 +28,7 @@ export async function getAllContributorsV2(
 		sort_order="asc",
 		filter_key='none',
 		filter_value=''){
-	let query_str = "MATCH (a:Alias)-[:ALIAS_OF]->(c:Contributor)";
+	let query_str = "MATCH (c:Contributor) OPTIONAL MATCH (a:Alias)-[:ALIAS_OF]->(c) OPTIONAL MATCH (c)-[r:CONTRIBUTED]->()";
 	let query_params = {};
 	/**
 	 * Set the filter by value if required
@@ -62,7 +62,7 @@ export async function getAllContributorsV2(
 	 * Set the return parameter
 	 */
 	let count_query_str = query_str + " return COUNT(c) AS count"
-	query_str += " WITH c, collect(a{.*}) AS aliases"
+	query_str += " WITH c, collect(DISTINCT a{.*}) AS aliases, count(r) as total_contributions"
 	/**
 	 * Set the default value for sort_by parameter
 	 */
@@ -78,7 +78,7 @@ export async function getAllContributorsV2(
 	query_params['from'] = neo4j.int(from);
 	query_params['size'] = neo4j.int(size);
 
-	query_str += " RETURN c{.*} AS contributor, aliases";
+	query_str += " RETURN c{.*} AS contributor, aliases, total_contributions";
 
 	try {
 		let records, summary;
@@ -93,6 +93,7 @@ export async function getAllContributorsV2(
 			if (contributor['_fields']?.length > 0) {
 				let temp_contributor = contributor['_fields'][0];
 				let aliases = contributor['_fields'][1];
+				let total_contr = utils.parse64BitNumber(contributor['_fields'][2]);
 				let primary_alias = {}
 				if (aliases?.length > 0) {
 					aliases.map((alias) => {
@@ -104,6 +105,7 @@ export async function getAllContributorsV2(
 					temp_contributor['email'] = primary_alias['email'];
 					temp_contributor['affiliation'] = primary_alias['affiliation'];
 					temp_contributor['aliases'] = aliases;
+					temp_contributor['total_contributions'] = total_contr;
 				}
 				//temp_contributor['role'] = utils.parse64BitNumber(temp_contributor['role']);
 				contributor_list.push(temp_contributor);
@@ -135,7 +137,8 @@ export async function getContributorByIDv2(id) {
 	} else {
 		query_str = "MATCH (a:Alias)-[:ALIAS_OF]->(c:Contributor{id: $id})"
 	}
-	query_str = query_str + " RETURN c{.*} AS contributor, collect(a{.*}) AS aliases";
+	query_str = query_str + "OPTIONAL MATCH (c)-[r:CONTRIBUTED]->() RETURN c{.*} AS contributor, " +
+		"collect(DISTINCT a{.*}) AS aliases, count(r) AS total_contributions";
 	try {
 		const {records, summary} =
 			await driver.executeQuery(query_str,
@@ -149,7 +152,8 @@ export async function getContributorByIDv2(id) {
 		}
 		let response = {
 			Contributor: records[0]['_fields'][0],
-			Aliases: records[0]['_fields'][1]
+			Aliases: records[0]['_fields'][1],
+			TotalContributions: records[0]['_fields'][2]
 		};
 		let primary_alias = {}
 		if (response?.Aliases) {
@@ -167,6 +171,7 @@ export async function getContributorByIDv2(id) {
 		contributor["last_name"] = primary_alias["last_name"];
 		contributor["aliases"] = response?.Aliases;
 		contributor["role"] = utils.parse64BitNumber(contributor["role"]);
+		contributor["total_contributions"] = utils.parse64BitNumber(response?.TotalContributions);
 		return makeFrontendCompatible(contributor)
 	} catch (error) {
 		console.log("getContributorByIDv2 - Error in query: " + error);
@@ -446,7 +451,7 @@ export async function mergeSecondaryAliasesToPrimary(primary_user_id, secondary_
 	// convert [a1]-r1->[u1] , [a2]-r2->[u2] to [a1]-r1->[u1]<-r3-[a2]-r2->[u2]
 	try {
 		let query_str =
-			"MATCH (c1:Contributor{id: $primary_user_id})<-[r1:ALIAS_OF]-(a1:Alias{"
+			"MATCH (c1:Contributor{id: $primary_user_id})<-[r1:ALIAS_OF]-(a1:Alias)"
 	} catch (error) {
 		console.log('mergeSecondaryAliasesToPrimary() - Error in query: ' + error);
 		return false;
