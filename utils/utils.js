@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import * as n4j from '../backend_neo4j.js'
 import neo4j from "neo4j-driver";
 import {checkUniversityDomain} from "./domain_utils.js";
+import {getContributorByIDv2} from "../routes/users_v2/backend_neo4j_users.js";
 
 /**************
  * Enums
@@ -439,6 +440,19 @@ export const HPC_ACCESS_AFFILIATION = "ACCESS";
 export async function checkHPCAccessGrant(user_id) {
     try {
         const user_details = await n4j.getContributorByID(user_id);
+        if (user_details['affiliation'] && user_details['affiliation'] === HPC_ACCESS_AFFILIATION) {
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.log("checkHPCAccessGrant() - Error: ", error);
+        return false;
+    }
+}
+
+export async function checkHPCAccessGrantV2(user_id) {
+    try {
+        const user_details = await getContributorByIDv2(user_id);
         if (user_details['affiliation'] && user_details['affiliation'] === HPC_ACCESS_AFFILIATION) {
             return true;
         }

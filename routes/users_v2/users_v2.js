@@ -1,24 +1,45 @@
 import express from 'express';
 import cors from 'cors';
-import * as n4j from '../backend_neo4j.js';
-import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
-import {authenticateAuth, authenticateJWT, authorizeRole} from '../jwtUtils.js';
-import {parse64BitNumber, performUserCheck, Role} from "../utils.js";
+import * as n4j from '../../backend_neo4j.js';
+import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../../iguide_cors.js';
+import {authenticateAuth, authenticateJWT, authorizeRole} from '../../utils/jwtUtils.js';
 import {
-	checkAliasIsPrimary,
-	checkIfAliasExists,
-	getPrimaryAliasById,
-} from "../backend_neo4j.js";
+	checkHPCAccessGrantV2,
+	checkUpdateParameters,
+	EditableParameters,
+	generateMultipleResolutionImagesFor,
+	parse64BitNumber, parseRole,
+	performUserCheck,
+	Role
+} from "../../utils/utils.js"
 import {
-    checkContributorByIDV2,
-    getAllContributorsV2,
-    getContributorByIDv2,
-    registerContributorAuthV2, registerContributorV2
+	checkContributorByIDV2, deleteUserByIdV2,
+	getAllContributorsV2,
+	getContributorByIDv2,
+	registerContributorAuthV2, registerContributorV2, setContributorAvatarV2, updateContributorV2
 } from "./backend_neo4j_users.js";
+import {performReIndexElementsBasedOnUserId} from "../../utils/elements_utils.js";
+import multer from "multer";
+import path from 'path';
+import fs from 'fs';
 
 const router = express.Router();
 
-
+// Ensure required directories exist
+const avatar_dir = path.join(process.env.UPLOAD_FOLDER, 'avatars');
+fs.mkdirSync(avatar_dir, { recursive: true });
+// Configure storage for avatars
+const avatarStorage = multer.diskStorage({
+	destination: (req, file, cb) => {
+	cb(null, avatar_dir);
+	},
+	filename: (req, file, cb) => {
+	// It's a good practice to sanitize the original file name
+	const sanitizedFilename = file.originalname.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
+	cb(null, `${Date.now()}-${sanitizedFilename}`);
+	}
+});
+const uploadAvatar = multer({ storage: avatarStorage });
 /**
  * @swagger
  * /api/v2/users:
@@ -332,6 +353,210 @@ router.get('/api/v2/users/:id', cors(), async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/v2/users/{id}:
+ *   put:
+ *     summary: Update the user document
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: User updated successfully
+ *       403:
+ *         description: Failed to edit user. User does not have permission
+ *       409:
+ *         description: Failed to edit user. Uneditable parameters present
+ *       500:
+ *         description: Internal server error
+ */
+// Handle OPTIONS requests for both methods
+router.options('/api/v2/users/:id', (req, res) => {
+	const method = req.header('Access-Control-Request-Method');
+	if (method === 'PUT') {
+		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+		res.header('Access-Control-Allow-Methods', 'PUT');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+		res.header('Access-Control-Allow-Credentials', 'true');
+	} else if (method === 'GET') {
+		res.header('Access-Control-Allow-Origin', '*');
+		res.header('Access-Control-Allow-Methods', 'GET');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
+	} else if (method === 'DELETE') {
+		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+		res.header('Access-Control-Allow-Methods', 'DELETE');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+		res.header('Access-Control-Allow-Credentials', 'true');
+	}
+	res.sendStatus(204); // No content
+});
+router.put('/api/v2/users/:id',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	async (req, res) => {
+	const id = decodeURIComponent(req.params.id);
+	const updates = req.body;
+
+	const {user_id, user_role} = (() => {
+		if (!req.user || typeof req.user === 'undefined'){
+			return {user_id:null, user_role:null};
+		}
+		return {user_id:req.user.id, user_role:req.user.role}
+	})();
+	let current_user_details = await getContributorByIDv2(user_id);
+
+	console.log("user detail from cookie: ", user_id, " detail from db: ", current_user_details['id']);
+	let user_permission = true
+	if (String(id).startsWith("http")) {
+		user_permission = id === current_user_details['openid']
+	} else {
+		user_permission = id === current_user_details['id']
+	}
+	if (!user_permission) {
+		res.status(403).json({message: 'Failed to edit user. User does not have permission.', result: false});
+		return;
+	}
+	let reindex_os = false;
+	let total_public_elements = 0
+	/**
+	 * Check if the user has contributions and has changed his display_first/last_name then perform the reindexing or else no need.
+	 */
+	if (updates[EditableParameters.DISPLAY_FIRST_NAME] !== current_user_details['display-first-name'] ||
+		updates[EditableParameters.DISPLAY_LAST_NAME] !== current_user_details['display-last-name']) {
+		total_public_elements = await n4j.getElementsCountByContributor(user_id);
+		if (total_public_elements > 0) {
+			reindex_os = true;
+		}
+	}
+
+	console.log('Updating user ...');
+	if (!checkUpdateParameters(updates)) {
+		res.status(409).json({message: 'Failed to edit user. Uneditable parameters present.', result: false});
+		return;
+	}
+	/**
+	 * To make sure it does not update the id of the contributor
+	 */
+	if (updates['id']) {
+		delete updates['id']
+	}
+	try {
+		const response = await updateContributorV2(id, updates);
+		if (response) {
+			if (reindex_os) {
+				let reindex_response = await performReIndexElementsBasedOnUserId(user_id, total_public_elements);
+				console.log('Reindex response: ', reindex_response);
+			}
+		}
+		if (response) {
+			res.json({ message: 'User updated successfully', result: response });
+		} else {
+			console.log('Error updating user');
+			res.json({ message: 'Error updating user', result: response });
+		}
+	} catch (error) {
+		console.error('Error updating user:', error);
+		res.status(500).json({ message: 'Internal server error' });
+	}
+});
+
+/**
+ * @swagger
+ * /api/v2/users/avatar:
+ *   post:
+ *     summary: Upload/update an avatar image for the user profile
+ *     tags: ['users']
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: formData
+ *         name: file
+ *         type: file
+ *         description: The avatar file to upload
+ *       - in: formData
+ *         name: id
+ *         type: string
+ *         description: The user ID
+ *     responses:
+ *       200:
+ *         description: Avatar uploaded successfully
+ *       400:
+ *         description: No file uploaded
+ */
+router.options('/api/v2/users/avatar', jwtCorsMiddleware);
+router.post('/api/v2/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
+	// if (!req.file) {
+	// 	return res.status(400).json({ message: 'No file uploaded' });
+	// }
+
+	// const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${req.file.filename}`;
+
+	// res.json({
+	// 	message: 'Avatar uploaded successfully',
+	// 	url: filePath,
+	// });
+
+	try {
+		const body = JSON.parse(JSON.stringify(req.body));
+		const id = body.id;
+		const new_avatar_file = req.file;
+
+		if (!id || !new_avatar_file) {
+			return res.status(400).json({message: 'ID and new avatar file are required'});
+		}
+
+		// Update the user's avatar URL with the new file URL
+		// const newAvatarUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${newAvatarFile.filename}`;
+
+		const new_avatar_images =
+			generateMultipleResolutionImagesFor(new_avatar_file.filename,
+				avatar_dir,
+				true);
+
+		// DB only stores the original image
+		const new_avatar_image = (new_avatar_images === null) ?
+			null :
+			new_avatar_images['original'];
+
+		const {result, old_avatar_url} =
+			await setContributorAvatarV2(id, new_avatar_image);
+		if (result == false) {
+			return res.status(404).json({message: 'User not found'});
+		}
+		if (old_avatar_url) {
+			// Delete the old avatar file
+			const old_avatar_filepath = path.join(avatar_dir, path.basename(old_avatar_url));
+			if (fs.existsSync(old_avatar_filepath)) {
+				fs.unlinkSync(old_avatar_filepath);
+			}
+			var ret_message = 'Avatar updated successfully'
+		} else {
+			var ret_message = 'Avatar uploaded successfully'
+		}
+
+		res.json({
+			message: ret_message,
+			'image-urls': new_avatar_images,
+		});
+	} catch (error) {
+		console.error('Error updating avatar:', error);
+		res.status(500).json({message: 'Internal server error'});
+	}
+
+});
+
 // /**
 //  * @swagger
 //  * /api/v2/users/alias/{userId}:
@@ -576,23 +801,23 @@ router.post('/api/v2/users/merge',
 	async (req, res) => {
 	try {
 		let request_body = req.body;
-		if (!request_body['primary_email'] || request_body['secondary_email']) {
-			res.status(409).json({message: 'Required emails not present in the request body.', result: false});
+		if (!request_body['primary_open_id'] || request_body['secondary_open_id']) {
+			res.status(409).json({message: 'Required OpenIds not present in the request body.', result: false});
             return;
 		}
 
-
         // Step - 1: Check if both emails exist in the DB
-        const primary_user_details = await getContributorByIDv2(request_body['primary_email'])
-        const secondary_user_details = await getContributorByIDv2(request_body['secondary_email'])
+        const primary_user_details = await getContributorByIDv2(request_body['primary_open_id'])
+        const secondary_user_details = await getContributorByIDv2(request_body['secondary_open_id'])
 
         if (primary_user_details === {} || secondary_user_details === {}) {
             res.status(409).json({message: 'Required user details not found in database', result: false});
             return;
         }
         // Step - 2: store their user_ids as primary_user_id and secondary_user_id
-         
+		let primary_user_id = primary_user_details['id'], secondary_user_id = secondary_user_details['id'];
         // Step - 3: Merge the alias with the primary one
+
         // Step - 4: Find out all contributions made by secondary_user_id
         // Step - 5: Update the contributions with the primary_user_id and perform an update in OS for the elements
         // Step - 6: Remove the alias relation and delete the secondary user object from DB
@@ -605,4 +830,187 @@ router.post('/api/v2/users/merge',
 
 });
 
+/**
+ * @swagger
+ * /api/v2/users/{id}/role:
+ *   put:
+ *     summary: Update the user's role
+ *     tags: ['users']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *            properties:
+ *               role:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: User role updated successfully
+ *       404:
+ *         description: Provided role id or user id does not exist
+ *       500:
+ *         description: Error in updating user role
+ */
+// Handle OPTIONS requests for both methods
+router.options('/api/v2/users/:id/role', (req, res) => {
+	const method = req.header('Access-Control-Request-Method');
+	if (method === 'PUT') {
+		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+		res.header('Access-Control-Allow-Methods', 'PUT');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+		res.header('Access-Control-Allow-Credentials', 'true');
+	} else if (method === 'GET') {
+		res.header('Access-Control-Allow-Origin', '*');
+		res.header('Access-Control-Allow-Methods', 'GET');
+		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
+	}
+	res.sendStatus(204); // No content
+});
+router.put('/api/v2/users/:id/role',
+		jwtCorsMiddleware,
+		authenticateJWT,
+		authorizeRole(Role.SUPER_ADMIN),
+		async (req, res) => {
+	try {
+		const id = decodeURIComponent(req.params.id);
+		const updated_role_body = req.body;
+
+		if (updated_role_body['role'] !== undefined) {
+			console.log('Updating user role for userId: ' + id);
+			//Check if the new role is a valid role and if the role is till the TRUSTED USER
+			let valid_role = true
+			let allowed_role = true
+			let parsed_role = 0
+			try {
+				parsed_role = parseRole(updated_role_body['role']);
+			} catch (err) {
+				console.log('Unrecognized Role found: ', updated_role_body['role']);
+				valid_role = false;
+			}
+			if (parsed_role <= Role.ADMIN) {
+				allowed_role = false
+			}
+			if (parsed_role === Role.TRUSTED_USER_PLUS) {
+				allowed_role = await checkHPCAccessGrantV2(id);
+				if (!allowed_role) {
+					res.status(404).json(
+						{message: 'Cannot update user role for TRUSTED_USER_PLUS, user should be ACCESS CI (XSEDE) logged in'});
+					return;
+				}
+			}
+			if (valid_role && allowed_role) {
+				const response = await n4j.updateRoleById(id, parsed_role);
+				if (response) {
+					res.status(200).json({message: 'User role updated successfully'});
+				} else {
+					res.status(500).json({message: 'Error in updating user role'});
+				}
+			} else {
+				if (valid_role === false) {
+					res.status(404).json({message: 'Provided role id does not exist'});
+				} else {
+					res.status(404).json({message: 'Cannot update user role above TRUSTED USER'});
+				}
+			}
+		} else {
+			res.status(404).json({message: 'User body not containing required attribute'});
+		}
+	} catch (error) {
+		console.error('Error in updating user role: ', error);
+		res.status(500).json({message: 'Error in updating user role'});
+	}
+});
+
+// Commenting the swagger definition makes sure the API is not visible in the Swagger Definition
+// /**
+//  * @swagger
+//  * /api/users/{id}:
+//  *   delete:
+//  *     summary: Delete the user document
+//  *     tags: ['users']
+//  *     parameters:
+//  *       - in: path
+//  *         name: id
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *         description: The OpenID of the user
+//  *     responses:
+//  *       200:
+//  *         description: User deleted successfully
+//  *       403:
+//  *         description: User cannot be deleted as user has contributions
+//  *       409:
+//  *         description: User cannot delete another Super Admin
+//  *       500:
+//  *         description: Internal server error
+//  */
+router.delete('/api/v2/users/:id',
+	jwtCorsMiddleware,
+	authenticateJWT,
+	authorizeRole(Role.SUPER_ADMIN),
+	async (req, res) => {
+		let id = decodeURIComponent(req.params.id);
+
+		try {
+			/**
+			 * Get the all the public elements created by user
+			 */
+			let public_elements_cnt_resp = await n4j.getElementsCountByContributor(id);
+			/**
+			 * Get the all the public elements created by user
+			 */
+			let private_elements_cnt_resp = await n4j.getElementsCountByContributor(id, true);
+			if (public_elements_cnt_resp + private_elements_cnt_resp > 0) {
+				res.status(409).json({message: 'Failed to delete user. User has public or private contributions.'});
+				return;
+			}
+			/**
+			 * Get user details to check SUPER_ADMIN Privileges
+			 */
+			const user_details = await getContributorByIDv2(id);
+			if (user_details['role'] === 1) {
+				res.status(409).json({message: 'Failed to delete user. User cannot delete a Super Admin User'});
+				return;
+			}
+			/**
+			 * Delete the user from neo4J
+			 */
+			// Check to allow deletion from openId
+			if (id.startsWith('http')) {
+				id = user_details['id']
+			}
+			const del_resp = await deleteUserByIdV2(id);
+			if (del_resp) {
+				console.log("Deleting user's avatar image");
+				try {
+					let avatar_url = user_details['avatar-url'];
+					if (avatar_url) {
+						for(const type in avatar_url) {
+							let avatar_filepath = path.join(avatar_dir, path.basename(avatar_url[type]));
+							if (fs.existsSync(avatar_filepath)) {
+								fs.unlinkSync(avatar_filepath);
+							}
+						}
+					}
+				} catch (error) {
+					console.log('Users Delete API - Error in deleting avatar: ' + error);
+				}
+				res.status(200).json({message: 'User deleted successfully', result: del_resp});
+			} else {
+				res.status(200).json({message: 'Error in deleting user', result: del_resp});
+			}
+		} catch (error) {
+			console.error('Error deleting user:', error);
+			res.status(500).json({message: 'Internal server error'});
+		}
+	});
 export default router;

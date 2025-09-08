@@ -1,8 +1,8 @@
-import * as utils from "../../utils.js";
+import * as utils from "../../utils/utils.js";
 import dotenv from "dotenv";
 import neo4j from "neo4j-driver";
 import {makeFrontendCompatible} from "../../backend_neo4j.js";
-import {generateUserRole} from "../../utils.js";
+import {generateUserRole} from "../../utils/utils.js";
 import { v4 as uuidv4 } from 'uuid';
 dotenv.config();
 console.log(process.env.NEO4J_CONNECTION_STRING);
@@ -313,4 +313,147 @@ export async function registerContributorV2(contributor){
 		console.log('registerContributor() - Error in query: '+ err);
 	}
     return false;
+}
+
+/**
+ * Delete user and its aliases based on user_id
+ * @param user_id
+ * @returns {Promise<boolean>}
+ */
+export async function deleteUserByIdV2(user_id) {
+	const query_str = "MATCH (a:Alias)-[:ALIAS_OF]->(c:Contributor{id:$id_param}) " +
+	  "DETACH DELETE c, a";
+	try {
+		const {_, summary} =
+		  	await driver.executeQuery(query_str,
+						{id_param: user_id},
+						{database: process.env.NEO4J_DB});
+		if (summary.counters.updates()['nodesDeleted'] > 1){
+			return true;
+		}
+	} catch(err){
+		console.log('deleteUserByOpenId() - Error in query: '+ err);
+	}
+	// something went wrong
+	return false;
+}
+
+/**
+ * Update existing contributor
+ * @param {string} id Contributor id
+ * @param {Object} contributor Map with new contributor attributes (refer to schema)
+ * @return {Boolean} true for successful registration. false otherwise or in case of error
+ */
+export async function updateContributorV2(id, contributor_attributes) {
+	let query_match = ""
+	if (String(id).startsWith("http")) {
+        /**
+         * Provided id is an OpenID hence check aliases
+         */
+        query_match = query_match + "MATCH (a:Alias{openid: $id})-[:ALIAS_OF]->(c:Contributor) ";
+    } else {
+        /**
+         * Provided id is a user-id hence check contributor
+         */
+        query_match = query_match + "MATCH (c:Contributor{id: $id}) ";
+    }
+	var query_set = "";
+	var query_params = {id: id};
+
+	let i = 0;
+	for (const [key, value] of Object.entries(contributor_attributes)) {
+		query_set += "SET c." + key + "=$attr" + i + " ";
+		if (key === 'avatar_url') {
+			query_params['attr' + i] = value['original'];
+		} else {
+			query_params['attr' + i] = value;
+		}
+		i += 1;
+	}
+
+	const query_str = query_match + query_set;
+	try {
+		const {_, summary} =
+			await driver.executeQuery(query_str,
+				query_params,
+				{database: process.env.NEO4J_DB});
+		if (summary.counters.updates()['propertiesSet'] >= 1) {
+			return true;
+		}
+	} catch (err) {
+		console.log('updateContributorV2() - Error in query: ' + err);
+	}
+	// something went wrong
+	return false;
+}
+
+/**
+ * Set contributor avatar given ID
+ * @param {string} id
+ * @param {string} avatar_url
+ * @return {Boolean} True if avatar set successfully. False if contributor not found
+ */
+export async function setContributorAvatarV2(id, avatar_url) {
+
+	const session = driver.session({database: process.env.NEO4J_DB});
+	const tx = await session.beginTransaction();
+	let query_match = ""
+	if (String(id).startsWith("http")) {
+        /**
+         * Provided id is an OpenID hence check aliases
+         */
+        query_match = query_match + "MATCH (a:Alias{openid: $id})-[:ALIAS_OF]->(c:Contributor)";
+    } else {
+        /**
+         * Provided id is a user-id hence check contributor
+         */
+        query_match = query_match + "MATCH (c:Contributor{id: $id})";
+    }
+	var old_url = "";
+	var ret = false;
+	try {
+		// get exising avatar url
+		let query_str = query_match + " " +
+			"RETURN c.avatar_url";
+		let {records, summ} = await tx.run(query_str,
+			{id: id},
+			{routing: 'READ', database: process.env.NEO4J_DB});
+		if (records.length > 0) {
+			old_url = records[0]['_fields'][0];
+		}
+
+		// update new avatar url
+		query_str = query_match + " " +
+			"SET c.avatar_url=$avatar_url";
+		let {_, summary} = await tx.run(query_str,
+			{id: id, avatar_url: avatar_url},
+			{database: process.env.NEO4J_DB});
+		if (summary.counters.updates()['propertiesSet'] == 1) {
+			ret = true;
+		}
+
+		await tx.commit();
+	} catch (err) {
+		console.log('setContributorAvatar() - Error in query: ' + err);
+	} finally {
+		await session.close();
+	}
+
+	return {result: ret, old_avatar_url: old_url};
+}
+
+export async function mergeSecondaryAliasesToPrimary(primary_user_id, secondary_user_id) {
+	// convert [a1]-r1->[u1] , [a2]-r2->[u2] to [a1]-r1->[u1]<-r3-[a2]-r2->[u2]
+	try {
+		let query_str =
+			"MATCH (c1:Contributor{id: $primary_user_id})<-[r1:ALIAS_OF]-(a1:Alias{"
+	} catch (error) {
+		console.log('mergeSecondaryAliasesToPrimary() - Error in query: ' + error);
+		return false;
+	}
+}
+
+export async function revertMergeSecondaryAliasesToPrimary(primary_user_id, secondary_user_id) {
+	// convert [a1]-r1->[u1]<-r3-[a2]-r2->[u2] to [a1]-r1->[u1] , [a2]-r2->[u2]
+	// Just delete the newly created r3..n
 }

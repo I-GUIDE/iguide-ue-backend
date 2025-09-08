@@ -40,11 +40,14 @@ const avatarStorage = multer.diskStorage({
 });
 const uploadAvatar = multer({ storage: avatarStorage });
 
+//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
  * /api/users/{id}:
  *   get:
  *     summary: Return the user document given the id
+ *     deprecated: true
+ *     deprecated: true
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -78,11 +81,13 @@ router.get('/api/users/:id', cors(), async (req, res) => {
 	}
 });
 
+//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
  * /api/users:
  *   get:
  *     summary: Return all users
+ *     deprecated: true
  *     tags: ['users']
  *     parameters:
  *       - in: query
@@ -156,11 +161,13 @@ router.get('/api/users',
 	}
 });
 
+//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
  * /api/users/{id}/role:
  *   put:
  *     summary: Update the user's role
+ *     deprecated: true
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -255,11 +262,13 @@ router.put('/api/users/:id/role',
 	}
 });
 
+//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
  * /api/users/{id}/role:
  *   get:
  *     summary: Return the user role given the id
+ *     deprecated: true
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -292,11 +301,13 @@ router.get('/api/users/:id/role', cors(), async (req, res) => {
 	}
 });
 
+//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
  * /api/users/{id}/valid:
  *   get:
  *     summary: Check if a user exists given the id
+ *     deprecated: true
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -326,11 +337,13 @@ router.get('/api/users/:id/valid', cors(), async (req, res) => {
 	}
 });
 
+//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
  * /api/users/avatar:
  *   post:
  *     summary: Upload/update an avatar image for the user profile
+ *     deprecated: true
  *     tags: ['users']
  *     consumes:
  *       - multipart/form-data
@@ -411,11 +424,13 @@ router.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvata
 
 });
 
+//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
  * /api/users:
  *   post:
  *     summary: Add a new user document
+ *     deprecated: true
  *     tags: ['users']
  *     requestBody:
  *       required: true
@@ -467,12 +482,13 @@ router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) =
 	}
 });
 
-
+//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
  * /api/auth/users:
  *   post:
  *     summary: Add a new user document for authorized server
+ *     deprecated: true
  *     tags: ['users']
  *     requestBody:
  *       required: true
@@ -523,11 +539,13 @@ router.post('/api/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, 
 	}
 });
 
+//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
  * /api/users/{id}:
  *   put:
  *     summary: Update the user document
+ *     deprecated: true
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -785,6 +803,7 @@ router.get('/api/users/bookmark/:elementId',
 	}
 });
 
+//DEPRECATED Moved to users_v2.js
 // Commenting the swagger definition makes sure the API is not visible in the Swagger Definition
 // /**
 //  * @swagger

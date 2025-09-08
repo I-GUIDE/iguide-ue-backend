@@ -39,6 +39,7 @@ import {
 	generateOptimizedDomainList,
 } from "./utils/domain_utils.js";
 import path from "path";
+import users_v2 from "./routes/users_v2/users_v2.js";
 
 const app = express();
 
@@ -63,6 +64,8 @@ app.use('/api', private_elements);
 app.use('/api', documentation);
 // Use users/contributors route
 app.use(users);
+// Use users/contributors route
+app.use(users_v2);
 // Use elements route
 app.use(elements);
 
