@@ -6,7 +6,7 @@ import cors from 'cors';
 import multer from 'multer';
 // local imports
 import * as utils from '../utils/utils.js';
-import * as n4j from '../backend_neo4j.js';
+import * as n4j from '../database/backend_neo4j.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from '../utils/jwtUtils.js';
 import {documentationRateLimiter} from "../ip_policy.js";

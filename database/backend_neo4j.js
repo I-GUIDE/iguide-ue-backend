@@ -6,13 +6,13 @@
 import neo4j from 'neo4j-driver';
 import { v4 as uuidv4 } from 'uuid';
 // local imports
-import * as utils from './utils/utils.js';
-import * as spatialUtils from './utils/spatial_utils.js';
+import * as utils from '../utils/utils.js';
+import * as spatialUtils from '../utils/spatial_utils.js';
 
 // For deployment on JetStream VM
 import dotenv from 'dotenv';
-import {checkUniversityDomain} from "./utils/domain_utils.js";
-import {generateUserRole, SortBy} from "./utils/utils.js";
+import {checkUniversityDomain} from "../utils/domain_utils.js";
+import {generateUserRole, SortBy} from "../utils/utils.js";
 dotenv.config();
 console.log(process.env.NEO4J_CONNECTION_STRING);
 
@@ -44,8 +44,8 @@ export async function testServerConnection() {
  * Frontend expects data in a particular format which may or may not be the same when
  * returned from DB. This function is to post process all data before returning to frontend
  */
-function makeFrontendCompatible(element) {
-	// frontend expects key names with '-', convert all '_' to '-'
+export function makeFrontendCompatible(element) {
+    // frontend expects key names with '-', convert all '_' to '-'
 
 	// let ret = Object.fromEntries(
 	// 	Object.entries(element).map(([key, value]) => [`${key}`.replaceAll("_","-"), value])

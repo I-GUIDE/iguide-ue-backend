@@ -1,9 +1,10 @@
 import path from 'path';
 import sharp from 'sharp';
 // local imports
-import * as n4j from '../backend_neo4j.js'
+import * as n4j from '../database/backend_neo4j.js'
 import neo4j from "neo4j-driver";
 import {checkUniversityDomain} from "./domain_utils.js";
+import {getContributorByIDv2} from "../database/backend_neo4j_users.js";
 
 /**************
  * Enums
@@ -447,4 +448,35 @@ export async function checkHPCAccessGrant(user_id) {
         console.log("checkHPCAccessGrant() - Error: ", error);
         return false;
     }
+}
+
+export async function checkHPCAccessGrantV2(user_id) {
+    try {
+        const user_details = await getContributorByIDv2(user_id);
+        if (user_details['affiliation'] && user_details['affiliation'] === HPC_ACCESS_AFFILIATION) {
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.log("checkHPCAccessGrant() - Error: ", error);
+        return false;
+    }
+}
+
+export function getUserDetailsFromRequest(req) {
+    const {user_id, user_role} = (() => {
+	    if (!req.user || typeof req.user === 'undefined'){
+	        return {user_id:null, user_role:null};
+	    }
+	    return {user_id:req.user.id, user_role:req.user.role}
+    })();
+    return {user_id: user_id, user_role: user_role};
+}
+
+export function performUserCheck(req, user_id) {
+    const user_details = getUserDetailsFromRequest(req);
+    if (user_details?.user_id === user_id || user_details?.user_role === Role.SUPER_ADMIN) {
+        return true;
+    }
+    return false;
 }
