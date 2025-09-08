@@ -132,7 +132,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
         let user_body = testData.elements_trusted_user
         const res = await request(app)
-            .post('/api/users')
+            .post('/api/v2/users')
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -144,7 +144,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
         let user_open_id_encoded = encodeURIComponent(testData.elements_trusted_user.openid);
         const res = await request(app)
-            .get('/api/users/' + user_open_id_encoded)
+            .get('/api/v2/users/' + user_open_id_encoded)
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
@@ -277,7 +277,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
     });
     it("(External) Should allow only SUPER_ADMIN to delete temp user", async () => {
         const res = await request(app)
-            .delete("/api/users/" + generated_user_id)
+            .delete("/api/v2/users/" + generated_user_id)
             .set('Cookie', generated_auth_super_admin_cookie)
             .set("Accept", "*/*")
             .set('Content-Type', "application/json");
@@ -297,7 +297,7 @@ describe("Elements Endpoint testing for Notebook elements", () => {
         let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
         let user_body = testData.elements_trusted_user
         const res = await request(app)
-            .post('/api/users')
+            .post('/api/v2/users')
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json")
@@ -309,7 +309,7 @@ describe("Elements Endpoint testing for Notebook elements", () => {
         let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
         let user_open_id_encoded = encodeURIComponent(testData.elements_trusted_user.openid);
         const res = await request(app)
-            .get('/api/users/' + user_open_id_encoded)
+            .get('/api/v2/users/' + user_open_id_encoded)
             .set('Cookie', generated_auth_cookie)
             .set("Accept", "*/*")
             .set("Content-Type", "application/json");
