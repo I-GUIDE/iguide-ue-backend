@@ -1,10 +1,10 @@
 import path from 'path';
 import sharp from 'sharp';
 // local imports
-import * as n4j from '../backend_neo4j.js'
+import * as n4j from '../database/backend_neo4j.js'
 import neo4j from "neo4j-driver";
 import {checkUniversityDomain} from "./domain_utils.js";
-import {getContributorByIDv2} from "../routes/users_v2/backend_neo4j_users.js";
+import {getContributorByIDv2} from "../database/backend_neo4j_users.js";
 
 /**************
  * Enums

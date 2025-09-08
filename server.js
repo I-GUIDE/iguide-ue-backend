@@ -19,8 +19,8 @@ import cookieParser from 'cookie-parser';
 
 // local imports
 import * as utils from './utils/utils.js';
-import * as n4j from './backend_neo4j.js';
-import * as os from './backend_opensearch.js';
+import * as n4j from './database/backend_neo4j.js';
+import * as os from './database/backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from './iguide_cors.js';
 import { authenticateJWT, authorizeRole, generateAccessToken } from './utils/jwtUtils.js';
 // local imports for endpoints
@@ -39,7 +39,7 @@ import {
 	generateOptimizedDomainList,
 } from "./utils/domain_utils.js";
 import path from "path";
-import users_v2 from "./routes/users_v2/users_v2.js";
+import users_v2 from "./routes/users_v2.js";
 
 const app = express();
 

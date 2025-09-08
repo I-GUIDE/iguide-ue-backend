@@ -1,8 +1,8 @@
-import * as utils from "../../utils/utils.js";
+import * as utils from "../utils/utils.js";
 import dotenv from "dotenv";
 import neo4j from "neo4j-driver";
-import {makeFrontendCompatible} from "../../backend_neo4j.js";
-import {generateUserRole} from "../../utils/utils.js";
+import {makeFrontendCompatible} from "./backend_neo4j.js";
+import {generateUserRole} from "../utils/utils.js";
 import { v4 as uuidv4 } from 'uuid';
 dotenv.config();
 console.log(process.env.NEO4J_CONNECTION_STRING);

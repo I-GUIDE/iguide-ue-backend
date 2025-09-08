@@ -11,8 +11,8 @@ import path from 'path';
 import axios from 'axios';
 // local imports
 import * as utils from '../utils/utils.js';
-import * as n4j from '../backend_neo4j.js';
-import * as os from '../backend_opensearch.js';
+import * as n4j from '../database/backend_neo4j.js';
+import * as os from '../database/backend_opensearch.js';
 import { authenticateJWT, authorizeRole, generateAccessToken, checkJWTTokenBypass } from '../utils/jwtUtils.js';
 import {jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware, getAllowedOrigin} from '../iguide_cors.js';
 import {

@@ -6,13 +6,13 @@
 import neo4j from 'neo4j-driver';
 import { v4 as uuidv4 } from 'uuid';
 // local imports
-import * as utils from './utils/utils.js';
-import * as spatialUtils from './utils/spatial_utils.js';
+import * as utils from '../utils/utils.js';
+import * as spatialUtils from '../utils/spatial_utils.js';
 
 // For deployment on JetStream VM
 import dotenv from 'dotenv';
-import {checkUniversityDomain} from "./utils/domain_utils.js";
-import {generateUserRole, SortBy} from "./utils/utils.js";
+import {checkUniversityDomain} from "../utils/domain_utils.js";
+import {generateUserRole, SortBy} from "../utils/utils.js";
 dotenv.config();
 console.log(process.env.NEO4J_CONNECTION_STRING);
 

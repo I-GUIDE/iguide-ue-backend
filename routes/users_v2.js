@@ -1,8 +1,8 @@
 import express from 'express';
 import cors from 'cors';
-import * as n4j from '../../backend_neo4j.js';
-import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../../iguide_cors.js';
-import {authenticateAuth, authenticateJWT, authorizeRole} from '../../utils/jwtUtils.js';
+import * as n4j from '../database/backend_neo4j.js';
+import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
+import {authenticateAuth, authenticateJWT, authorizeRole} from '../utils/jwtUtils.js';
 import {
 	checkHPCAccessGrantV2,
 	checkUpdateParameters,
@@ -11,14 +11,14 @@ import {
 	parse64BitNumber, parseElementType, parseRole,
 	performUserCheck,
 	Role
-} from "../../utils/utils.js"
+} from "../utils/utils.js"
 import {
 	checkContributorByIDV2, deleteUserByIdV2,
 	getAllContributorsV2,
 	getContributorByIDv2,
 	registerContributorAuthV2, registerContributorV2, setContributorAvatarV2, updateContributorV2
-} from "./backend_neo4j_users.js";
-import {performReIndexElementsBasedOnUserId} from "../../utils/elements_utils.js";
+} from "../database/backend_neo4j_users.js";
+import {performReIndexElementsBasedOnUserId} from "../utils/elements_utils.js";
 import multer from "multer";
 import path from 'path';
 import fs from 'fs';
