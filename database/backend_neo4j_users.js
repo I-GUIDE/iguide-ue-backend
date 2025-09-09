@@ -109,7 +109,9 @@ export async function getAllContributorsV2(
 					temp_contributor['aliases'] = aliases;
 					temp_contributor['total_contributions'] = total_contr;
 				}
-				//temp_contributor['role'] = utils.parse64BitNumber(temp_contributor['role']);
+				if (temp_contributor["role"] !== undefined && temp_contributor["role"]?.low) { // to only convert from neo4jInt when the same is returned
+					temp_contributor["role"] = utils.parse64BitNumber(temp_contributor["role"]);
+				}
 				contributor_list.push(temp_contributor);
 			}
 		});
