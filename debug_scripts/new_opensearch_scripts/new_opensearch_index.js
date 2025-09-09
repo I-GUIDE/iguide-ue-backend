@@ -14,16 +14,16 @@ async function newOpenSearchIndex(newIndexName) {
   try {
     console.log(`New OpenSearch index: ${newIndexName}`);
 
-    // 1. Delete existing index if it exists
-    try {
-      await os.client.indices.delete({ index: newIndexName });
-      console.log(`Deleted existing index: ${newIndexName}`);
-    } catch (err) {
-      if (err.meta?.body?.error?.type === "index_not_found_exception") {
-        console.log(`No existing index named ${newIndexName}`);
-      } else {
-        throw err;
-      }
+    // 1. Check if index already exists
+    const exists = await os.client.indices.exists({ index: newIndexName });
+
+    if (exists.body === true) {
+      console.warn(
+        `Index "${newIndexName}" already exists.\n` +
+        `Please delete it manually and rerun the script.\n` +
+        `Exiting without making changes.`
+      );
+      return;
     }
 
     // 2. Create new index (dynamic mapping for flexibility)
