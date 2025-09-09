@@ -28,7 +28,7 @@ export async function getAllContributorsV2(
 		sort_order="asc",
 		filter_key='none',
 		filter_value=''){
-	let query_str = "MATCH (c:Contributor) OPTIONAL MATCH (a:Alias)-[:ALIAS_OF]->(c) OPTIONAL MATCH (c)-[r:CONTRIBUTED]->()";
+	let query_str = "MATCH (a:Alias)-[:ALIAS_OF]->(c:Contributor)";
 	let query_params = {};
 	/**
 	 * Set the filter by value if required
@@ -62,7 +62,7 @@ export async function getAllContributorsV2(
 	 * Set the return parameter
 	 */
 	let count_query_str = query_str + " return COUNT(c) AS count"
-	query_str += " WITH c, collect(DISTINCT a{.*}) AS aliases, count(r) as total_contributions"
+	query_str += " WITH c, collect(DISTINCT a{.*}) AS aliases"
 	/**
 	 * Set the default value for sort_by parameter
 	 */
@@ -78,7 +78,7 @@ export async function getAllContributorsV2(
 	query_params['from'] = neo4j.int(from);
 	query_params['size'] = neo4j.int(size);
 
-	query_str += " RETURN c{.*} AS contributor, aliases, total_contributions";
+	query_str += " RETURN c{.*} AS contributor, aliases";
 
 	try {
 		let records, summary;
@@ -93,7 +93,7 @@ export async function getAllContributorsV2(
 			if (contributor['_fields']?.length > 0) {
 				let temp_contributor = contributor['_fields'][0];
 				let aliases = contributor['_fields'][1];
-				let total_contr = utils.parse64BitNumber(contributor['_fields'][2]);
+				// let total_contr = utils.parse64BitNumber(contributor['_fields'][2]);
 				let primary_alias = {}
 				if (aliases?.length > 0) {
 					aliases.map((alias) => {
@@ -107,7 +107,7 @@ export async function getAllContributorsV2(
 					temp_contributor['first_name'] = primary_alias['first_name'];
 					temp_contributor['last_name'] = primary_alias['last_name'];
 					temp_contributor['aliases'] = aliases;
-					temp_contributor['total_contributions'] = total_contr;
+					// temp_contributor['total_contributions'] = total_contr;
 				}
 				if (temp_contributor["role"] !== undefined && temp_contributor["role"]?.low) { // to only convert from neo4jInt when the same is returned
 					temp_contributor["role"] = utils.parse64BitNumber(temp_contributor["role"]);
@@ -141,8 +141,7 @@ export async function getContributorByIDv2(id) {
 	} else {
 		query_str = "MATCH (a:Alias)-[:ALIAS_OF]->(c:Contributor{id: $id})"
 	}
-	query_str = query_str + "OPTIONAL MATCH (c)-[r:CONTRIBUTED]->() RETURN c{.*} AS contributor, " +
-		"collect(DISTINCT a{.*}) AS aliases, count(r) AS total_contributions";
+	query_str = query_str + " RETURN c{.*} AS contributor, collect(DISTINCT a{.*}) AS aliases";
 	try {
 		const {records, summary} =
 			await driver.executeQuery(query_str,
@@ -157,7 +156,7 @@ export async function getContributorByIDv2(id) {
 		let response = {
 			Contributor: records[0]['_fields'][0],
 			Aliases: records[0]['_fields'][1],
-			TotalContributions: records[0]['_fields'][2]
+			// TotalContributions: records[0]['_fields'][2]
 		};
 		let primary_alias = {}
 		if (response?.Aliases) {
@@ -177,7 +176,7 @@ export async function getContributorByIDv2(id) {
 		if (contributor["role"] !== undefined && contributor["role"]?.low) { // to only convert from neo4jInt when the same is returned
 			contributor["role"] = utils.parse64BitNumber(contributor["role"]);
 		}
-		contributor["total_contributions"] = utils.parse64BitNumber(response?.TotalContributions);
+		// contributor["total_contributions"] = utils.parse64BitNumber(response?.TotalContributions);
 		return makeFrontendCompatible(contributor)
 	} catch (error) {
 		console.log("getContributorByIDv2 - Error in query: " + error);
