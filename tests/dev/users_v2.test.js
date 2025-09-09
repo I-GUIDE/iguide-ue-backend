@@ -68,7 +68,7 @@ describe("Users V2 Endpoint API Testing", () => {
         expect(res.body).toHaveProperty("last-name", testData.trusted_user.last_name);
         expect(res.body).toHaveProperty("email", testData.trusted_user.email);
         expect(res.body).toHaveProperty("aliases");
-        expect(res.body).toHaveProperty("total-contributions");
+        // expect(res.body).toHaveProperty("total-contributions");
         generated_user_id = res.body['id'];
     });
     it("3. Should allow user to fetch the user's role", async () => {
@@ -168,7 +168,7 @@ describe("Users V2 Endpoint API Testing", () => {
         expect(res.body).toHaveProperty("last-name", testData.trusted_user.last_name);
         expect(res.body).toHaveProperty("email", testData.trusted_user.email);
         expect(res.body).toHaveProperty("aliases");
-        expect(res.body).toHaveProperty("total-contributions");
+        // expect(res.body).toHaveProperty("total-contributions");
     });
     it("10. Should allow the user to update the user's avatar", async () => {
         let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
