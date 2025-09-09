@@ -6,13 +6,15 @@ import * as n4j from "../../backend_neo4j.js";
 import * as os from "../../backend_opensearch.js";
 import * as utils from "../../utils.js";
 
-async function newOpenSearchIndex() {
+async function newOpenSearchIndex(newIndexName) {
+  if (typeof newIndexName !== "string" || newIndexName.trim() === "") {
+    throw new Error("newIndexName must be a non-empty string");
+  }
+
   try {
-    // 1. New OpenSearch index name
-    const newIndexName = "new-opensearch-index";
     console.log(`New OpenSearch index: ${newIndexName}`);
 
-    // 2. Delete existing index if it exists
+    // 1. Delete existing index if it exists
     try {
       await os.client.indices.delete({ index: newIndexName });
       console.log(`Deleted existing index: ${newIndexName}`);
@@ -24,7 +26,7 @@ async function newOpenSearchIndex() {
       }
     }
 
-    // 3. Create new index (dynamic mapping for flexibility)
+    // 2. Create new index (dynamic mapping for flexibility)
     await os.client.indices.create({
       index: newIndexName,
       body: {
@@ -39,7 +41,7 @@ async function newOpenSearchIndex() {
     });
     console.log(`Created new index: ${newIndexName}`);
 
-    // 4. Fetch all element IDs from Neo4j and index them
+    // 3. Fetch all element IDs from Neo4j and index them
     const elementTypes = Object.values(utils.ElementType);
     let bulkOps = [];
 
@@ -104,7 +106,7 @@ async function newOpenSearchIndex() {
       }
     }
 
-    // 5. Bulk insert into OpenSearch
+    // 4. Bulk insert into OpenSearch
     if (bulkOps.length > 0) {
       console.log(`Bulk inserting ${bulkOps.length / 2} documents into ${newIndexName}...`);
       await os.client.bulk({ refresh: true, body: bulkOps });
@@ -117,5 +119,5 @@ async function newOpenSearchIndex() {
   }
 }
 
-newOpenSearchIndex();
+newOpenSearchIndex('new-opensearch-index');
 
