@@ -40,6 +40,7 @@ import {
 } from "./utils/domain_utils.js";
 import path from "path";
 import users_v2 from "./routes/users_v2.js";
+import {getContributorByIDv2} from "./database/backend_neo4j_users.js";
 
 const app = express();
 
@@ -148,7 +149,8 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 		}
 		// Generate a new access token with the role in the database
 		try {
-			const response = await n4j.getContributorByID(user.id);
+			// const response = await n4j.getContributorByID(user.id);
+			const response = await getContributorByIDv2(user.id);
 			if (response.size == 0){
 				return res.status(404).json({ message: 'User not found' });
 			}

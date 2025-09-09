@@ -104,6 +104,8 @@ export async function getAllContributorsV2(
 					temp_contributor['openid'] = primary_alias['openid'];
 					temp_contributor['email'] = primary_alias['email'];
 					temp_contributor['affiliation'] = primary_alias['affiliation'];
+					temp_contributor['first_name'] = primary_alias['first_name'];
+					temp_contributor['last_name'] = primary_alias['last_name'];
 					temp_contributor['aliases'] = aliases;
 					temp_contributor['total_contributions'] = total_contr;
 				}

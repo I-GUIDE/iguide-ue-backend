@@ -46,6 +46,7 @@ import {
 	upload,
 } from "./minio_uploader.js";
 import {elementsRateLimiter} from "../ip_policy.js";
+import {getContributorByIDv2} from "../database/backend_neo4j_users.js";
 
 
 const router = express.Router();
@@ -953,7 +954,8 @@ router.post('/api/elements',
 				};
 				console.log('Getting contributor name');
 				// Set contributor name
-				let contributor = await n4j.getContributorByID(contributor_id);
+				// let contributor = await n4j.getContributorByID(contributor_id);
+				let contributor = await getContributorByIDv2(contributor_id);
 				let contributor_name = '';
 				if ('display-first-name' in contributor || 'display-last-name' in contributor) {
 					contributor_name = `${contributor['display-first-name']} ${contributor['display-last-name']}`;
@@ -1322,7 +1324,8 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 			// --- End PDF Embedding Update ---
 			switch (visibility_action) {
 				case 'INSERT':
-					let contributor = await n4j.getContributorByID(req.user.id);
+					// let contributor = await n4j.getContributorByID(req.user.id);
+					let contributor = await getContributorByIDv2(req.user.id);
 					let contributor_name = '';
 					if ('display-first-name' in contributor || 'display-last-name' in contributor) {
 						contributor_name = `${contributor['display-first-name']} ${contributor['display-last-name']}`;

@@ -2,6 +2,7 @@ import axios from "axios";
 import * as os from "../database/backend_opensearch.js";
 import * as n4j from '../database/backend_neo4j.js';
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
+import {getContributorByIDv2} from "../database/backend_neo4j_users.js";
 
 // Element operations
 export async function getFlaskEmbeddingResponse(content) {
@@ -107,7 +108,8 @@ export async function performReIndexElementsBasedOnUserId(user_id, total_element
             });
         }
 
-        let user_details = await n4j.getContributorByID(user_id);
+        // let user_details = await n4j.getContributorByID(user_id);
+        let user_details = await getContributorByIDv2(user_id);
         let user_updated_name = user_details['display-first-name'] + " " + user_details['display-last-name'];
 
         let success_updates = 0;
