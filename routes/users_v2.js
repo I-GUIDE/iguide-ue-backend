@@ -138,9 +138,9 @@ router.get('/api/users/:id', cors(), async (req, res) => {
  */
 router.options('/api/users', cors());
 router.get('/api/users',
-		// jwtCorsMiddleware,
-		// authenticateJWT,
-		// authorizeRole(Role.SUPER_ADMIN),
+		jwtCorsMiddleware,
+		authenticateJWT,
+		authorizeRole(Role.SUPER_ADMIN),
 		async (req, res) => {
     try {
 		const {
