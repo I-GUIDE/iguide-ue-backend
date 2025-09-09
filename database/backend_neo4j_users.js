@@ -47,12 +47,12 @@ export async function getAllContributorsV2(
 			break
 		case "first-name":
 			filter_key = "first_name"
-			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_str += " WHERE (toLower(a." + filter_key + ") CONTAINS toLower($filter_val) OR toLower(c.display_" + filter_key + ") CONTAINS toLower($filter_val))"
 			query_params['filter_val'] = filter_value
 			break
 		case "last-name":
 			filter_key = "last_name"
-			query_str += " WHERE toLower(c." + filter_key + ") CONTAINS toLower($filter_val)"
+			query_str += " WHERE (toLower(a." + filter_key + ") CONTAINS toLower($filter_val) OR toLower(c.display_" + filter_key + ") CONTAINS toLower($filter_val))"
 			query_params['filter_val'] = filter_value
 			break
 		default:
@@ -229,6 +229,8 @@ export async function registerContributorAuthV2(contributor){
 	contributor['role'] = generateUserRole(contributor);
     // (3) get avatar URL
     //contributor['avatar_url'] = contributor['avatar_url']['original'];
+	// Add user registration date
+	contributor['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
     const query_str = "CREATE (c: Contributor $contr_param) " +
 		"CREATE (a:Alias $alias_param) " +
 		"CREATE (a)-[:ALIAS_OF]->(c) " +
@@ -248,6 +250,7 @@ export async function registerContributorAuthV2(contributor){
 			role: contributor["role"],
 			display_first_name: contributor["first_name"],
 			display_last_name: contributor["last_name"],
+			created_at: contributor['created_at'],
 		};
 		const {records, summary} =
 	      	await driver.executeQuery(query_str,
@@ -292,6 +295,9 @@ export async function registerContributorV2(contributor){
 	contributor['role'] = generateUserRole(contributor);
     // (3) get avatar URL
     //contributor['avatar_url'] = contributor['avatar_url']['original'];
+	// Add user registration date
+	contributor['created_at'] = neo4j.types.DateTime.fromStandardDate(new Date());
+
     const query_str = "CREATE (c: Contributor $contr_param) " +
 		"CREATE (a:Alias $alias_param) " +
 		"CREATE (a)-[:ALIAS_OF]->(c) " +
@@ -309,6 +315,7 @@ export async function registerContributorV2(contributor){
 			id: contributor['id'],
 			display_first_name: contributor["first_name"],
 			display_last_name: contributor["last_name"],
+			created_at: contributor['created_at'],
 			bio: contributor["bio"],
 			role: contributor["role"],
 		};
@@ -450,6 +457,93 @@ export async function setContributorAvatarV2(id, avatar_url) {
 	}
 
 	return {result: ret, old_avatar_url: old_url};
+}
+
+/**
+ * Toggle element bookmark by user
+ * @param {string} contributor_id Looged-in user/contributor ID
+ * @param {string} element_id Element ID
+ * @param {string} element_type If provided will make DB querying more efficient
+ * @param {boolean} bookmark
+ * @return {boolean} true if bookmark status updated, false otherwise
+ */
+export async function toggleElementBookmarkByContributorV2(contributor_id,
+							 element_id,
+							 element_type,
+							 bookmark){
+	try {
+	let query_str = "MATCH(c:Contributor)<-[:ALIAS_OF]-(a:Alias) " +
+		"WHERE (c.id=$contrib_id OR $contrib_id IN a.openid) ";
+	if (bookmark === 'true'){
+		// create a new BOOKMARKED relation between contributor and element
+		if (element_type){
+		query_str += "MATCH (e:" + element_type + "{id:$elem_id}) ";
+		}
+		else {
+		// inefficient query
+		query_str += "MATCH (e{id:$elem_id}) ";
+		}
+		query_str += "MERGE (c)-[s:BOOKMARKED]-(e)";
+		const {_, summary} =
+		  await driver.executeQuery(query_str,
+						{contrib_id: contributor_id, elem_id: element_id},
+						{database: process.env.NEO4J_DB});
+		if (summary.counters.updates()['relationshipsCreated'] == 1){
+		return true;
+		}
+	} else {
+		// remove relation between contributor and element
+		if (element_type) {
+		query_str += "MATCH(c)-[s:BOOKMARKED]-(e:" + element_type +"{id:$elem_id}) ";
+		} else {
+		// inefficient query
+		console.warn('toggleElementBookmarkByContributor() - Inefficient query');
+		query_str += "MATCH(c)-[s:BOOKMARKED]-(e{id:$elem_id}) ";
+		}
+		query_str += "DELETE s";
+		const {_, summary} =
+		  await driver.executeQuery(query_str,
+						{contrib_id: contributor_id, elem_id: element_id},
+						{database: process.env.NEO4J_DB});
+		if (summary.counters.updates()['relationshipsDeleted'] == 1){
+		return true;
+		}
+	}
+	} catch(err){console.log('toggleElementBookmarkByContributor() - Error in query: '+ err);}
+	// something went wrong
+	return false;
+}
+
+/**
+ * Get if element bookmarked by contrib
+ * @param {string} contributor_id Looged-in user/contributor ID
+ * @param {string} element_id Element ID
+ * @param {string} element_type If provided will make DB querying more efficient
+ * @return {boolean} true if element bookmarked by user, false otherwise
+ */
+export async function getIfElementBookmarkedByContributorV2(contributor_id,
+							  element_id,
+							  element_type){
+	try {
+	let query_str = "MATCH(c:Contributor)<-[:ALIAS_OF]-(a:Alias) " +
+		"WHERE (c.id=$contrib_id OR $contrib_id IN a.openid) ";
+	if (element_type){
+		query_str += "MATCH (e:" + element_type + "{id:$elem_id}) ";
+	}
+	else {
+		// inefficient query
+		console.warn('getIfElementBookmarkedByContributor() - Inefficient query');
+		query_str += "MATCH (e{id:$elem_id}) ";
+	}
+	query_str += "RETURN EXISTS ((c)-[:BOOKMARKED]-(e)) as status";
+	const {records, _} =
+		  await driver.executeQuery(query_str,
+					{contrib_id: contributor_id, elem_id: element_id},
+					{database: process.env.NEO4J_DB});
+	return records[0].get('status');
+	} catch(err){console.log('getIfElementBookmarkedByContributor() - Error in query: '+ err);}
+	// something went wrong
+	return false;
 }
 
 export async function mergeSecondaryAliasesToPrimary(primary_user_id, secondary_user_id) {

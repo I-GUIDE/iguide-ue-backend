@@ -199,7 +199,7 @@ describe("Users V2 Endpoint API Testing", () => {
         generated_element_id = res.body['elementId'];
     });
     it("11. Should allow user to bookmark their created element", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         let element_type = testData.element_details_json['resource-type']
         const res = await request(app)
             .put("/api/users/bookmark/" + generated_element_id + "?bookmark=true&elementType=" + element_type)
@@ -210,7 +210,7 @@ describe("Users V2 Endpoint API Testing", () => {
         expect(res.body).toHaveProperty("message", 'Toggle element bookmark success');
     });
     it("12. Should allow user to fetch if their created element is bookmarked", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         let element_type = testData.element_details_json['resource-type']
         const res = await request(app)
             .get("/api/users/bookmark/" + generated_element_id + "?elementType=" + element_type)

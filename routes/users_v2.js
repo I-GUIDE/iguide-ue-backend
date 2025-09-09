@@ -13,10 +13,15 @@ import {
 	Role
 } from "../utils/utils.js"
 import {
-	checkContributorByIDV2, deleteUserByIdV2,
+	checkContributorByIDV2,
+	deleteUserByIdV2,
 	getAllContributorsV2,
-	getContributorByIDv2,
-	registerContributorAuthV2, registerContributorV2, setContributorAvatarV2, updateContributorV2
+	getContributorByIDv2, getIfElementBookmarkedByContributorV2,
+	registerContributorAuthV2,
+	registerContributorV2,
+	setContributorAvatarV2,
+	toggleElementBookmarkByContributorV2,
+	updateContributorV2
 } from "../database/backend_neo4j_users.js";
 import {performReIndexElementsBasedOnUserId} from "../utils/elements_utils.js";
 import multer from "multer";
@@ -962,7 +967,7 @@ router.put('/api/users/bookmark/:elementId',
 			' setting element: ' + element_id +
 			' bookmark: ' + bookmark);
 		try {
-			const response = await n4j.toggleElementBookmarkByContributor(user_id,
+			const response = await toggleElementBookmarkByContributorV2(user_id,
 				element_id,
 				element_type,
 				bookmark);
@@ -1032,7 +1037,7 @@ router.get('/api/users/bookmark/:elementId',
 		// 				  user_role: utils.Role.TRUSTED_USER};
 
 		try {
-			const response = await n4j.getIfElementBookmarkedByContributor(user_id,
+			const response = await getIfElementBookmarkedByContributorV2(user_id,
 				element_id,
 				element_type);
 			res.status(200).json(response);

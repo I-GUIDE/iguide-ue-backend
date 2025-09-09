@@ -33,6 +33,8 @@ export const SortBy = Object.freeze({
     TITLE: "title",
     FIRST_NAME: "first_name",
     LAST_NAME: "last_name",
+    DISPLAY_FIRST_NAME: "display_first_name",
+    DISPLAY_LAST_NAME: "display_last_name"
 });
 
 /*
@@ -156,9 +158,9 @@ export function parseSortBy(sort_by){
         return SortBy.CREATION_TIME;
     case SortBy.TITLE: return SortBy.TITLE;
     case SortBy.FIRST_NAME:
-    case SortBy.FIRST_NAME.toLowerCase(): return SortBy.FIRST_NAME;
+    case SortBy.FIRST_NAME.toLowerCase(): return SortBy.DISPLAY_FIRST_NAME;
     case SortBy.LAST_NAME:
-    case SortBy.LAST_NAME.toLowerCase(): return SortBy.LAST_NAME;
+    case SortBy.LAST_NAME.toLowerCase(): return SortBy.DISPLAY_LAST_NAME;
     default:
     throw Error('Server Neo4j: SortBy ('+ sort_by  +') not implemented');
     }
