@@ -1,5 +1,5 @@
 // Function: Generate an answer using relevant documents
-import { formatDocsString, formatDocsXML } from "./rag_utils.js";
+import { formatDocsString, formatDocsXML } from "../../utils/rag_utils.js";
 import { callLlamaModel, callGPTModel } from './llm_modules.js';
 import { createQueryPayload } from './llm_modules.js';
 const front_end = process.env.FRONTEND_DOMAIN || "https://platform.i-guide.io"

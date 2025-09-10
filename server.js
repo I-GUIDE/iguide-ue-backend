@@ -7,6 +7,8 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 // import { exec } from 'child_process';
 // import fetch from 'node-fetch';
+import { S3Client } from '@aws-sdk/client-s3';
+import multerS3 from 'multer-s3';
 import https from 'https';
 import http from 'http';
 import axios from 'axios';
@@ -16,11 +18,11 @@ import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 
 // local imports
-import * as utils from './utils.js';
-import * as n4j from './backend_neo4j.js';
-import * as os from './backend_opensearch.js';
+import * as utils from './utils/utils.js';
+import * as n4j from './database/backend_neo4j.js';
+import * as os from './database/backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from './iguide_cors.js';
-import { authenticateJWT, authorizeRole, generateAccessToken } from './jwtUtils.js';
+import { authenticateJWT, authorizeRole, generateAccessToken } from './utils/jwtUtils.js';
 // local imports for endpoints
 //import llm_routes from './routes/llm_with_filter_routes.js';
 //import llm_routes from './routes/llm_routes.js';
@@ -35,8 +37,10 @@ import documentation from './routes/documentation.js';
 import elements from './routes/elements.js';
 import {
 	generateOptimizedDomainList,
-} from "./routes/domain_utils.js";
+} from "./utils/domain_utils.js";
 import path from "path";
+import users_v2 from "./routes/users_v2.js";
+import {getContributorByIDv2} from "./database/backend_neo4j_users.js";
 
 const app = express();
 
@@ -59,8 +63,10 @@ app.use('/api', spatial_routes);
 app.use('/api', private_elements);
 // Use documentation route
 app.use('/api', documentation);
-// Use users/contributors route
-app.use(users);
+// // Use users/contributors route
+// app.use(users);
+// Use users/contributors route (v2 version)
+app.use(users_v2);
 // Use elements route
 app.use(elements);
 
@@ -70,8 +76,8 @@ const keyPath = path.resolve(process.env.SSL_KEY)
 const certPath = path.resolve(process.env.SSL_CERT)
 
 const SSLOptions = {
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath)
+	key: fs.readFileSync(keyPath),
+	cert: fs.readFileSync(certPath)
 };
 /****************************************************************************
  * JWT Specific Functions
@@ -115,35 +121,36 @@ app.options('/api/refresh-token', jwtCorsMiddleware);
 app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 
 	// updated refresh token to use env variable
-    const refreshToken = req.cookies[process.env.JWT_REFRESH_TOKEN_NAME];
-    //console.log("Refresh token", refreshToken);
-    if (!refreshToken) {
+	const refreshToken = req.cookies[process.env.JWT_REFRESH_TOKEN_NAME];
+	//console.log("Refresh token", refreshToken);
+	if (!refreshToken) {
 	return res.sendStatus(401);
-    }
+	}
 
-    // Verify the refresh token exists in OpenSearch
-    const { body } = await os.client.search({
+	// Verify the refresh token exists in OpenSearch
+	const { body } = await os.client.search({
 	index: 'refresh_tokens',
 	body: {
-	    query: {
+		query: {
 		term: { token: refreshToken }
-	    }
+		}
 	}
-    });
+	});
 
-    if (body.hits.total.value === 0) {
+	if (body.hits.total.value === 0) {
 	console.log(`Token not found in database for ${refreshToken}`)
 	return res.sendStatus(403);
-    }
+	}
 
-    jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_SECRET, async (err, user) => {
+	jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_SECRET, async (err, user) => {
 		if (err) {
 			console.log(`Error processing refreshToken ${refreshToken}`)
 			return res.sendStatus(403);
 		}
 		// Generate a new access token with the role in the database
 		try {
-			const response = await n4j.getContributorByID(user.id);
+			// const response = await n4j.getContributorByID(user.id);
+			const response = await getContributorByIDv2(user.id);
 			if (response.size == 0){
 				return res.status(404).json({ message: 'User not found' });
 			}
@@ -160,7 +167,7 @@ app.post('/api/refresh-token', jwtCorsMiddleware, async (req, res) => {
 		// updated to new variable name
 		//res.cookie(process.env.JWT_ACCESS_TOKEN_NAME, newAccessToken, { httpOnly: true, secure: process.env.SERV_TAG === 'production' , sameSite: 'Strict', domain: target_domain, path: '/'});
 		//res.json({ accessToken: newAccessToken });
-    });
+	});
 });
 
 
@@ -170,7 +177,7 @@ app.get('/api/check-tokens', jwtCorsMiddleware, authenticateJWT, async (req, res
 		res.json({
 			id: req.user.id,
 			role: req.user.role
-  		});
+		});
 	} catch (error) {
 		console.error("Error performing check user: ", error)
 		res.status(500).json({message: 'Error checking user details'});
@@ -183,16 +190,16 @@ app.get('/api/check-tokens', jwtCorsMiddleware, authenticateJWT, async (req, res
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    if (err instanceof multer.MulterError) {
+	if (err instanceof multer.MulterError) {
 	// A Multer error occurred when uploading.
 	return res.status(400).json({ message: err.message });
-    } else if (err) {
+	} else if (err) {
 	// An unknown error occurred.
 	return res.status(400).json({ message: err.message });
-    }
+	}
 
-    // Forward to next middleware if no errors
-    next();
+	// Forward to next middleware if no errors
+	next();
 });
 /****************************************************************************
  * Importing Domain List
@@ -227,20 +234,20 @@ console.log("Domain list import complete!");
  */
 app.options('/api/url-title', cors());
 app.get('/api/url-title', cors(), async (req, res) => {
-    // [Done] Neo4j not required
-    const url = req.query.url;
-    try {
+	// [Done] Neo4j not required
+	const url = req.query.url;
+	try {
 	const response = await axios.get(url);
 	const matches = response.data.match(/<title>(.*?)<\/title>/);
 	if (matches) {
-	    res.json({ title: matches[1] });
+		res.json({ title: matches[1] });
 	} else {
-	    res.status(404).json({ error: 'Title not found' });
+		res.status(404).json({ error: 'Title not found' });
 	}
-    } catch (error) {
+	} catch (error) {
 	console.log(error);
 	res.status(500).json({ error: 'Failed to retrieve title' });
-    }
+	}
 });
 
 /****************************************************************************/
