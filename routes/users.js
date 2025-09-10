@@ -7,14 +7,14 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 // local imports
-import * as utils from '../utils/utils.js';
-import * as n4j from '../database/backend_neo4j.js';
-import * as os from '../database/backend_opensearch.js';
+import * as utils from '../utils.js';
+import * as n4j from '../backend_neo4j.js';
+import * as os from '../backend_opensearch.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
-import {authenticateAuth, authenticateJWT, authorizeRole, generateAccessToken} from '../utils/jwtUtils.js';
-import {checkHPCAccessGrant, checkUpdateParameters, EditableParameters, Role} from "../utils/utils.js";
-import {getAllContributors, registerContributorAuth} from "../database/backend_neo4j.js";
-import {performReIndexElementsBasedOnUserId} from "../utils/elements_utils.js";
+import {authenticateAuth, authenticateJWT, authorizeRole, generateAccessToken} from '../jwtUtils.js';
+import {checkHPCAccessGrant, checkUpdateParameters, EditableParameters, Role} from "../utils.js";
+import {getAllContributors, registerContributorAuth} from "../backend_neo4j.js";
+import {performReIndexElementsBasedOnUserId} from "./elements_utils.js";
 import {usersRateLimiter} from "../ip_policy.js";
 
 const router = express.Router();
@@ -29,24 +29,22 @@ fs.mkdirSync(avatar_dir, { recursive: true });
 router.use('/user-uploads/avatars', express.static(avatar_dir));
 // Configure storage for avatars
 const avatarStorage = multer.diskStorage({
-	destination: (req, file, cb) => {
+    destination: (req, file, cb) => {
 	cb(null, avatar_dir);
-	},
-	filename: (req, file, cb) => {
+    },
+    filename: (req, file, cb) => {
 	// It's a good practice to sanitize the original file name
 	const sanitizedFilename = file.originalname.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
 	cb(null, `${Date.now()}-${sanitizedFilename}`);
-	}
+    }
 });
 const uploadAvatar = multer({ storage: avatarStorage });
 
-//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/v1/users/{id}:
+ * /api/users/{id}:
  *   get:
  *     summary: Return the user document given the id
- *     deprecated: true
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -64,29 +62,27 @@ const uploadAvatar = multer({ storage: avatarStorage });
  *         description: Error fetching the user
  */
 //router.options('/users/:id', cors());
-router.get('/api/v1/users/:id', cors(), async (req, res) => {
-	const id = decodeURIComponent(req.params.id);
-	try {
+router.get('/api/users/:id', cors(), async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
+    try {
 	const response = await n4j.getContributorByID(id);
 	if (response.size == 0){
-		return res.status(404).json({ message: 'User not found' });
+	    return res.status(404).json({ message: 'User not found' });
 	}
 	// remove role attribute
 	delete response['role'];
 	res.status(200).json(response);
-	} catch (error) {
+    } catch (error) {
 	console.error('Error fetching user:', error);
 	res.status(500).json({ message: 'Error fetching the user' });
-	}
+    }
 });
 
-//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/v1/users:
+ * /api/users:
  *   get:
  *     summary: Return all users
- *     deprecated: true
  *     tags: ['users']
  *     parameters:
  *       - in: query
@@ -137,15 +133,15 @@ router.get('/api/v1/users/:id', cors(), async (req, res) => {
  *       500:
  *         description: Error fetching the user list
  */
-router.get('/api/v1/users',
+router.get('/api/users',
 		jwtCorsMiddleware,
 		authenticateJWT,
 		authorizeRole(Role.SUPER_ADMIN),
 		async (req, res) => {
-	try {
+    try {
 		const {
-			'from': from,
-			'size': size,
+	    	'from': from,
+	    	'size': size,
 			'sort-by': sort_by,
 			'sort-order': sort_order,
 			'filter-name': filter_key,
@@ -154,19 +150,17 @@ router.get('/api/v1/users',
 
 		const response = await n4j.getAllContributors(from, size, sort_by, sort_order, filter_key, filter_value);
 		res.status(200).json(response);
-	} catch (error) {
+    } catch (error) {
 		console.error('Error fetching user list:', error);
 		res.status(500).json({ message: 'Error fetching the user list' });
-	}
+    }
 });
 
-//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/v1/users/{id}/role:
+ * /api/users/{id}/role:
  *   put:
  *     summary: Update the user's role
- *     deprecated: true
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -192,28 +186,28 @@ router.get('/api/v1/users',
  *         description: Error in updating user role
  */
 // Handle OPTIONS requests for both methods
-router.options('/api/v1/users/:id/role', (req, res) => {
-	const method = req.header('Access-Control-Request-Method');
-	if (method === 'PUT') {
-		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
-		res.header('Access-Control-Allow-Methods', 'PUT');
-		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
-		res.header('Access-Control-Allow-Credentials', 'true');
-	} else if (method === 'GET') {
-		res.header('Access-Control-Allow-Origin', '*');
-		res.header('Access-Control-Allow-Methods', 'GET');
-		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
-	}
-	res.sendStatus(204); // No content
+router.options('/api/users/:id/role', (req, res) => {
+    const method = req.header('Access-Control-Request-Method');
+    if (method === 'PUT') {
+        res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+        res.header('Access-Control-Allow-Methods', 'PUT');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+        res.header('Access-Control-Allow-Credentials', 'true');
+    } else if (method === 'GET') {
+        res.header('Access-Control-Allow-Origin', '*');
+        res.header('Access-Control-Allow-Methods', 'GET');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
+    }
+    res.sendStatus(204); // No content
 });
-router.put('/api/v1/users/:id/role',
+router.put('/api/users/:id/role',
 		jwtCorsMiddleware,
 		authenticateJWT,
 		authorizeRole(Role.SUPER_ADMIN),
 		async (req, res) => {
 	try {
-		const id = decodeURIComponent(req.params.id);
-		const updated_role_body = req.body;
+ 		const id = decodeURIComponent(req.params.id);
+    	const updated_role_body = req.body;
 
 		if (updated_role_body['role'] !== undefined) {
 			console.log('Updating user role for userId: ' + id);
@@ -261,13 +255,11 @@ router.put('/api/v1/users/:id/role',
 	}
 });
 
-//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/v1/users/{id}/role:
+ * /api/users/{id}/role:
  *   get:
  *     summary: Return the user role given the id
- *     deprecated: true
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -284,29 +276,27 @@ router.put('/api/v1/users/:id/role',
  *       500:
  *         description: Error fetching the user
  */
-router.options('/api/v1/users/:id/role', cors());
-router.get('/api/v1/users/:id/role', cors(), async (req, res) => {
-	const id = decodeURIComponent(req.params.id);
-	try {
+router.options('/api/users/:id/role', cors());
+router.get('/api/users/:id/role', cors(), async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
+    try {
 	const response = await n4j.getContributorByID(id);
 	if (response.size == 0){
-		return res.status(404).json({ message: 'User not found' });
+	    return res.status(404).json({ message: 'User not found' });
 	}
 	let ret = {'role' : response['role']};
 	res.json(ret);
-	} catch (error) {
+    } catch (error) {
 	console.error('Error fetching user:', error);
 	res.status(500).json({ message: 'Error fetching the user' });
-	}
+    }
 });
 
-//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/v1/users/{id}/valid:
+ * /api/users/{id}/valid:
  *   get:
  *     summary: Check if a user exists given the id
- *     deprecated: true
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -321,28 +311,26 @@ router.get('/api/v1/users/:id/role', cors(), async (req, res) => {
  *       500:
  *         description: Error checking the user
  */
-router.options('/api/v1/users/:id/valid', cors());
-router.get('/api/v1/users/:id/valid', cors(), async (req, res) => {
-	const id = decodeURIComponent(req.params.id);
+router.options('/api/users/:id/valid', cors());
+router.get('/api/users/:id/valid', cors(), async (req, res) => {
+    const id = decodeURIComponent(req.params.id);
 
-	console.log('Check user ...' + id);
-	// [ToDo] Return {true, version_num} OR {false, -1}
-	try {
+    console.log('Check user ...' + id);
+    // [ToDo] Return {true, version_num} OR {false, -1}
+    try {
 	const response = await n4j.checkContributorByID(id);
 	res.status(200).json(response);
-	} catch (error) {
+    } catch (error) {
 	console.error('Error checking user:', error);
 	res.status(500).json({ message: 'Error checking the user' });
-	}
+    }
 });
 
-//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/v1/users/avatar:
+ * /api/users/avatar:
  *   post:
  *     summary: Upload/update an avatar image for the user profile
- *     deprecated: true
  *     tags: ['users']
  *     consumes:
  *       - multipart/form-data
@@ -361,75 +349,73 @@ router.get('/api/v1/users/:id/valid', cors(), async (req, res) => {
  *       400:
  *         description: No file uploaded
  */
-router.options('/api/v1/users/avatar', jwtCorsMiddleware);
-router.post('/api/v1/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
-	// if (!req.file) {
-	// 	return res.status(400).json({ message: 'No file uploaded' });
-	// }
+router.options('/api/users/avatar', jwtCorsMiddleware);
+router.post('/api/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAvatar.single('file'), async (req, res) => {
+    // if (!req.file) {
+    // 	return res.status(400).json({ message: 'No file uploaded' });
+    // }
 
-	// const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${req.file.filename}`;
+    // const filePath = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${req.file.filename}`;
 
-	// res.json({
-	// 	message: 'Avatar uploaded successfully',
-	// 	url: filePath,
-	// });
+    // res.json({
+    // 	message: 'Avatar uploaded successfully',
+    // 	url: filePath,
+    // });
 
-	try {
+    try {
 	const body = JSON.parse(JSON.stringify(req.body));
 	const id = body.id;
 	const new_avatar_file = req.file;
 
 	if (!id || !new_avatar_file) {
-		return res.status(400).json({ message: 'ID and new avatar file are required' });
+	    return res.status(400).json({ message: 'ID and new avatar file are required' });
 	}
 
 	// Update the user's avatar URL with the new file URL
 	// const newAvatarUrl = `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/avatars/${newAvatarFile.filename}`;
 
 	const new_avatar_images =
-		  utils.generateMultipleResolutionImagesFor(new_avatar_file.filename,
+	      utils.generateMultipleResolutionImagesFor(new_avatar_file.filename,
 							avatar_dir,
 							true);
 
 	// DB only stores the original image
 	const new_avatar_image = (new_avatar_images === null) ?
-		  null :
-		  new_avatar_images['original'];
+	      null :
+	      new_avatar_images['original'];
 
 	const {result, old_avatar_url} =
-		  await n4j.setContributorAvatar(id, new_avatar_image);
+	      await n4j.setContributorAvatar(id, new_avatar_image);
 	if (result == false){
-		return res.status(404).json({ message: 'User not found' });
+	    return res.status(404).json({ message: 'User not found' });
 	}
 	if (old_avatar_url) {
-		// Delete the old avatar file
-		const old_avatar_filepath = path.join(avatar_dir, path.basename(old_avatar_url));
-		if (fs.existsSync(old_avatar_filepath)) {
+	    // Delete the old avatar file
+	    const old_avatar_filepath = path.join(avatar_dir, path.basename(old_avatar_url));
+	    if (fs.existsSync(old_avatar_filepath)) {
 		fs.unlinkSync(old_avatar_filepath);
-		}
-		var ret_message = 'Avatar updated successfully'
+	    }
+	    var ret_message = 'Avatar updated successfully'
 	} else {
-		var ret_message = 'Avatar uploaded successfully'
+	    var ret_message = 'Avatar uploaded successfully'
 	}
 
 	res.json({
-		message: ret_message,
-		'image-urls': new_avatar_images,
+	    message: ret_message,
+	    'image-urls': new_avatar_images,
 	});
-	} catch (error) {
+    } catch (error) {
 	console.error('Error updating avatar:', error);
 	res.status(500).json({ message: 'Internal server error' });
-	}
+    }
 
 });
 
-//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/v1/users:
+ * /api/users:
  *   post:
  *     summary: Add a new user document
- *     deprecated: true
  *     tags: ['users']
  *     requestBody:
  *       required: true
@@ -450,21 +436,21 @@ router.post('/api/v1/users/avatar', jwtCorsMiddleware, authenticateJWT, uploadAv
  *       500:
  *         description: Internal server error
  */
-router.options('/api/v1/users', jwtCorsMiddleware);
-router.post('/api/v1/users', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
-	const user = req.body;
-	console.log('Adding new user');
-	//console.log(user);
+router.options('/api/users', jwtCorsMiddleware);
+router.post('/api/users', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+    const user = req.body;
+    console.log('Adding new user');
+    //console.log(user);
 
-	try {
+    try {
 	const id = user['id'];
 	console.log("user body while adding user: ", user);
 	const response = await n4j.registerContributor(user);
 	if (response){
-		res.status(201).json({ message: 'User added successfully', id: id });
+	    res.status(201).json({ message: 'User added successfully', id: id });
 	} else {
-		res.status(201).json({ message: 'User already exists', id: id });
-		console.log('User already exists with id: ' + id);
+	    res.status(201).json({ message: 'User already exists', id: id });
+	    console.log('User already exists with id: ' + id);
 	}
 	// [ToDo] Add contributor name to OpenSearch
 
@@ -475,19 +461,18 @@ router.post('/api/v1/users', jwtCorsMiddleware, authenticateJWT, async (req, res
 	//     refresh:'wait-for'
 	// });
 	//res.status(201).json({ message: 'User added successfully', id: response.body._id });
-	} catch (error) {
+    } catch (error) {
 	console.error('Error adding user:', error);
 	res.status(500).json({ message: 'Internal server error' });
-	}
+    }
 });
 
-//DEPRECATED Moved to users_v2.js
+
 /**
  * @swagger
- * /api/v1/auth/users:
+ * /api/auth/users:
  *   post:
  *     summary: Add a new user document for authorized server
- *     deprecated: true
  *     tags: ['users']
  *     requestBody:
  *       required: true
@@ -508,13 +493,13 @@ router.post('/api/v1/users', jwtCorsMiddleware, authenticateJWT, async (req, res
  *       500:
  *         description: Internal server error
  */
-router.options('/api/v1/auth/users', jwtCorsMiddleware);
-router.post('/api/v1/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, res) => {
+router.options('/api/auth/users', jwtCorsMiddleware);
+router.post('/api/auth/users', jwtCorsMiddleware, authenticateAuth, async (req, res) => {
 
 	const user = req.body;
-	console.log('Adding new user through auth API');
+    console.log('Adding new user through auth API');
 	console.log("user body while adding user: ", user);
-	try {
+    try {
 		const id = user['id'];
 		let existing_user = {}
 		if (id !== undefined) {
@@ -532,19 +517,17 @@ router.post('/api/v1/auth/users', jwtCorsMiddleware, authenticateAuth, async (re
 			}
 		}
 
-	} catch (error) {
+    } catch (error) {
 		console.error('Error adding user:', error);
 		res.status(500).json({ message: 'Internal server error' });
-	}
+    }
 });
 
-//DEPRECATED Moved to users_v2.js
 /**
  * @swagger
- * /api/v1/users/{id}:
+ * /api/users/{id}:
  *   put:
  *     summary: Update the user document
- *     deprecated: true
  *     tags: ['users']
  *     parameters:
  *       - in: path
@@ -570,38 +553,38 @@ router.post('/api/v1/auth/users', jwtCorsMiddleware, authenticateAuth, async (re
  *         description: Internal server error
  */
 // Handle OPTIONS requests for both methods
-router.options('/api/v1/users/:id', (req, res) => {
-	const method = req.header('Access-Control-Request-Method');
-	if (method === 'PUT') {
+router.options('/api/users/:id', (req, res) => {
+    const method = req.header('Access-Control-Request-Method');
+    if (method === 'PUT') {
+        res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
+        res.header('Access-Control-Allow-Methods', 'PUT');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+        res.header('Access-Control-Allow-Credentials', 'true');
+    } else if (method === 'GET') {
+        res.header('Access-Control-Allow-Origin', '*');
+        res.header('Access-Control-Allow-Methods', 'GET');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
+    } else if (method === 'DELETE') {
 		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
-		res.header('Access-Control-Allow-Methods', 'PUT');
-		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
-		res.header('Access-Control-Allow-Credentials', 'true');
-	} else if (method === 'GET') {
-		res.header('Access-Control-Allow-Origin', '*');
-		res.header('Access-Control-Allow-Methods', 'GET');
-		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeadersWithoutAuth);
-	} else if (method === 'DELETE') {
-		res.header('Access-Control-Allow-Origin', jwtCORSOptions.origin);
-		res.header('Access-Control-Allow-Methods', 'DELETE');
-		res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
-		res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Methods', 'DELETE');
+        res.header('Access-Control-Allow-Headers', jwtCorsOptions.allowedHeaders);
+        res.header('Access-Control-Allow-Credentials', 'true');
 	}
-	res.sendStatus(204); // No content
+    res.sendStatus(204); // No content
 });
-router.put('/api/v1/users/:id',
+router.put('/api/users/:id',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	async (req, res) => {
-	const id = decodeURIComponent(req.params.id);
-	const updates = req.body;
+    const id = decodeURIComponent(req.params.id);
+    const updates = req.body;
 
 	const {user_id, user_role} = (() => {
 		if (!req.user || typeof req.user === 'undefined'){
-			return {user_id:null, user_role:null};
+	    	return {user_id:null, user_role:null};
 		}
 		return {user_id:req.user.id, user_role:req.user.role}
-	})();
+    })();
 	let current_user_details = await n4j.getContributorByID(user_id);
 
 	console.log("user detail from cookie: ", user_id, " detail from db: ", current_user_details['id']);
@@ -628,7 +611,7 @@ router.put('/api/v1/users/:id',
 		}
 	}
 
-	console.log('Updating user ...');
+    console.log('Updating user ...');
 	if (!checkUpdateParameters(updates)) {
 		res.status(409).json({message: 'Failed to edit user. Uneditable parameters present.', result: false});
 		return;
@@ -639,7 +622,7 @@ router.put('/api/v1/users/:id',
 	if (updates['id']) {
 		delete updates['id']
 	}
-	try {
+    try {
 		const response = await n4j.updateContributor(id, updates);
 		if (response) {
 			if (reindex_os) {
@@ -648,20 +631,20 @@ router.put('/api/v1/users/:id',
 			}
 		}
 		if (response) {
-			res.json({ message: 'User updated successfully', result: response });
+	    	res.json({ message: 'User updated successfully', result: response });
 		} else {
-			console.log('Error updating user');
-			res.json({ message: 'Error updating user', result: response });
+	    	console.log('Error updating user');
+	    	res.json({ message: 'Error updating user', result: response });
 		}
-	} catch (error) {
+    } catch (error) {
 		console.error('Error updating user:', error);
 		res.status(500).json({ message: 'Internal server error' });
-	}
+    }
 });
 
 /**
  * @swagger
- * /api/v1/users/bookmark/{elementId}:
+ * /api/users/bookmark/{elementId}:
  *   put:
  *     summary: Toggle element bookmark by logged-in user
  *     tags: ['users']
@@ -693,50 +676,50 @@ router.put('/api/v1/users/:id',
  *       500:
  *         description: Internal server error
  */
-router.options('/api/v1/users/bookmark/:elementId', jwtCorsMiddleware);
-router.put('/api/v1/users/bookmark/:elementId',
+router.options('/api/users/bookmark/:elementId', jwtCorsMiddleware);
+router.put('/api/users/bookmark/:elementId',
 	   jwtCorsMiddleware,
 	   authenticateJWT,
 	   async (req, res) => {
-	const element_id = decodeURIComponent(req.params['elementId']);
-	const bookmark = req.query['bookmark'];
-	const element_type = (() => {
+    const element_id = decodeURIComponent(req.params['elementId']);
+    const bookmark = req.query['bookmark'];
+    const element_type = (() => {
 	if (req.query['elementType']){
-		return utils.parseElementType(req.query['elementType']);
+	    return utils.parseElementType(req.query['elementType']);
 	}
 	return null;
-	})();
-
-	const {user_id, user_role} = (() => {
+    })();
+    
+    const {user_id, user_role} = (() => {
 	if (!req.user || req.user == null || typeof req.user === 'undefined'){
-		return {user_id:null, user_role:null};
+	    return {user_id:null, user_role:null};
 	}
 	return {user_id:req.user.id, user_role:req.user.role}
-	})();
+    })();
 
-	// 'http://cilogon.org/serverA/users/48835826'
-	// const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
-	// 				  user_role: utils.Role.TRUSTED_USER};
+    // 'http://cilogon.org/serverA/users/48835826'
+    // const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
+    // 				  user_role: utils.Role.TRUSTED_USER};
 
-	console.log('User: ' + user_id +
+    console.log('User: ' + user_id +
 		' setting element: ' + element_id +
 		' bookmark: ' + bookmark );
-	try {
+    try {
 	const response = await n4j.toggleElementBookmarkByContributor(user_id,
-									  element_id,
-									  element_type,
-									  bookmark);
+								      element_id,
+								      element_type,
+								      bookmark);
 	if (response) {
-		//res.status(200).json({ message: 'Toggle element bookmark success' });
-		res.json({ message: 'Toggle element bookmark success' });
+	    //res.status(200).json({ message: 'Toggle element bookmark success' });
+	    res.json({ message: 'Toggle element bookmark success' });
 	} else {
-		console.log('Error setting element bookmark');
-		res.status(401).json({ message: 'Error setting element bookmark' });
+	    console.log('Error setting element bookmark');
+	    res.status(401).json({ message: 'Error setting element bookmark' });
 	}
-	} catch (error) {
+    } catch (error) {
 	console.error('Error setting element bookmark:', error);
 	res.status(500).json({ message: 'Internal server error' });
-	}
+    }
 });
 
 /**
@@ -766,47 +749,46 @@ router.put('/api/v1/users/bookmark/:elementId',
  *       500:
  *         description: Internal server error
  */
-router.options('/api/v1/users/bookmark/:elementId', jwtCorsMiddleware);
-router.get('/api/v1/users/bookmark/:elementId',
+router.options('/api/users/bookmark/:elementId', jwtCorsMiddleware);
+router.get('/api/users/bookmark/:elementId',
 	   jwtCorsMiddleware,
 	   authenticateJWT,
 	   async (req, res) => {
-	const element_id = decodeURIComponent(req.params['elementId']);
-	//const user_id = decodeURIComponent(req.params['userId']);
-	const element_type = (() => {
+    const element_id = decodeURIComponent(req.params['elementId']);
+    //const user_id = decodeURIComponent(req.params['userId']);
+    const element_type = (() => {
 	if (req.query['elementType']){
-		return utils.parseElementType(req.query['elementType']);
+	    return utils.parseElementType(req.query['elementType']);
 	}
 	return null;
-	})();
-
-	const {user_id, user_role} = (() => {
+    })();
+    
+    const {user_id, user_role} = (() => {
 	if (!req.user || req.user == null || typeof req.user === 'undefined'){
-		return {user_id:null, user_role:null};
+	    return {user_id:null, user_role:null};
 	}
 	return {user_id:req.user.id, user_role:req.user.role}
-	})();
+    })();
 
-	// // 'http://cilogon.org/serverA/users/48835826'
-	// const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
-	// 				  user_role: utils.Role.TRUSTED_USER};
+    // // 'http://cilogon.org/serverA/users/48835826'
+    // const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
+    // 				  user_role: utils.Role.TRUSTED_USER};
 
-	try {
+    try {
 	const response = await n4j.getIfElementBookmarkedByContributor(user_id,
-									   element_id,
-									   element_type);
+								       element_id,
+								       element_type);
 	res.status(200).json(response);
-	} catch (error) {
+    } catch (error) {
 	console.error('Error updating user:', error);
 	res.status(500).json({ message: 'Internal server error' });
-	}
+    }
 });
 
-//DEPRECATED Moved to users_v2.js
 // Commenting the swagger definition makes sure the API is not visible in the Swagger Definition
 // /**
 //  * @swagger
-//  * /api/v1/users/{id}:
+//  * /api/users/{id}:
 //  *   delete:
 //  *     summary: Delete the user document
 //  *     tags: ['users']
@@ -827,7 +809,7 @@ router.get('/api/v1/users/bookmark/:elementId',
 //  *       500:
 //  *         description: Internal server error
 //  */
-router.delete('/api/v1/users/:id',
+router.delete('/api/users/:id',
 	jwtCorsMiddleware,
 	authenticateJWT,
 	authorizeRole(utils.Role.SUPER_ADMIN),

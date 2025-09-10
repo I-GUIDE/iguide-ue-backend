@@ -72,6 +72,7 @@ export const authorizeRole = (requiredRole) => (req, res, next) => {
   }
 };
 
+
 // Store refresh token in OpenSearch
 export const storeRefreshToken = async (token, user_id) => {
   await client.index({
@@ -127,3 +128,4 @@ export const checkAuthTokenBypass = (req) => {
 export const generateAccessToken = (user) => {
   return jwt.sign(user, process.env.JWT_ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
 };
+

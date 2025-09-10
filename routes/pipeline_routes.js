@@ -4,17 +4,17 @@ import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { formComprehensiveUserQuery, getOrCreateMemory, updateMemory, deleteMemory, createMemory, updateRating } from './rag_modules/memory_modules.js';
 import { jwtCORSOptions, jwtCorsOptions, jwtCorsMiddleware } from '../iguide_cors.js';
-import { authenticateJWT, authorizeRole, generateAccessToken } from '../utils/jwtUtils.js';
+import { authenticateJWT, authorizeRole, generateAccessToken } from '../jwtUtils.js';
 import { getSemanticSearchResults } from './rag_modules/search_modules.js';
 import { gradeDocuments, gradeGenerationVsDocumentsAndQuestion } from './rag_modules/grader_modules.js';
 import { callGPTModel, callLlamaModel } from './rag_modules/llm_modules.js';
 import { routeUserQuery } from './rag_modules/routing_modules.js';
-import * as utils from '../utils/utils.js';
-import { extractJsonFromLLMReturn, formatDocsJson, makeSearchRateLimiter, safeParseLLMJson} from '../utils/rag_utils.js';
+import * as utils from '../utils.js';
+import { extractJsonFromLLMReturn, formatDocsJson, makeSearchRateLimiter, safeParseLLMJson} from './rag_modules/rag_utils.js';
 import { generateAnswer } from './rag_modules/generation_module.js';
 import { restrictToUIUC } from '../ip_policy.js';
 import {createQueryPayload} from './rag_modules/llm_modules.js';
-import {Role} from "../utils/utils.js";
+import {Role} from "../utils.js";
 const router = express.Router();
 const checkGenerationQuality = process.env.CHECK_GENERATION_QUALITY === 'true' || false; // Default to false if not set
 const MAX_SEARCHES_PER_HOUR =process.env.MAX_SEARCHES_PER_HOUR || 10; // Set a default value if not provided
@@ -315,6 +315,7 @@ Answer the user's question by chaining searches **only when truly necessary**.
           message_id: uuidv4(),
           elements: [],
           count: 0,
+          retrievalSteps
         };
       }
     }
@@ -861,7 +862,7 @@ async function resolveReferences(query, facts) {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
-   2.  Iterative retrieval & reasoning (ReAct-style)
+   2.  Iterative retrieval & reasoning
    ─────────────────────────────────────────────────────────────────────────── */
 
 export async function handleIterativeQuery(
@@ -874,7 +875,7 @@ export async function handleIterativeQuery(
   console.log("Starting iterative retrieval for", comprehensiveUserQuery);
 
   const retrievalSteps = [];
-  const MAX_ITERATIONS = 4;
+  const MAX_ITERATIONS = 3;
 
   // State object with working memory
   const state = {
@@ -882,108 +883,86 @@ export async function handleIterativeQuery(
     augmentedQuery: comprehensiveUserQuery,
     documents: [],
     knowledge: {},
-    reactHistory: [], // For ReAct-style step tracking
   };
 
   let finalAnswerContent = "";
   for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     progressCallback(`Iteration #${iteration}: reasoning`);
 
-    // Build ReAct-style prompt
-    const iterationPrompt = buildReActPrompt(
+    const iterationPrompt = buildIterativePrompt(
       userQuery,
       state.documents,
       retrievalSteps,
-      state.knowledge,
-      state.reactHistory
+      state.knowledge
     );
 
     const systemPrompt = `
-You are a multi-hop ReAct agent for retrieval-augmented question answering.
+You are a multi‑step retrieval‑and‑reasoning agent.
 
-For each step, follow this format:
-Thought: <your reasoning about what to do next>
-Action: <Search["query"] or Answer["final answer"]>
-Observation: <Result of the action, provided by the system>
+### Contract
+Return the scratchpad, then output valid JSON with one of the actions:
+  /*** Scratch‑pad**************************************************************
+   * Write your chain‑of‑thought here. DO NOT include braces in the scratch‑pad *
+   *****************************************************************************/
+  
+  REMINDER: After the scratch‑pad output ONLY one JSON object:
+    { "action":"search", "search_query":"…", "new_facts":{…} }
+    or
+    { "action":"answer", "content":"…",     "new_facts":{…} }
 
-Repeat until you can answer the user's question. At the end, output only the final answer.
-
-Rules:
-- Use concrete facts from previous observations in your next search.
-- Do not repeat previous searches unless you have new information.
-- Keep answers concise and cite facts from the documents implicitly.
-- Every step must follow the format above.
-`;
+### Rules
+1. Think in the Scratch‑pad about whether the questions asked in the previous steps are sufficient for answering the user query. Focus on the questions asked instead of the documents as the documents maybe related but it is always better to ask another subquestion.
+2. If you learn any concrete value (name, %, id, date…), add it to "new_facts".
+3. When facts exist, use them in the next search instead of vague phrases.
+4. Stop searching when the question is fully answered by the sub-questions in each step and supported by ≥1 doc.
+5. If you need to find out more facts, do the search.
+6. Keep answers ≤1–2 sentences.
+7. Every key *and* every string value **MUST** be wrapped in double quotes.
+   Example: { "name": "Finn Roberts" }   NOT  { "name": Finn Roberts }.
+8. Avoid doing new searches that are just rephrased versions of previous steps. For example, if the previous step searched "Works from Alice" then you should avoid searching for "Alice's works" or "Alice's publications". Instead, you should go for a follow-up search if there is other unknown facts or stop and choose to answer.
+9. Avoid repharsing the user query in the next search. Instead, you should go for a follow-up search if there is other unknown facts or stop and choose to answer.
+10. If the user query is a set of keywords, keep it as is in the next search. For example, if the user query is "Chicago Dataset" then just search for "Chicago Dataset" in the next search.`;
 
     const raw = process.env.USE_GPT === true
       ? await callGPTModel(createQueryPayload("gpt-4o", systemPrompt, iterationPrompt))
       : await callLlamaModel(createQueryPayload("llama3:instruct", systemPrompt, iterationPrompt));
 
-    console.log(`LLM Iteration Response for ReAct: ${raw}`);
+    //console.log("LLM Iteration Response:", raw);
+    console.log(`LLM Iteration Response for iterative query: ${raw}`);
+    let act;
+    try { act = safeParseLLMJson(raw); }
+    catch (e) { console.warn("Bad JSON:", e); finalAnswerContent = raw; break; }
 
-    // Parse LLM output for Thought and Action
-    const reactMatch = raw.match(/Thought:(.*)\nAction:(.*)/s);
-    let thought = "", action = "", observation = "";
-    if (reactMatch) {
-      thought = reactMatch[1].trim();
-      action = reactMatch[2].trim();
-    } else {
-      // fallback: treat as final answer
-      finalAnswerContent = raw;
-      break;
-    }
+    // merge LLM‑reported facts
+    if (act.new_facts) Object.assign(state.knowledge, act.new_facts);
 
-    if (action.startsWith("Search[")) {
-      // Extract query
-      const queryMatch = action.match(/Search\["(.*)"\]/);
-      const searchQuery = queryMatch ? queryMatch[1] : action;
-      const resolvedQuery = await resolveReferences(searchQuery, state.knowledge);
-      progressCallback(`Searching: "${resolvedQuery}"`);
-      const newResults = await routeUserQuery(resolvedQuery);
-      const newlyRelevant = await gradeDocuments(newResults, resolvedQuery);
+    if (act.action === "search") {
+      let nextQ = await resolveReferences(act.search_query || "", state.knowledge);
+      progressCallback(`Searching: "${nextQ}"`);
+      const newResults = await routeUserQuery(nextQ);
+      const newlyRelevant = await gradeDocuments(newResults, nextQ);
 
-      // auto-extract facts (fail-safe)
+      // auto‑extract facts (fail‑safe)
       const extracted = await autoExtractFacts(userQuery, newlyRelevant, state.knowledge);
       Object.assign(state.knowledge, extracted);
 
-      // Prepare observation (short summary of top doc or count)
-      if (newlyRelevant.length > 0) {
-        observation = `Found ${newlyRelevant.length} docs. Top: "${(newlyRelevant[0]._source.title || "Untitled")}", "${(newlyRelevant[0]._source.contents || "").slice(0, 120)}..."`;
-      } else {
-        observation = "No relevant documents found.";
-      }
-
       // bookkeeping
-      retrievalSteps.push({ searchQuery: resolvedQuery, results: newlyRelevant });
+      retrievalSteps.push({ searchQuery: nextQ, results: newlyRelevant });
       state.documents.push(...newlyRelevant);
 
       // dedupe + keep top‑10 by score
       const uniq = new Map();
       state.documents.forEach(d => uniq.set(d._id, d));
       state.documents = [...uniq.values()].sort((a, b) => b._score - a._score).slice(0, 10);
-
-      // Add to ReAct history
-      state.reactHistory.push({ thought, action, observation });
-
-      continue; // next iteration
+      continue;                       // next iteration
     }
 
-    if (action.startsWith("Answer[")) {
-      // Extract answer
-      const answerMatch = action.match(/Answer\["(.*)"\]/s);
-      finalAnswerContent = answerMatch ? answerMatch[1] : action;
-      observation = "Final answer given.";
-      state.reactHistory.push({ thought, action, observation });
-      break;
-    }
+    if (act.action === "answer") { finalAnswerContent = act.content; break; }
 
     // fallback: treat whatever came as final
-    finalAnswerContent = raw;
-    observation = "Unrecognized action.";
-    state.reactHistory.push({ thought, action, observation });
-    break;
+    finalAnswerContent = raw; break;
   }
-
+  //console.log("Final answer content:", finalAnswerContent, "State documents:", state.documents.length);
   if (state.documents.length === 0) {
     progressCallback("No relevant knowledge element found");
     console.log("No relevant knowledge element found.");
@@ -1044,46 +1023,46 @@ Rules:
     })),
     count: state.documents.length,
     retrievalSteps,
-    reactHistory: state.reactHistory,
   };
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
-   3.  ReAct Prompt builder
+   3.  Prompt builder (now shows knowledge)
    ─────────────────────────────────────────────────────────────────────────── */
 
-function buildReActPrompt(userQuery, docs, steps, knowledge, reactHistory) {
-  let prompt = `User question: "${userQuery}"\n\n`;
-
-  prompt += "Known facts so far:\n";
-  prompt += JSON.stringify(knowledge, null, 2) + "\n\n";
-
-  prompt += "Previous steps:\n";
-  if (reactHistory && reactHistory.length > 0) {
-    reactHistory.forEach((step, idx) => {
-      prompt += `Step #${idx + 1}\n`;
-      prompt += `Thought: ${step.thought}\n`;
-      prompt += `Action: ${step.action}\n`;
-      prompt += `Observation: ${step.observation}\n\n`;
-    });
-  } else {
-    prompt += "(none)\n\n";
-  }
-
-  prompt += "Current documents (summaries):\n";
-  if (docs && docs.length > 0) {
-    docs.forEach((d, i) => {
+   function buildIterativePrompt(userQuery, docs, steps, knowledge) {
+    const stepTxt = steps.map((s, i) =>
+      `Step #${i + 1}  →  searched: "${s.searchQuery}"  •  docs: ${s.results.length}`
+    ).join("\n");
+  
+    const docTxt = docs.map((d, i) => {
       const src = d._source || {};
-      prompt += `Doc #${i + 1}: "${src.title || "Untitled"}"\nExcerpt: "${(src.contents || "").slice(0, 160)}..."\n\n`;
-    });
-  } else {
-    prompt += "(none)\n";
+      const authors = Array.isArray(src.authors) ? src.authors.join("; ") : src.authors || "";
+      const tags    = Array.isArray(src.tags)    ? src.tags.join(", ")   : src.tags   || "";
+      return [
+        `Doc #${i + 1}`,
+        `  title      : ${src.title || "Untitled"}`,
+        `  authors    : ${authors || "(none)"}`,
+        `  contributor: ${src.contributor || "(unknown)"}`,
+        `  tags       : ${tags || "(none)"}`,
+        `  contents    : ${(src.contents || "").slice(0, 160)}…`
+      ].join("\n");
+    }).join("\n\n");
+  
+    return `
+  User question: "${userQuery}"
+  
+  Known facts so far:
+  ${JSON.stringify(knowledge, null, 2)}
+  
+  Previous steps:
+  ${stepTxt || "(none)"}
+  
+  Current documents:
+  ${docTxt || "(none)"}
+  
+  `.trim();
   }
-
-  prompt += "Continue the reasoning. Output the next Thought and Action.\n";
-  return prompt;
-}
-
 /**
  * @swagger
  * /beta/llm/advanced-rating:
