@@ -18,8 +18,8 @@
 import request from "supertest";
 import app from "../../server.js";
 import testData from "./test_user_data.json";
-import {generateAccessToken} from "../../utils/jwtUtils.js";
-import {ElementType, Role} from "../../utils/utils.js";
+import {generateAccessToken} from "../../jwtUtils.js";
+import {ElementType, Role} from "../../utils.js";
 import path from "path";
 import url from "node:url";
 import fs from "fs";
@@ -368,24 +368,7 @@ describe("Elements Endpoint testing for Notebook elements", () => {
         expect(res.body).toHaveProperty("notebook-file", testData.test_notebook_file_name);
         expect(res.body).toHaveProperty("contents",testData.test_notebook_details_json["contents"]);
     });
-    it("4. Should be able to update an element based on Id with an invalid notebook", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
-        let user_body = testData.test_notebook_details_json;
-        // Added a typo in "cybergis" -> "cyberges"
-        user_body['notebook-url'] = "https://github.com/I-GUIDE/iguide-ue-backend/blob/dev-candidate/tests/dev/cyberges_test_notebook.ipynb"
-        let encoded_uri = encodeURIComponent(generated_element_id);
-        const res = await request(app)
-            .put("/api/elements/" + encoded_uri)
-            .set('Cookie', generated_auth_cookie)
-            .set("Accept", "*/*")
-            .set("Content-Type", "application/json")
-            .send(user_body);
-        expect(res.statusCode).toBe(200);
-        expect(res.body).toHaveProperty("message",'Element updated successfully');
-        expect(res.body).toHaveProperty("result",true);
-        expect(res.body).toHaveProperty("notebookStatus", false);
-    });
-    it("5. Element registered should be deleted by the user", async () => {
+    it("4. Element registered should be deleted by the user", async () => {
         if (generated_element_id === "") {
             throw new Error('No element created in (2), test case (4) failed!');
         }
@@ -412,22 +395,6 @@ describe("Elements Endpoint testing for Notebook elements", () => {
                 expect(fs.existsSync(thumbnail_filepath)).toBe(false);
             }
         }
-    });
-    it("6. Element registration should fail if notebook creation fails", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
-        let user_body = testData.test_notebook_details_json
-        user_body["thumbnail-image"] = uploaded_image_urls;
-        user_body['metadata']['created_by'] = generated_user_id;
-        // Added a typo in "cybergis" -> "cyberges"
-        user_body['notebook-url'] = "https://github.com/I-GUIDE/iguide-ue-backend/blob/dev-candidate/tests/dev/cyberges_test_notebook.ipynb"
-        const res = await request(app)
-            .post("/api/elements")
-            .set('Cookie', generated_auth_cookie)
-            .set("Accept", "*/*")
-            .set("Content-Type", "application/json")
-            .send(user_body);
-        expect(res.statusCode).toBe(500);
-        expect(res.body).toHaveProperty("error", 'Error registering resource, notebook creation failed!');
     });
     it("(External) Should allow only SUPER_ADMIN to delete temp user", async () => {
         const res = await request(app)

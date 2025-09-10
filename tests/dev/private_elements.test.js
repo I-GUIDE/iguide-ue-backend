@@ -8,9 +8,9 @@
 
 import request from "supertest";
 import app from "../../server.js";
-import {generateAccessToken} from "../../utils/jwtUtils.js";
+import {generateAccessToken} from "../../jwtUtils.js";
 import testData from "./test_user_data.json";
-import {Role} from "../../utils/utils.js";
+import {Role} from "../../utils.js";
 
 const COOKIE_NAME = process.env.JWT_ACCESS_TOKEN_NAME || "access_token";
 const target_domain = "localhost"; // Adjust based on your setup
