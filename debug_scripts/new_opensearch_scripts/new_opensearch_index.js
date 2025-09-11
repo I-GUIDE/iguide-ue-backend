@@ -5,6 +5,12 @@
 import * as n4j from "../../database/backend_neo4j.js";
 import * as os from "../../database/backend_opensearch.js";
 import * as utils from "../../utils/utils.js";
+import {
+  getFlaskEmbeddingResponse,
+  getPdfUrlFromDoi,
+  extractTextFromPdfUrl,
+  splitTextIntoChunks,
+} from "../../utils/elements_utils.js";
 
 async function newOpenSearchIndex(newIndexName) {
   if (typeof newIndexName !== "string" || newIndexName.trim() === "") {
@@ -26,7 +32,7 @@ async function newOpenSearchIndex(newIndexName) {
       return;
     }
 
-    // 2. Create new index (dynamic mapping for flexibility)
+    // 2. Create new index with vector fields
     await os.client.indices.create({
       index: newIndexName,
       body: {
@@ -36,6 +42,10 @@ async function newOpenSearchIndex(newIndexName) {
         },
         mappings: {
           dynamic: true,
+          properties: {
+            "contents-embedding": { type: "knn_vector", dimension: 1536 },
+            "pdf_chunks_embeddings": { type: "knn_vector", dimension: 1536 },
+          },
         },
       },
     });
@@ -98,6 +108,40 @@ async function newOpenSearchIndex(newIndexName) {
                 : avatarUrl || null,
             name: resource["contributor"]["name"],
           };
+        }
+
+        try {
+          if (resource["contents"]) {
+            const contentEmbedding = await getFlaskEmbeddingResponse(resource["contents"]);
+            if (contentEmbedding) {
+              os_element["contents-embedding"] = contentEmbedding;
+            }
+          }
+
+          if (resource["resource-type"] === "publication") {
+            const doi = resource["external-link-publication"] || resource["doi"];
+            if (doi) {
+              const pdfUrl = await getPdfUrlFromDoi(doi);
+              if (pdfUrl) {
+                const pdfText = await extractTextFromPdfUrl(pdfUrl);
+                if (pdfText) {
+                  const chunks = splitTextIntoChunks(pdfText, 1000, 200);
+                  const embeddingsArray = [];
+                  for (const chunk of chunks) {
+                    const embedding = await getFlaskEmbeddingResponse(chunk);
+                    if (embedding) {
+                      embeddingsArray.push(embedding);
+                    }
+                  }
+                  if (embeddingsArray.length > 0) {
+                    os_element["pdf_chunks_embeddings"] = embeddingsArray;
+                  }
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error(`Embedding generation failed for element ${elementId}:`, err.message);
         }
 
         // Add to bulk operations
