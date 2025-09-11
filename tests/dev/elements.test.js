@@ -129,7 +129,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
     let uploaded_image_urls = {};
     let generated_auth_super_admin_cookie = createAuthCookie({id: 1, role: Role.SUPER_ADMIN});
     it("(External) Create a trusted User to perform operations", async () => {
-        let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_body = testData.elements_trusted_user
         const res = await request(app)
             .post('/api/users')
@@ -141,7 +141,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         expect(res.body).toHaveProperty("message", 'User added successfully');
     });
     it("(External) Should allow to fetch user details", async () => {
-        let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_open_id_encoded = encodeURIComponent(testData.elements_trusted_user.openid);
         const res = await request(app)
             .get('/api/users/' + user_open_id_encoded)
@@ -156,7 +156,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         generated_user_id = res.body['id'];
     });
     it("1. Should be able to upload a thumbnail image and get the image data", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         const file_path = path.join(__dirname, "test_avatar_image.jpg");
         const res = await request(app)
             .post('/api/elements/thumbnail')
@@ -169,7 +169,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         uploaded_image_urls = res.body['image-urls'];
     });
     it("2. Element should be registered for a given user", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_body = testData.element_details_json
         user_body["thumbnail-image"] = uploaded_image_urls;
         user_body['metadata']['created_by'] = generated_user_id;
@@ -185,7 +185,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         generated_element_id = res.body['elementId'];
     });
     it("3. Should be able to retrieve a public element based on Id", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_uri = encodeURIComponent(generated_element_id);
         const res = await request(app)
             .get("/api/elements/" + encoded_uri)
@@ -198,7 +198,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         expect(res.body).toHaveProperty("user-uploaded-dataset", false);
     });
     it("4. Should be able to update an element based on Id", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_body = testData.element_details_json;
         user_body['title'] = testData.element_update_title;
         let encoded_uri = encodeURIComponent(generated_element_id);
@@ -213,7 +213,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         expect(res.body).toHaveProperty("result",true);
     });
     it("5. Should be able to set the visibility of an element based on Id", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_uri = encodeURIComponent(generated_element_id)
         const res = await request(app)
             .put("/api/elements/" + encoded_uri + "/visibility?visibility=private")
@@ -224,7 +224,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         expect(res.body).toHaveProperty("message", "Element visibility updated successfully");
     });
     it("6. Should be able to retrieve all the elements created by user for user profile", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let url_params = "field-name=contributor&match-value="+generated_user_id+"&sort-by=creation_time&order=desc&from=0&size=12&count-only=false";
         const res = await request(app)
             .get("/api/elements?" +url_params)
@@ -235,7 +235,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         expect(res.body).toHaveProperty("elements");
     });
     it("(External) Bookmark the given element to be fetched later", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let element_type = testData.element_details_json['resource-type']
         const res = await request(app)
             .put("/api/users/bookmark/" + generated_element_id + "?bookmark=true&elementType=" + element_type)
@@ -246,7 +246,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         expect(res.body).toHaveProperty("message", 'Toggle element bookmark success');
     });
     it("7. Bookmarked element should be returned by the API", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         const res = await request(app)
             .get("/api/elements/bookmark?user-id=" + generated_user_id + "&sort-by=creation_time&order=asc&from=0&size=10")
             .set('Cookie', generated_auth_cookie)
@@ -256,7 +256,7 @@ describe("Elements Endpoint testing for Element based APIs", () => {
         console.log(res.body);
     });
     it("8. Element registered should be deleted by the user", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_uri = encodeURIComponent(generated_element_id)
         const res = await request(app)
             .delete("/api/elements/" + encoded_uri)
@@ -294,7 +294,7 @@ describe("Elements Endpoint testing for Notebook elements", () => {
     let html_notebook_url = "";
     let generated_auth_super_admin_cookie = createAuthCookie({id: 1, role: Role.SUPER_ADMIN});
     it("(External) Create a trusted User to perform operations", async () => {
-        let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_body = testData.elements_trusted_user
         const res = await request(app)
             .post('/api/users')
@@ -306,7 +306,7 @@ describe("Elements Endpoint testing for Notebook elements", () => {
         expect(res.body).toHaveProperty("message", 'User added successfully');
     });
     it("(External) Should allow to fetch user details", async () => {
-        let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_open_id_encoded = encodeURIComponent(testData.elements_trusted_user.openid);
         const res = await request(app)
             .get('/api/users/' + user_open_id_encoded)
@@ -321,7 +321,7 @@ describe("Elements Endpoint testing for Notebook elements", () => {
         generated_user_id = res.body['id'];
     });
     it("1. Should be able to upload a thumbnail image and get the image data", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         const file_path = path.join(__dirname, "test_avatar_image.jpg");
         const res = await request(app)
             .post('/api/elements/thumbnail')
@@ -334,7 +334,7 @@ describe("Elements Endpoint testing for Notebook elements", () => {
         uploaded_image_urls = res.body['image-urls'];
     });
     it("2. Element should be registered for a given user", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_body = testData.test_notebook_details_json
         user_body["thumbnail-image"] = uploaded_image_urls;
         user_body['metadata']['created_by'] = generated_user_id;
@@ -353,7 +353,7 @@ describe("Elements Endpoint testing for Notebook elements", () => {
         if (generated_element_id === "") {
             throw new Error('No element created in (2), test case (3) failed!');
         }
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_uri = encodeURIComponent(generated_element_id);
         const res = await request(app)
             .get("/api/elements/" + encoded_uri)
@@ -369,7 +369,7 @@ describe("Elements Endpoint testing for Notebook elements", () => {
         expect(res.body).toHaveProperty("contents",testData.test_notebook_details_json["contents"]);
     });
     it("4. Should be able to update an element based on Id with an invalid notebook", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_body = testData.test_notebook_details_json;
         // Added a typo in "cybergis" -> "cyberges"
         user_body['notebook-url'] = "https://github.com/I-GUIDE/iguide-ue-backend/blob/dev-candidate/tests/dev/cyberges_test_notebook.ipynb"
@@ -389,7 +389,7 @@ describe("Elements Endpoint testing for Notebook elements", () => {
         if (generated_element_id === "") {
             throw new Error('No element created in (2), test case (4) failed!');
         }
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_uri = encodeURIComponent(generated_element_id)
         const res = await request(app)
             .delete("/api/elements/" + encoded_uri)
@@ -414,7 +414,7 @@ describe("Elements Endpoint testing for Notebook elements", () => {
         }
     });
     it("6. Element registration should fail if notebook creation fails", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.elements_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_body = testData.test_notebook_details_json
         user_body["thumbnail-image"] = uploaded_image_urls;
         user_body['metadata']['created_by'] = generated_user_id;

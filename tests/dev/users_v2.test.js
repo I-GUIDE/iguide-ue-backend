@@ -55,7 +55,7 @@ describe("Users V2 Endpoint API Testing", () => {
         expect(res.body).toHaveProperty("message", 'User added successfully');
     });
     it("2. Should be able to get user details based on provided open_id", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_openid = encodeURIComponent(testData.trusted_user.openid);
         const res = await request(app)
             .get('/api/users/' + encoded_openid)
@@ -106,7 +106,7 @@ describe("Users V2 Endpoint API Testing", () => {
     });
     it("6. Should not allow the user to update their first_name or role information", async () => {
         let user_id = encodeURIComponent(generated_user_id);
-        let updated_generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let updated_generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         let updated_user_info = {
             first_name: testData.trusted_user_updated_first_name,
             role: 1,
@@ -184,7 +184,7 @@ describe("Users V2 Endpoint API Testing", () => {
     });
     let generated_element_id = "";
     it("(External) Should allow to create an element to be bookmarked", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         let user_body = testData.element_details_json
         user_body['metadata']['created_by'] = generated_user_id;
         const res = await request(app)
@@ -221,7 +221,7 @@ describe("Users V2 Endpoint API Testing", () => {
         expect(res.body).toBe(true);
     });
     it("(External) Element registered should be deleted by the user", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_uri = encodeURIComponent(generated_element_id)
         const res = await request(app)
             .delete("/api/elements/" + encoded_uri)
@@ -398,7 +398,7 @@ describe("Users V2 Endpoint API Testing", () => {
     });
     let avatar_images = {};
     it("18.2. Upload a user's avatar image for the TRUSTED USER", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         const file_path = path.join(__dirname, "test_avatar_image.jpg");
         const res = await request(app)
             .post('/api/users/avatar')
@@ -449,7 +449,7 @@ describe("Users V2 Endpoint API Testing", () => {
 });
 
 describe("Users Endpoint API Testing for Role based changes", () => {
-    let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+    let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
     let generated_auth_super_admin_cookie = createAuthCookie({id: 1, role: Role.SUPER_ADMIN});
     let generated_user_id = testData.trusted_user_id
     let generated_element_id = ""
@@ -476,7 +476,7 @@ describe("Users Endpoint API Testing for Role based changes", () => {
     });
     it("1. Should not allow user less than SUPER_ADMIN role to update user's role", async () => {
         let encoded_user_id = encodeURIComponent(generated_user_id);
-        let updated_generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let updated_generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         let request_body = {
             role: Role.TRUSTED_USER_PLUS
         };
