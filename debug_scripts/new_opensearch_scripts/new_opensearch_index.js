@@ -11,6 +11,7 @@ import {
   extractTextFromPdfUrl,
   splitTextIntoChunks,
 } from "../../utils/elements_utils.js";
+import {convertGeoSpatialFields} from "../../utils/spatial_utils.js"
 
 async function newOpenSearchIndex(newIndexName) {
   if (typeof newIndexName !== "string" || newIndexName.trim() === "") {
@@ -43,8 +44,7 @@ async function newOpenSearchIndex(newIndexName) {
         mappings: {
           dynamic: true,
           properties: {
-            "contents-embedding": { type: "knn_vector", dimension: 1536 },
-            "pdf_chunks_embeddings": { type: "knn_vector", dimension: 1536 },
+            "contents-embedding": { type: "knn_vector", dimension: 1536 }
           },
         },
       },
@@ -68,6 +68,7 @@ async function newOpenSearchIndex(newIndexName) {
         const resource = await n4j.getElementByID(elementId);
         if (!resource || Object.keys(resource).length === 0) continue;
 
+        let geo_spatial_resource = convertGeoSpatialFields(resource);
         // Build os_element
         let os_element = {
           title: resource["title"],
@@ -81,11 +82,11 @@ async function newOpenSearchIndex(newIndexName) {
           // spatial (if they exist in resource)
           "spatial-coverage": resource["spatial-coverage"] || null,
           "spatial-geometry": resource["spatial-geometry"] || null,
-          "spatial-geometry-geojson": resource["spatial-geometry-geojson"] || null,
+          "spatial-geometry-geojson": geo_spatial_resource["spatial-geometry-geojson"] || null,
           "spatial-bounding-box": resource["spatial-bounding-box"] || null,
-          "spatial-bounding-box-geojson": resource["spatial-bounding-box-geojson"] || null,
+          "spatial-bounding-box-geojson": geo_spatial_resource["spatial-bounding-box-geojson"] || null,
           "spatial-centroid": resource["spatial-centroid"] || null,
-          "spatial-centroid-geojson": resource["spatial-centroid-geojson"] || null,
+          "spatial-centroid-geojson": geo_spatial_resource["spatial-centroid-geojson"] || null,
           "spatial-georeferenced": resource["spatial-georeferenced"] || null,
           "spatial-temporal-coverage": resource["spatial-temporal-coverage"] || null,
           "spatial-index-year": resource["spatial-index-year"] || null,
@@ -121,22 +122,56 @@ async function newOpenSearchIndex(newIndexName) {
           if (resource["resource-type"] === "publication") {
             const doi = resource["external-link-publication"] || resource["doi"];
             if (doi) {
-              const pdfUrl = await getPdfUrlFromDoi(doi);
+              let pdfUrl = null;
+              let pdfText = null;
+              let chunks = [];
+              let chunkEmbeddings = [];
+              try {
+                pdfUrl = await getPdfUrlFromDoi(doi);
+                console.log("PDF URL:", pdfUrl);
+                if (!pdfUrl) {
+                  console.log(`No PDF found for DOI: ${doi}`);
+                }
+              } catch (err) {
+                console.error("getPdfUrlFromDoi failed:", err.message);
+              }
+
               if (pdfUrl) {
-                const pdfText = await extractTextFromPdfUrl(pdfUrl);
-                if (pdfText) {
-                  const chunks = splitTextIntoChunks(pdfText, 1000, 200);
-                  const embeddingsArray = [];
-                  for (const chunk of chunks) {
-                    const embedding = await getFlaskEmbeddingResponse(chunk);
-                    if (embedding) {
-                      embeddingsArray.push(embedding);
+                try {
+                  pdfText = await extractTextFromPdfUrl(pdfUrl);
+                  console.log("Extracted PDF text length:", pdfText ? pdfText.length : 0);
+                  console.log("Extracted PDF text sample:", pdfText ? pdfText.slice(0, 300) : '[empty]');
+                } catch (err) {
+                  console.error("extractTextFromPdfUrl failed:", err.message);
+                }
+              }
+
+              if (pdfText) {
+                try {
+                  chunks = splitTextIntoChunks(pdfText, 1000, 200);
+                  console.log("Number of chunks:", chunks.length);
+                } catch (err) {
+                  console.error("splitTextIntoChunks failed:", err.message);
+                }
+              }
+
+              if (chunks && chunks.length > 0) {
+                for (const chunk of chunks) {
+                  try {
+                    if (chunk && chunk.trim().length > 0) {
+                      console.log("Embedding chunk (first 100 chars):", chunk.slice(0, 100));
+                      const embedding = await getFlaskEmbeddingResponse(chunk);
+                      chunkEmbeddings.push({ chunk, embedding });
                     }
-                  }
-                  if (embeddingsArray.length > 0) {
-                    os_element["pdf_chunks_embeddings"] = embeddingsArray;
+                  } catch (err) {
+                    console.error("Embedding failed for chunk:", chunk.slice(0, 100), "Error:", err.message);
                   }
                 }
+                os_element['pdf_chunks'] = chunkEmbeddings.map((c, i) => ({
+                  chunk_id: i,
+                  text: c.chunk,
+                  embedding: c.embedding
+                }));
               }
             }
           }
