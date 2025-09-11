@@ -32,14 +32,17 @@ The index schema includes:
 - Other spatial fields: spatial-bounding-box, spatial-centroid, spatial-coverage, spatial-geometry, spatial-georeferenced
 
 Guidelines:
-- For spatial queries, use geo_shape queries on "spatial-bounding-box-geojson", "spatial-centroid-geojson", or "spatial-geometry-geojson".
-- For temporal queries, use match or range queries on "spatial-temporal-coverage" or "spatial-index-year".
-- For semantic search, use knn queries on "contents-embedding" or nested "pdf_chunks.embedding".
-- If both spatial and temporal constraints are present, combine them using a bool filter.
+- For spatial queries, use geo_shape queries inside the "filter" array.
+- For temporal queries, use range or match queries inside the "filter" array.
+- For keyword/semantic queries (e.g., match), use the "must" array.
+- If both spatial/temporal and keyword constraints are present, combine them using "bool" with "filter" and "must".
 - Limit results to 10.
 - Only return the JSON for the OpenSearch query body. Do not include explanations or formatting.
 
-Example spatial query:
+Few-shot examples:
+
+Example 1: Spatial only  
+User question: "Find all resources within the bounding box near Urbana, IL."
 {
   "size": 10,
   "query": {
@@ -50,7 +53,7 @@ Example spatial query:
             "spatial-bounding-box-geojson": {
               "shape": {
                 "type": "envelope",
-                "coordinates": [[-88.3, 40.2], [-88.2, 40.1]]
+                "coordinates": [[-88.25, 40.15], [-88.20, 40.10]]
               },
               "relation": "intersects"
             }
@@ -61,17 +64,25 @@ Example spatial query:
   }
 }
 
-Example temporal query:
+Example 2: Temporal only  
+User question: "Show me datasets from 2021."
 {
   "size": 10,
   "query": {
-    "match": {
-      "spatial-index-year": "2022"
+    "bool": {
+      "filter": [
+        {
+          "match": {
+            "spatial-index-year": "2021"
+          }
+        }
+      ]
     }
   }
 }
 
-Example spatial-temporal query:
+Example 3: Spatial + Temporal  
+User question: "Find maps from 2020 in Champaign County."
 {
   "size": 10,
   "query": {
@@ -81,8 +92,8 @@ Example spatial-temporal query:
           "geo_shape": {
             "spatial-geometry-geojson": {
               "shape": {
-                "type": "point",
-                "coordinates": [-88.25, 40.15]
+                "type": "envelope",
+                "coordinates": [[-88.45, 40.25], [-88.10, 39.90]]
               },
               "relation": "intersects"
             }
@@ -90,7 +101,14 @@ Example spatial-temporal query:
         },
         {
           "match": {
-            "spatial-temporal-coverage": "2022"
+            "spatial-index-year": "2020"
+          }
+        }
+      ],
+      "must": [
+        {
+          "match": {
+            "title": "map"
           }
         }
       ]
@@ -98,7 +116,39 @@ Example spatial-temporal query:
   }
 }
 
-If the question cannot be answered with spatial or temporal search, return: "{}"
+Example 4: Semantic + Spatial  
+User question: "Flood risk maps for Chicago area."
+{
+  "size": 10,
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "geo_shape": {
+            "spatial-geometry-geojson": {
+              "shape": {
+                "type": "envelope",
+                "coordinates": [[-87.9401, 41.6445], [-87.5237, 42.0230]]
+              },
+              "relation": "intersects"
+            }
+          }
+        }
+      ],
+      "must": [
+        {
+          "match": {
+            "title": "flood risk map"
+          }
+        }
+      ]
+    }
+  }
+}
+
+Example 5: No spatial/temporal constraint  
+User question: "List all contributors."
+{}
   `.trim();
 
   const userPrompt = `User question: ${question}`;
