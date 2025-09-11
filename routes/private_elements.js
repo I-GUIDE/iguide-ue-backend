@@ -14,9 +14,10 @@ router.use(privateElementsRateLimiter);
 
 /**
  * @swagger
- * /api/elements/private/{elementId}:
+ * /api/elements/v1/private/{elementId}:
  *   get:
  *     summary: Retrieve ONE private element using id.
+ *     deprecated: true
  *     tags: ['private-elements']
  *     parameters:
  *       - in: path
@@ -35,8 +36,8 @@ router.use(privateElementsRateLimiter);
  *       500:
  *         description: Internal server error
  */
-router.options('/elements/private/:elementId', jwtCorsMiddleware);
-router.get('/elements/private/:elementId', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.options('/elements/v1/private/:elementId', jwtCorsMiddleware);
+router.get('/elements/v1/private/:elementId', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
 
 	const element_id = decodeURIComponent(req.params['elementId']);
 	const {user_id, user_role} = (() => {
@@ -66,6 +67,63 @@ router.get('/elements/private/:elementId', jwtCorsMiddleware, authenticateJWT, a
 	} catch (error) {
 	console.error('/api/resources/:id Error querying:', error);
 	res.status(500).json({ message: 'Internal server error' });
+	}
+});
+
+/**
+ * @swagger
+ * /api/elements/private/{elementId}:
+ *   get:
+ *     summary: Retrieve ONE private element using id.
+ *     tags: ['private-elements']
+ *     parameters:
+ *       - in: path
+ *         name: elementId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The element ID to fetch
+ *     responses:
+ *       200:
+ *         description: JSON Map object for element with given ID
+ *       403:
+ *         description: Insufficient permission to view this element
+ *       404:
+ *         description: No element found with given ID
+ *       500:
+ *         description: Internal server error
+ */
+router.options('/elements/private/:elementId', jwtCorsMiddleware);
+router.get('/elements/private/:elementId', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+
+	const element_id = decodeURIComponent(req.params['elementId']);
+	const {id, user_role} = (() => {
+		if (!req.user || req.user == null || typeof req.user === 'undefined') {
+			return {id: null, user_role: null};
+		}
+		return {id: req.user.id, user_role: req.user.role}
+	})();
+
+	// 'http://cilogon.org/serverA/users/48835826'
+	// const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
+	// 				  user_role: n4j.Role.TRUSTED_USER};
+	try {
+		const can_view = await utils.userCanViewElementV2(element_id, id, user_role);
+		if (!can_view) {
+			res.status(403).json({message: 'Forbidden: You do not have permission to view this element.'});
+			return;
+		}
+
+		const element = await n4j.getElementByID(element_id, id, user_role);
+		if (JSON.stringify(element) === '{}') {
+			res.status(404).json({message: 'Element not found'});
+			return;
+		}
+
+		res.status(200).json(element);
+	} catch (error) {
+		console.error('/api/resources/:id Error querying:', error);
+		res.status(500).json({message: 'Internal server error'});
 	}
 });
 

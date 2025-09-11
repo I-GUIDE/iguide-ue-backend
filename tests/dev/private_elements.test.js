@@ -25,7 +25,7 @@ describe("Private Elements fetch APIs endpoint testing", () => {
     let generated_private_element_id = ""
     let generated_user_id = ""
     it("(External) Create a trusted User to perform operations", async () => {
-        let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.private_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_body = testData.private_trusted_user
         const res = await request(app)
             .post('/api/users')
@@ -37,7 +37,7 @@ describe("Private Elements fetch APIs endpoint testing", () => {
         expect(res.body).toHaveProperty("message", 'User added successfully');
     });
     it("(External) Should allow to fetch user details", async () => {
-        let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.private_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_open_id_encoded = encodeURIComponent(testData.private_trusted_user.openid);
         const res = await request(app)
             .get('/api/users/' + user_open_id_encoded)
@@ -52,7 +52,7 @@ describe("Private Elements fetch APIs endpoint testing", () => {
         generated_user_id = res.body['id'];
     });
     it("(External) Should allow existing user to create an private element", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.private_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_body = testData.element_details_json
         // Setting the visibilty as PRIVATE TO test the private_elements routes
         user_body["visibility"] = "private";
@@ -69,7 +69,7 @@ describe("Private Elements fetch APIs endpoint testing", () => {
         generated_private_element_id = res.body['elementId'];
     });
     it("1. Should allow the existing user to fetch the created private element based on the id", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.private_trusted_user.openid, role: Role.TRUSTED_USER});
         const res = await request(app)
             .get("/api/elements/private/" + generated_private_element_id)
             .set('Cookie', generated_auth_cookie)
@@ -79,7 +79,7 @@ describe("Private Elements fetch APIs endpoint testing", () => {
         expect(res.body).toHaveProperty("id", generated_private_element_id);
     });
     it("2. Should not allow any other user to fetch the created private element based on the id", async () => {
-        let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
         const res = await request(app)
             .get("/api/elements/private/" + generated_private_element_id)
             .set('Cookie', generated_auth_cookie)
@@ -89,7 +89,7 @@ describe("Private Elements fetch APIs endpoint testing", () => {
         expect(res.body).toHaveProperty("message", 'Forbidden: You do not have permission to view this element.');
     });
     it("3. Should allow to fetch all private elements for a given user ID", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.private_trusted_user.openid, role: Role.TRUSTED_USER});
         const res = await request(app)
             .get("/api/elements/private?user-id="+generated_user_id+"&sort-by=creation_time&order=desc&from=0&size=12")
             .set('Cookie', generated_auth_cookie)
@@ -101,7 +101,7 @@ describe("Private Elements fetch APIs endpoint testing", () => {
         expect(res.body).toHaveProperty("total-count",1);
     });
     it("(External) Should allow existing user to delete the created private element", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.private_trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_uri = encodeURIComponent(generated_private_element_id)
         const res = await request(app)
             .delete("/api/elements/" + encoded_uri)

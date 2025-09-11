@@ -1132,9 +1132,10 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
 
 /**
  * @swagger
- * /api/elements/{id}:
+ * /api/v1/elements/{id}:
  *   put:
  *     summary: Update the element with given ID
+ *     deprecated: true
  *     tags: ['elements']
  *     parameters:
  *       - in: path
@@ -1158,7 +1159,7 @@ router.delete('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (re
  *         description: Internal server error
  */
 //router.options('/api/elements/:id', jwtCorsMiddleware);
-router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.put('/api/v1/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
 	const id = decodeURIComponent(req.params.id);
 	const updates = req.body;
 
@@ -1168,6 +1169,7 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 		const can_edit = await utils.userCanEditElement(id, req.user.id, req.user.role);
 		if (!can_edit) {
 			res.status(403).json({message: 'Forbidden: You do not have permission to edit this element.'});
+			return;
 		}
 		// HotFix: OERshare
 		if (updates['resource-type'] === 'oer' &&
@@ -1367,9 +1369,246 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
 
 /**
  * @swagger
- * /api/elements/{id}/visibility:
+ * /api/elements/{id}:
+ *   put:
+ *     summary: Update the element with given ID
+ *     tags: ['elements']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The id of the element
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: User updated successfully
+ *       403:
+ *         description: The user does not have the permission to edit this element
+ *       500:
+ *         description: Internal server error
+ */
+//router.options('/api/elements/:id', jwtCorsMiddleware);
+router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+	const id = decodeURIComponent(req.params.id);
+	const updates = req.body;
+
+	console.log('Updating element with id: ' + id);
+
+	try {
+		const can_edit = await utils.userCanEditElementV2(id, req.user.id, req.user.role);
+		if (!can_edit) {
+			res.status(403).json({message: 'Forbidden: You do not have permission to edit this element.'});
+			return;
+		}
+		// HotFix: OERshare
+		if (updates['resource-type'] === 'oer' &&
+	    	(req.user.role === utils.Role.TRUSTED_USER_PLUS)) {
+			if (!updates['tags'].includes('OERshare')) {
+				updates['tags'].push('OERshare')
+			}
+		}
+		/**
+		 * Updated logic building the repo details,
+		 *    In the request resource['notebook-url']
+		 *        resource['notebook-repo']  => repo name
+		 *        resource['notebook-file'] => file_name (
+		 *        resource['html-notebook'] => generated
+		 *        resource['notebook-url'] => new additions (if not present in the resource )
+		 */
+		let notebook_status = false;
+		if (updates['resource-type'] === 'notebook' &&
+			updates['notebook-url']) {
+			const notebookDetails = await convertNotebookToHtmlV2(updates['notebook-url'], notebook_html_dir);
+			console.log("notebook details post update: ", notebookDetails);
+			if (notebookDetails) {
+				updates['html-notebook'] =
+					`https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(notebookDetails.htmlOutputPath)}`
+				updates['notebook-repo'] = notebookDetails["notebook-repo"];
+				updates['notebook-file'] = notebookDetails['notebook-file'];
+				notebook_status = true;
+			} else {
+				const element_details = await n4j.getElementByID(id, req.user.id);
+				updates['html-notebook'] = element_details['html-notebook']
+				updates['notebook-repo'] = element_details['notebook-repo']
+				updates['notebook-file'] = element_details['notebook-file']
+				notebook_status = false;
+			}
+		}
+		// if (updates['resource-type'] === 'notebook' &&
+		//         updates['notebook-repo'] &&
+		//         updates['notebook-file']) {
+		//         const htmlNotebookPath =
+		//             await convertNotebookToHtml(updates['notebook-repo'],
+		//                                         updates['notebook-file'], notebook_html_dir);
+		//         if (htmlNotebookPath) {
+		//             updates['html-notebook'] =
+		//                 `https://${process.env.DOMAIN}:${process.env.PORT}/user-uploads/notebook_html/${path.basename(htmlNotebookPath)}`;
+		//         }
+		//     }
+		const element_old_visibility = await n4j.getElementVisibilityForID(id);
+		const response = await n4j.updateElement(id, updates);
+		if (response) {
+			if (parseElementType(updates['resource-type']) === ElementType.DATASET
+				&& updates['direct-download-link'].startsWith(process.env.MINIO_ENDPOINT)) {
+
+				// If the download link is not updated do not move them else move
+				if (!updates['direct-download-link'].includes(id)) {
+					// Move the dataset to the element entry
+					const updated_download_link = await moveDatasetToElement(updates['direct-download-link'], id)
+					if (updated_download_link === "") {
+						console.log('error in updating direct-download-link for file: ' + updates['direct-download-link']);
+					} else {
+						updates['direct-download-link'] = updated_download_link;
+						updates['user-uploaded-dataset'] = true;
+						const response = await n4j.updateElement(id, updates);
+						if (!response) {
+							console.log('registerElement() - Error in updating direct-download-link for element_id: '
+								+ id + " link: "  + updated_download_link);
+						}
+					}
+				}
+			}
+			// 'visibility' field is NOT searchable so should NOT be added to OS
+			// elements should ONLY be in OpenSearch if they are public
+			const visibility = utils.parseVisibility(updates['visibility']);
+			const visibility_action = updateOSBasedtOnVisibility(element_old_visibility, visibility);
+			const geo_spatial_updates = convertGeoSpatialFields(updates)
+			let os_doc_body = {
+				'title': updates['title'],
+				'contents': updates['contents'],
+				// Update the embedding field
+				// 'contents-embedding': newEmbedding,
+				'resource-type': updates['resource-type'],
+				'authors': updates['authors'],
+				'tags': updates['tags'],
+				'thumbnail-image': updates['thumbnail-image']['original'],
+				// Spatial-temporal properties
+				'spatial-coverage': updates['spatial-coverage'],
+				'spatial-geometry': updates['spatial-geometry'],
+				'spatial-geometry-geojson': geo_spatial_updates['spatial-geometry-geojson'],
+				'spatial-bounding-box': updates['spatial-bounding-box'],
+				'spatial-bounding-box-geojson': geo_spatial_updates['spatial-bounding-box-geojson'],
+				'spatial-centroid': updates['spatial-centroid'],
+				'spatial-centroid-geojson': geo_spatial_updates['spatial-centroid-geojson'],
+				'spatial-georeferenced': updates['spatial-georeferenced'],
+				'spatial-temporal-coverage': updates['spatial-temporal-coverage'],
+				'spatial-index-year': updates['spatial-index-year'],
+				// Type and contributor should never be updated
+			}
+	  // --- PDF Embedding Update for Publications ---
+			if (updates['resource-type'] === 'publication') {
+				const doi = updates['external-link-publication'] || updates['doi'];
+				if (doi) {
+					let pdfUrl = null;
+					let pdfText = null;
+					let chunks = [];
+					let chunkEmbeddings = [];
+					try {
+						pdfUrl = await getPdfUrlFromDoi(doi);
+						console.log("PDF URL:", pdfUrl);
+						if (!pdfUrl) {
+							console.log(`No PDF found for DOI: ${doi}`);
+						}
+					} catch (err) {
+						console.error("getPdfUrlFromDoi failed:", err.message);
+					}
+
+					if (pdfUrl) {
+						try {
+							pdfText = await extractTextFromPdfUrl(pdfUrl);
+							console.log("Extracted PDF text length:", pdfText ? pdfText.length : 0);
+							console.log("Extracted PDF text sample:", pdfText ? pdfText.slice(0, 300) : '[empty]');
+						} catch (err) {
+							console.error("extractTextFromPdfUrl failed:", err.message);
+						}
+					}
+
+					if (pdfText) {
+						try {
+							chunks = splitTextIntoChunks(pdfText, 1000, 200);
+							console.log("Number of chunks:", chunks.length);
+						} catch (err) {
+							console.error("splitTextIntoChunks failed:", err.message);
+						}
+					}
+
+					if (chunks && chunks.length > 0) {
+						for (const chunk of chunks) {
+							try {
+								if (chunk && chunk.trim().length > 0) {
+									console.log("Embedding chunk (first 100 chars):", chunk.slice(0, 100));
+									const embedding = await getFlaskEmbeddingResponse(chunk);
+									chunkEmbeddings.push({ chunk, embedding });
+								}
+							} catch (err) {
+								console.error("Embedding failed for chunk:", chunk.slice(0, 100), "Error:", err.message);
+							}
+						}
+						os_doc_body['pdf_chunks'] = chunkEmbeddings.map((c, i) => ({
+							chunk_id: i,
+							text: c.chunk,
+							embedding: c.embedding
+						}));
+					}
+				}
+			}
+			// --- End PDF Embedding Update ---
+			switch (visibility_action) {
+				case 'INSERT':
+					// let contributor = await n4j.getContributorByID(req.user.id);
+					let contributor = await getContributorByIDv2(req.user.id);
+					let contributor_name = '';
+					if ('display-first-name' in contributor || 'display-last-name' in contributor) {
+						contributor_name = `${contributor['display-first-name']} ${contributor['display-last-name']}`;
+					}
+					os_doc_body['contributor'] = contributor_name;
+					let contentEmbeddingInsert = await getFlaskEmbeddingResponse(updates['contents']);
+					if (contentEmbeddingInsert) {
+						os_doc_body['contents-embedding'] = contentEmbeddingInsert;
+					}
+					let os_insert_response = await performElementOpenSearchInsert(os_doc_body, id);
+					console.log("OpenSearch Response: ", os_insert_response);
+					break;
+				case 'UPDATE':
+					let contentEmbeddingUpdate = await getFlaskEmbeddingResponse(updates['contents']);
+					if (contentEmbeddingUpdate) {
+						os_doc_body['contents-embedding'] = contentEmbeddingUpdate;
+					}
+					let os_update_response = await performElementOpenSearchUpdate(os_doc_body, id);
+					console.log("OpenSearch Response: ", os_update_response);
+					break;
+				case 'DELETE':
+					let os_delete_response = await performElementOpenSearchDelete(id);
+					console.log("OpenSearch Response: ", os_delete_response);
+					break;
+				case 'NONE':
+				default:
+					break;
+			}
+			res.status(200).json({message: 'Element updated successfully', result: response, notebookStatus: notebook_status});
+		} else {
+			console.log('Error updating element');
+			res.status(500).json({message: 'Error updating element', result: response, notebookStatus: notebook_status});
+		}
+	} catch (error) {
+		console.error('Error updating element:', error);
+		res.status(500).json({ message: 'Internal server error' });
+	}
+});
+
+/**
+ * @swagger
+ * /api/v1/elements/{id}/visibility:
  *   put:
  *     summary: Set visibility for the element with given ID
+ *     deprecated: true
  *     tags: ['elements']
  *     parameters:
  *       - in: path
@@ -1393,7 +1632,7 @@ router.put('/api/elements/:id', jwtCorsMiddleware, authenticateJWT, async (req, 
  *       500:
  *         description: Internal server error
  */
-router.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+router.put('/api/v1/elements/:id/visibility', cors(), jwtCorsMiddleware, authenticateJWT, async (req, res) => {
 	const id = decodeURIComponent(req.params.id);
 	const visibility_str = decodeURIComponent(req.query.visibility);
 
@@ -1403,6 +1642,7 @@ router.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, authentica
 	const can_edit = await utils.userCanEditElement(id, req.user.id, req.user.role);
 	if (!can_edit){
 		res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
+		return;
 	}
 
 	const visibility = utils.parseVisibility(visibility_str);
@@ -1443,6 +1683,84 @@ router.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, authentica
 	}
 });
 
+/**
+ * @swagger
+ * /api/elements/{id}/visibility:
+ *   put:
+ *     summary: Set visibility for the element with given ID
+ *     tags: ['elements']
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The id of the element
+ *       - in: query
+ *         name: visibility
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [public, private]
+ *         description: The visibility value
+ *     responses:
+ *       200:
+ *         description: Element visibility updated successfully
+ *       403:
+ *         description: The user does not have the permission to edit this element
+ *       500:
+ *         description: Internal server error
+ */
+router.put('/api/elements/:id/visibility', cors(), jwtCorsMiddleware, authenticateJWT, async (req, res) => {
+	const id = decodeURIComponent(req.params.id);
+	const visibility_str = decodeURIComponent(req.query.visibility);
+
+	console.log('Setting visibility (' + visibility_str + ') for element with id: ' + id);
+
+	try {
+	const can_edit = await utils.userCanEditElementV2(id, req.user.id, req.user.role);
+	if (!can_edit){
+		res.status(403).json({ message: 'Forbidden: You do not have permission to edit this element.' });
+		return;
+	}
+
+	const visibility = utils.parseVisibility(visibility_str);
+	console.log(visibility);
+
+	const response =
+		  await n4j.setElementVisibilityForID(id, visibility);
+
+	// 'visibility' field is NOT searchable so should NOT be added to OS
+	// elements should ONLY be in OpenSearch if they are public
+	if (response) {
+		if (visibility === utils.Visibility.PUBLIC) {
+		// [ToDo] add/update element to OpenSearch
+		} else {
+		// [ToDo] remove element from OpenSearch
+		}
+
+		// // Update in OpenSearch
+		// const response = await os.client.update({
+		// 	id: id,
+		// 	index: os.os_index,
+		// 	body: {
+		// 	    doc: {
+		// 		'visibility': visibility
+		// 	    }
+		// 	},
+		// 	refresh: true,
+		// });
+		// console.log('OpenSearch set visibility:' + response['body']['result']);
+		res.status(200).json({ message: 'Element visibility updated successfully'});
+	} else {
+		console.log('Error updating element');
+		res.status(500).json({ message: 'Error updating element'});
+	}
+	} catch (error) {
+	console.error('Error updating element:', error);
+	res.status(500).json({ message: 'Internal server error' });
+	}
+});
 
 /**
  * @swagger
