@@ -502,7 +502,7 @@ router.get('/search/semantic-search', cors(), async (req, res) => {
         return res.status(400).json({ error: "Missing 'query' query parameter." });
     }
     try {
-        let results = await getSemanticSearchResults(query);
+        let results = await getSemanticSearchResults(query, size = 6);
 
         // Remove contents-embedding and pdf_chunks from each result
         results = results.map(result => {

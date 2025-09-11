@@ -44,14 +44,14 @@ export async function getEmbeddingFromFlask(userQuery) {
   }
 }
 
-export async function getSemanticSearchResults(userQuery) {
+export async function getSemanticSearchResults(userQuery, size = 12) {
   const embedding = await getEmbeddingFromFlask(userQuery);
   if (!embedding) return [];
   try {
     const response = await client.search({
       index: process.env.OPENSEARCH_INDEX,
       body: {
-        size: 12,
+        size: size,
         query: {
           bool: {
             should: [
