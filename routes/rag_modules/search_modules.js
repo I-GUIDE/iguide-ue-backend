@@ -79,18 +79,24 @@ export async function getSemanticSearchResults(userQuery) {
 
     // Map results: if inner_hits.pdf_chunk_hits exists, return the chunk, else the whole doc
     return response.body.hits.hits.map(hit => {
-      if (hit.inner_hits && hit.inner_hits.pdf_chunk_hits && hit.inner_hits.pdf_chunk_hits.hits.hits.length > 0) {
-        // Return the matching chunk(s) with parent doc info
+      if (
+        hit.inner_hits &&
+        hit.inner_hits.pdf_chunk_hits &&
+        hit.inner_hits.pdf_chunk_hits.hits.hits.length > 0
+      ) {
         const chunkHit = hit.inner_hits.pdf_chunk_hits.hits.hits[0];
+        const pdfChunk = chunkHit._source?.pdf_chunks;
         return {
           _id: hit._id,
           _score: hit._score,
           _source: {
             ...hit._source,
-            pdf_chunk: {
-              chunk_id: chunkHit._source.pdf_chunks.chunk_id,
-              text: chunkHit._source.pdf_chunks.text
-            }
+            pdf_chunk: pdfChunk
+              ? {
+                  chunk_id: pdfChunk.chunk_id,
+                  text: pdfChunk.text
+                }
+              : undefined
           }
         };
       } else {
