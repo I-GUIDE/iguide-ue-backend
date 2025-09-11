@@ -502,7 +502,19 @@ router.get('/search/semantic-search', cors(), async (req, res) => {
         return res.status(400).json({ error: "Missing 'query' query parameter." });
     }
     try {
-        const results = await getSemanticSearchResults(query);
+        let results = await getSemanticSearchResults(query);
+
+        // Remove contents-embedding and pdf_chunks from each result
+        results = results.map(result => {
+            const { _id, _score, _source } = result;
+            // Remove fields if present
+            if (_source) {
+                delete _source['contents-embedding'];
+                delete _source['pdf_chunks'];
+            }
+            return { _id, _score, _source };
+        });
+
         res.json({ elements: results });
     } catch (error) {
         console.error('Error in semantic search:', error);
