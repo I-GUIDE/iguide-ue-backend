@@ -7,7 +7,7 @@ import { Filter } from 'bad-words'
 // local imports
 import * as utils from '../utils/utils.js';
 import {searchRoutesRateLimiter} from "../ip_policy.js";
-import { getOpenSearchAgentResults } from './rag_modules/search_modules.js';
+import { getOpenSearchAgentResults, getSemanticSearchResults } from './rag_modules/search_modules.js';
 
 const router = express.Router();
 
@@ -472,6 +472,41 @@ router.get('/search/agentic-opensearch', cors(), async (req, res) => {
     } catch (error) {
         console.error('Error in agentic OpenSearch:', error);
         res.status(500).json({ error: 'Error querying agentic OpenSearch' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/search/semantic-search:
+ *   get:
+ *     summary: Semantic search using embedding-based retrieval
+ *     tags:
+ *       - Advanced Search
+ *     parameters:
+ *       - in: query
+ *         name: query
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: The user query for semantic search
+ *     responses:
+ *       200:
+ *         description: Semantic search results
+ *       500:
+ *         description: Error querying semantic search
+ */
+router.options('/search/semantic-search', cors());
+router.get('/search/semantic-search', cors(), async (req, res) => {
+    const { query } = req.query;
+    if (!query) {
+        return res.status(400).json({ error: "Missing 'query' query parameter." });
+    }
+    try {
+        const results = await getSemanticSearchResults(query);
+        res.json({ elements: results });
+    } catch (error) {
+        console.error('Error in semantic search:', error);
+        res.status(500).json({ error: 'Error querying semantic search' });
     }
 });
 
