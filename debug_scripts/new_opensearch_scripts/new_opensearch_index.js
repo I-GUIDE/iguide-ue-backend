@@ -2,9 +2,9 @@
  * Script to create a fresh OpenSearch index from scratch using Neo4j data
 **/
 
-import * as n4j from "../../backend_neo4j.js";
-import * as os from "../../backend_opensearch.js";
-import * as utils from "../../utils.js";
+import * as n4j from "../../database/backend_neo4j.js";
+import * as os from "../../database/backend_opensearch.js";
+import * as utils from "../../utils/utils.js";
 
 async function newOpenSearchIndex(newIndexName) {
   if (typeof newIndexName !== "string" || newIndexName.trim() === "") {
