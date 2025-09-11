@@ -1,13 +1,13 @@
 import request from "supertest";
 import app from "../../server.js";
 import testData from "./test_user_data.json";
-import {generateAccessToken} from "../../jwtUtils.js";
-import {ElementType, Role} from "../../utils.js";
+import {ElementType, Role} from "../../utils/utils.js";
 import path from "path";
 import url from "node:url";
 import fs from "fs";
 import axios from "axios";
 import * as crypto from "node:crypto";
+import {generateAccessToken} from "../../utils/jwtUtils.js";
 
 /**
  * As the APIs involve the usage of JWT Token for the purposes of the testing we will create 2 test suites with 2 different access
@@ -50,7 +50,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
     let generated_element_id = ""
     let uploaded_file_url_update = ""
     it("(External) Create a trusted User to perform operations", async () => {
-        let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_body = testData.minio_trusted_user
         const res = await request(app)
             .post('/api/users')
@@ -62,7 +62,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         expect(res.body).toHaveProperty("message", 'User added successfully');
     });
     it("(External) Should allow to fetch user details", async () => {
-        let generated_auth_cookie = createAuthCookie({id: 1, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_open_id_encoded = encodeURIComponent(testData.minio_trusted_user.openid);
         const res = await request(app)
             .get('/api/users/' + user_open_id_encoded)
@@ -77,7 +77,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         generated_user_id = res.body['id'];
     });
     it("1. Should be able to start the chunk upload", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         const req_body = {
             filename: filename,
             fileSize: fakeFileBuffer.length,
@@ -95,7 +95,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         uploadId = res.body.uploadId;
     });
     it("2. Should be able to upload a chunk data", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_upload_id = encodeURIComponent(uploadId);
         const res = await request(app)
             .post(`/api/elements/datasets/chunk/${encoded_upload_id}`)
@@ -109,7 +109,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         expect(res.body.success).toBe(true);
     });
     it("3. Should be able to return the upload progress", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_upload_id = encodeURIComponent(uploadId);
         const res = await request(app)
             .get(`/api/elements/datasets/chunk/progress/${encoded_upload_id}`)
@@ -123,7 +123,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         expect(res.body.progress).toBeDefined();
     });
     it("4. Should be able to complete the upload", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_upload_id = encodeURIComponent(uploadId);
         const res = await request(app)
             .post(`/api/elements/datasets/chunk/complete/${encoded_upload_id}`)
@@ -137,7 +137,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         uploadedFileUrl = res.body.url;
     });
     it("(External) Should be able to start the chunk upload (to abort in next step)", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         const req_body = {
             filename: filename,
             fileSize: fakeFileBuffer.length,
@@ -155,7 +155,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         uploadId = res.body.uploadId;
     });
     it("5. Should be able to stop the chunk upload", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_upload_id = encodeURIComponent(uploadId);
         const res = await request(app)
             .delete(`/api/elements/datasets/chunk/${encoded_upload_id}`)
@@ -166,7 +166,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         expect(res.body).toHaveProperty('message','Upload aborted successfully');
     });
     it("6. Should return appropriate message for invalid chunk upload", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_upload_id = encodeURIComponent("invalid-upload-id");
         const res = await request(app)
             .delete(`/api/elements/datasets/chunk/${encoded_upload_id}`)
@@ -177,7 +177,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         expect(res.body).toHaveProperty('message','Upload not found');
     });
     it("(External) Create a Dataset element to link the file uploaded to the element_id", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         let user_body = testData.element_details_json
         user_body['metadata']['created_by'] = generated_user_id;
         user_body['direct-download-link'] = uploadedFileUrl
@@ -194,7 +194,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         generated_element_id = res.body['elementId'];
     });
     it("7. Should be able to retrieve a public element based on Id and check the Url", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_uri = encodeURIComponent(generated_element_id);
         const res = await request(app)
             .get("/api/elements/" + encoded_uri)
@@ -212,7 +212,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         expect(res.body).toHaveProperty("user-uploaded-dataset", true);
     });
     it("8. Delete the file through delete element dataset and check if the element updated", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         let request_body = {
             url: uploaded_file_url_update,
             elementId: generated_element_id
@@ -244,7 +244,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
     });
     it("9. Upload another file and update the element with that file", async() => {
         // Start a chunk upload
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         const req_body = {
             filename: filename,
             fileSize: fakeFileBuffer.length,
@@ -302,7 +302,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         expect(update_res.body).toHaveProperty("result",true);
     });
     it("10. Check if the updated element has the uploaded file moved", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_uri = encodeURIComponent(generated_element_id);
         const res = await request(app)
             .get("/api/elements/" + encoded_uri)
@@ -319,7 +319,7 @@ describe("Endpoint testing for MinIO Uploader APIs", () => {
         expect(res.body).toHaveProperty("user-uploaded-dataset", true);
     });
     it("(External) Element registered should be deleted by the user", async () => {
-        let generated_auth_cookie = createAuthCookie({id: generated_user_id, role: Role.TRUSTED_USER});
+        let generated_auth_cookie = createAuthCookie({id: testData.minio_trusted_user.openid, role: Role.TRUSTED_USER});
         let encoded_uri = encodeURIComponent(generated_element_id)
         const res = await request(app)
             .delete("/api/elements/" + encoded_uri)
