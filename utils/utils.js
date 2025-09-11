@@ -4,7 +4,7 @@ import sharp from 'sharp';
 import * as n4j from '../database/backend_neo4j.js'
 import neo4j from "neo4j-driver";
 import {checkUniversityDomain} from "./domain_utils.js";
-import {getContributorByIDv2} from "../database/backend_neo4j_users.js";
+import {getContributorByIDv2, getContributorIdForElementV2} from "../database/backend_neo4j_users.js";
 
 /**************
  * Enums
@@ -325,6 +325,30 @@ export async function userCanEditElement(element_id, user_id, user_role) {
 //exports.userCanEditElement = userCanEditElement;
 
 /**
+ * Determing if user with user_id has enough permission to edit element with element_id v2
+ * @param {string} element_id Element to check permissions for
+ * @param {string} user_id Logged-in user ID
+ * @param {int} user_role Logged-in user role
+ * @returns Boolean true if user can edit, false otherwise
+ */
+export async function userCanEditElementV2(element_id, user_id, user_role) {
+    // only allow editing if
+    // (1) this element is owned by the user sending update request
+    // (2) user sending update request is admin or super admin
+    const element_owner = await getContributorIdForElementV2(element_id);
+    if (user_id === element_owner['id'] ||
+        (Array.isArray(element_owner['openids']) && element_owner['openids'].includes(user_id))){
+        console.log('This element is owned by the user');
+        // this element is owned by the user calling endpoing
+        return true;
+    } else if (user_role <= Role.CONTENT_MODERATOR) {
+        // endpoint invoked by admin or super admin
+        console.log('Admin user accessing a private element');
+        return true;
+    }
+    return false;
+}
+/**
  * Determing if user with user_id has enough permission to access element with element_id
  * @param {string} element_id Element to check permissions for
  * @param {string} user_id Logged-in user ID
@@ -356,6 +380,38 @@ export async function userCanViewElement(element_id, user_id, user_role) {
     return false;
 }
 
+/**
+ * Determing if user with user_id has enough permission to access element with element_id V2
+ * @param {string} element_id Element to check permissions for
+ * @param {string} user_id Logged-in user ID
+ * @param {int} user_role Logged-in user role
+ * @returns Boolean true if user can access, false otherwise
+ */
+export async function userCanViewElementV2(element_id, user_id, user_role) {
+    const element_visibility = await n4j.getElementVisibilityForID(element_id);
+    const element_owner = await getContributorIdForElementV2(element_id);
+
+    if (element_visibility === Visibility.PUBLIC){
+        return true;
+    }
+    // non-public element will never be visible to logged-out user
+    if (user_id === null || user_role === null){
+        console.log('User is not logged in and trying to access a private element');
+        return false;
+    }
+    // non-public element should only be visible to owner or admin
+    if (user_id == element_owner['id'] ||
+        (Array.isArray(element_owner['openids']) && element_owner['openids'].includes(user_id))){
+        console.log('This element is owned by the user');
+        // this element is owned by the user calling endpoing
+        return true;
+    } else if (user_role <= Role.CONTENT_MODERATOR) {
+        // endpoint invoked by admin or super admin
+        console.log('Admin user accessing a private element');
+        return true;
+    }
+    return false;
+}
 /**
  * Get the Update action to be performed for OpenSearch based on the visibility parameter
  * @param old_visibility

@@ -546,6 +546,33 @@ export async function getIfElementBookmarkedByContributorV2(contributor_id,
 	return false;
 }
 
+/**
+ * Get contrib ID for the element
+ * @param {string} e_id Element ID
+ * @return {Object} Contributors {id, openid}
+ */
+export async function getContributorIdForElementV2(e_id){
+	const query_str = "MATCH (a:Alias)-[:ALIAS_OF]->(c)-[:CONTRIBUTED]-(n{id:$id_param})" +
+		" WITH collect(a.openid) as aliases, c" +
+	  	" RETURN {id:c.id, openids: aliases}";
+	try {
+		const {records, summary} =
+			  await driver.executeQuery(query_str,
+						{id_param: e_id},
+						{database: process.env.NEO4J_DB});
+
+		if (records.length <= 0){
+			// No contributor found for given element
+			return {id:null, openid:null};
+		}
+		return records[0]['_fields'][0];
+	} catch(err){
+		console.log('getContributorIdForElement() - Error in query: '+ err);
+	}
+	// something went wrong
+	return false;
+}
+
 export async function mergeSecondaryAliasesToPrimary(primary_user_id, secondary_user_id) {
 	// convert [a1]-r1->[u1] , [a2]-r2->[u2] to [a1]-r1->[u1]<-r3-[a2]-r2->[u2]
 	try {
