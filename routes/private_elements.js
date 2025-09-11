@@ -97,24 +97,24 @@ router.options('/elements/private/:elementId', jwtCorsMiddleware);
 router.get('/elements/private/:elementId', jwtCorsMiddleware, authenticateJWT, async (req, res) => {
 
 	const element_id = decodeURIComponent(req.params['elementId']);
-	const {user_id, user_role} = (() => {
+	const {id, user_role} = (() => {
 		if (!req.user || req.user == null || typeof req.user === 'undefined') {
-			return {user_id: null, user_role: null};
+			return {id: null, user_role: null};
 		}
-		return {user_id: req.user.id, user_role: req.user.role}
+		return {id: req.user.id, user_role: req.user.role}
 	})();
 
 	// 'http://cilogon.org/serverA/users/48835826'
 	// const {user_id, user_role} = {user_id: '62992f5f-fd30-41d6-bc19-810cbba752e9',
 	// 				  user_role: n4j.Role.TRUSTED_USER};
 	try {
-		const can_view = await utils.userCanViewElementV2(element_id, user_id, user_role);
+		const can_view = await utils.userCanViewElementV2(element_id, id, user_role);
 		if (!can_view) {
 			res.status(403).json({message: 'Forbidden: You do not have permission to view this element.'});
 			return;
 		}
 
-		const element = await n4j.getElementByID(element_id, user_id, user_role);
+		const element = await n4j.getElementByID(element_id, id, user_role);
 		if (JSON.stringify(element) === '{}') {
 			res.status(404).json({message: 'Element not found'});
 			return;

@@ -547,9 +547,9 @@ export async function getIfElementBookmarkedByContributorV2(contributor_id,
 }
 
 /**
- * Get contrib ID for the element
+ * Get contributor user_id and openIds for the element
  * @param {string} e_id Element ID
- * @return {Object} Contributors {id, openid}
+ * @return {Object} Contributors {id, openids}
  */
 export async function getContributorIdForElementV2(e_id){
 	const query_str = "MATCH (a:Alias)-[:ALIAS_OF]->(c)-[:CONTRIBUTED]-(n{id:$id_param})" +
@@ -563,7 +563,7 @@ export async function getContributorIdForElementV2(e_id){
 
 		if (records.length <= 0){
 			// No contributor found for given element
-			return {id:null, openid:null};
+			return {id:null, openids:null};
 		}
 		return records[0]['_fields'][0];
 	} catch(err){
