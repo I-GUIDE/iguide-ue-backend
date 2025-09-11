@@ -3,7 +3,9 @@ import { Client } from '@opensearch-project/opensearch';
 import axios from 'axios';
 import cors from 'cors';
 import { Filter } from 'bad-words'
-import * as utils from '../utils.js';
+
+// local imports
+import * as utils from '../utils/utils.js';
 import {searchRoutesRateLimiter} from "../ip_policy.js";
 
 const router = express.Router();
@@ -90,7 +92,7 @@ router.get('/search/count', cors(), async (req, res) => {
     const { keyword, 'element-type': element_type, 'sort-by': sort_by = '_score', order = 'desc', from = 0, size = 15, ...additionalFields } = req.query;
 
     let query = {
-	multi_match: {
+    multi_match: {
             query: keyword,
             fields: [
                 'title^3',    // Boost title matches

@@ -1,5 +1,5 @@
 import { callLlamaModel, createQueryPayload, callGPTModel } from './llm_modules.js';
-import { extractJsonFromLLMReturn, formatDocsString, formatDocsJson } from './rag_utils.js';
+import { extractJsonFromLLMReturn, formatDocsString, formatDocsJson } from '../../utils/rag_utils.js';
 
 /*export async function gradeDocuments(documents, question) {
   const gradedDocuments = [];
@@ -54,29 +54,27 @@ export async function gradeDocuments(documents, question) {
 
   for (const doc of documents) {
     // 1) Remove "contents-embedding" (and anything else unnecessary)
-    // This uses destructuring to "pull out" the key and discard it
     const { 
       "contents-embedding": _embeddings,  // discard
       ...docWithoutEmbedding 
     } = doc._source;
 
     // 2) Build a simpler, consistent schema for the grader
-    //    (you can rename or reorder fields as you wish)
+    // Add pdf_chunk.text if present
     const docForGrading = {
-      count: docWithoutEmbedding.click_count?.low ?? -1, // when the document is from Neo4j
+      count: docWithoutEmbedding.click_count?.low ?? -1,
       title: docWithoutEmbedding.title || "",
       resourceType: docWithoutEmbedding["resource-type"] || "",
       authors: docWithoutEmbedding.authors || [],
       tags: docWithoutEmbedding.tags || [],
       contributor: docWithoutEmbedding.contributor || "",
       contents: docWithoutEmbedding.contents || "",
-      // Add or remove fields as needed
+      pdf_chunk_text: docWithoutEmbedding.pdf_chunk?.text || undefined, // <-- add this line
     };
 
-    // Convert the simplified doc to JSON or a string for the prompt
     const docString = JSON.stringify(docForGrading, null, 2);
     console.log("Doc for grading:", docForGrading.count);
-    // 3) Build your grader prompt with the simplified doc
+
     const graderPrompt = `
       You are a grader assessing the relevance of the following knowledge element to a user question.
       The knowledge element has the following fields in JSON format:
@@ -91,8 +89,7 @@ export async function gradeDocuments(documents, question) {
       {"relevance_score": 7}
 `;
 
-    // 4) Create your query payload (adjust system prompt as needed)
-    let result
+    let result;
     if(process.env.USE_GPT==true){
       const queryPayload = createQueryPayload(
         "gpt-4o-mini",
@@ -110,9 +107,7 @@ export async function gradeDocuments(documents, question) {
       );
       result = await callLlamaModel(queryPayload);
     }
-    
 
-    // 6) Parse LLM response as JSON
     try {
       const parsed = extractJsonFromLLMReturn(result.trim());
       var relevanceScore;
