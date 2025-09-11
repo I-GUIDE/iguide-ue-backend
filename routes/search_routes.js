@@ -7,6 +7,7 @@ import { Filter } from 'bad-words'
 // local imports
 import * as utils from '../utils/utils.js';
 import {searchRoutesRateLimiter} from "../ip_policy.js";
+import { getOpenSearchAgentResults } from './rag_modules/search_modules.js';
 
 const router = express.Router();
 
@@ -436,6 +437,41 @@ router.get('/top-keywords', cors(), async (req, res) => {
     } catch (error) {
         console.error('Error retrieving top keywords:', error);
         res.status(500).json({ error: 'Error retrieving top keywords' });
+    }
+});
+
+/**
+ * @swagger
+ * /api/search/agentic-opensearch:
+ *   get:
+ *     summary: Agentic spatial/temporal OpenSearch using LLM
+ *     tags:
+ *       - Advanced Search
+ *     parameters:
+ *       - in: query
+ *         name: query
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: The user query for spatial/temporal search
+ *     responses:
+ *       200:
+ *         description: Agentic OpenSearch results
+ *       500:
+ *         description: Error querying OpenSearch agent
+ */
+router.options('/search/agentic-opensearch', cors());
+router.get('/search/agentic-opensearch', cors(), async (req, res) => {
+    const { query } = req.query;
+    if (!query) {
+        return res.status(400).json({ error: "Missing 'query' query parameter." });
+    }
+    try {
+        const results = await getOpenSearchAgentResults(query);
+        res.json({ elements: results });
+    } catch (error) {
+        console.error('Error in agentic OpenSearch:', error);
+        res.status(500).json({ error: 'Error querying agentic OpenSearch' });
     }
 });
 
