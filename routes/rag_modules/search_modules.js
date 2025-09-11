@@ -133,3 +133,38 @@ export async function getNeo4jSearchResults(userQuery) {
     return [];
   }
 }
+import { agentSpatialTemporalSearchWithLLM, getOpenSearchSchema } from './opensearch_agent.js';
+
+export async function getOpenSearchAgentResults(userQuery) {
+  try {
+    // Fetch schema (cached if available)
+    const schema = await getOpenSearchSchema();
+
+    // Pass schema to the agent
+    const result = await agentSpatialTemporalSearchWithLLM(userQuery, schema);
+
+    if (!result || !Array.isArray(result.results)) {
+      console.warn("OpenSearch agent returned no usable results.");
+      return [];
+    }
+
+    // Normalize result format (like other search results)
+    return result.results.map((doc, i) => ({
+      _id: doc._id,
+      _score: doc._score ?? 1.0,
+      _source: {
+        contributor: doc.contributor,
+        contents: doc.contents,
+        "resource-type": doc["resource-type"],
+        title: doc.title,
+        authors: doc.authors || [],
+        tags: doc.tags || [],
+        "thumbnail-image": doc["thumbnail-image"],
+        click_count: doc.click_count ?? 0
+      }
+    }));
+  } catch (error) {
+    console.error("Error in getOpenSearchAgentResults:", error);
+    return [];
+  }
+}
