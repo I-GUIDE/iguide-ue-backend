@@ -11,7 +11,7 @@ import {
   extractTextFromPdfUrl,
   splitTextIntoChunks,
 } from "../../utils/elements_utils.js";
-import {convertGeoSpatialFields} from "../../utils/spatial_utils.js"
+import {convertGeoSpatialFields} from "../../utils/spatial_utils.js";
 
 async function newOpenSearchIndex(newIndexName) {
   if (typeof newIndexName !== "string" || newIndexName.trim() === "") {
@@ -68,7 +68,13 @@ async function newOpenSearchIndex(newIndexName) {
         const resource = await n4j.getElementByID(elementId);
         if (!resource || Object.keys(resource).length === 0) continue;
 
-        let geo_spatial_resource = convertGeoSpatialFields(resource);
+        // only index Public elements
+        const resource_visibility = utils.parseVisibility(resource["visibility"]);
+        if (resource_visibility !== utils.Visibility.PUBLIC) {
+          continue;
+        }
+
+        const geo_spatial_resource = convertGeoSpatialFields(resource);
         // Build os_element
         let os_element = {
           title: resource["title"],
@@ -94,7 +100,7 @@ async function newOpenSearchIndex(newIndexName) {
 
         // Override contributor with new format
         if (resource["contributor"]) {
-          let avatarUrl =
+          const avatarUrl =
             resource["contributor"]["avatar-url"] || resource["contributor"]["avatar_url"];
 
           os_element["contributor"] = {
