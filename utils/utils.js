@@ -5,6 +5,8 @@ import * as n4j from '../database/backend_neo4j.js'
 import neo4j from "neo4j-driver";
 import {checkUniversityDomain} from "./domain_utils.js";
 import {getContributorByIDv2, getContributorIdForElementV2} from "../database/backend_neo4j_users.js";
+import {checkJWTTokenBypass} from "./jwtUtils.js";
+import jwt from 'jsonwebtoken';
 
 /**************
  * Enums
@@ -81,6 +83,24 @@ export const EditableParameters = Object.freeze({
 });
 //exports.Visibility = Visibility;
 
+/**
+ * List of parameters exposed to the UI when any user views the details
+ * @type {Readonly<{ID: string}>}
+ */
+export const UserPublicViewParameters = Object.freeze({
+    ID: 'id',
+    DISPLAY_FIRST_NAME: 'display-first-name',
+    DISPLAY_LAST_NAME: 'display-last-name',
+    ROLE: 'role',
+    CREATED_AT: 'created-at',
+    AFFILIATION: 'affiliation',
+    AVATAR_URL: 'avatar-url',
+    GITHUB_LINK: 'gitHubLink',
+    PERSONAL_WEBSITE_LINK: 'personalWebsiteLink',
+    LINKEDIN_LINK: 'linkedInLink',
+    GOOGLE_SCHOLAR_LINK: 'googleScholarLink',
+    BIO: 'bio'
+});
 /**************/
 
 /**
@@ -537,4 +557,42 @@ export function performUserCheck(req, user_id) {
         return true;
     }
     return false;
+}
+
+export function userCanViewAllContributorParams(req, requested_user) {
+    try {
+        // Allow to view all details if auth API KEY is provided
+        if (checkJWTTokenBypass(req)) {
+            return true;
+        }
+        // Check if the request has an jwt token and if not return false
+        if (!(process.env.JWT_ACCESS_TOKEN_NAME in req.cookies)) {
+            return false
+        }
+        const token = req.cookies[process.env.JWT_ACCESS_TOKEN_NAME]
+        let req_user;
+        if (token) {
+            jwt.verify(token, process.env.JWT_ACCESS_TOKEN_SECRET, (err, user) => {
+                if (err) {
+                    if (err.name === 'TokenExpiredError') {
+                        return false;
+                    }
+                    return false;
+                }
+                req.user = user;
+                req_user = user;
+            });
+            const alias_present = requested_user['aliases']
+                    ?.some(alias => alias['openid'] === req_user?.id);
+            if (alias_present || (req_user?.role <= Role.CONTENT_MODERATOR)) {
+                return true;
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    } catch (error) {
+        return false;
+    }
 }

@@ -10,7 +10,7 @@ import {
 	generateMultipleResolutionImagesFor,
 	parse64BitNumber, parseElementType, parseRole,
 	performUserCheck,
-	Role
+	Role, userCanViewAllContributorParams, UserPublicViewParameters
 } from "../utils/utils.js"
 import {
 	checkContributorByIDV2,
@@ -77,12 +77,24 @@ router.get('/api/users/:id', cors(), async (req, res) => {
 		if (response.size === 0){
 	    	return res.status(404).json({ message: 'User not found' });
 		}
-		// remove role attribute
-		// delete response['role'];
-		res.status(200).json(response);
+		const viewAllParams = userCanViewAllContributorParams(req, response);
+		if (viewAllParams) {
+			return res.status(200).json(response);
+		} else {
+			// keep only the UserPublicViewParameters and return the response
+			const filteredResponse = {};
+
+			Object.values(UserPublicViewParameters).forEach(param => {
+				if (response[param] !== undefined) {
+					filteredResponse[param] = response[param];
+				}
+			});
+
+			return res.status(200).json(filteredResponse);
+		}
     } catch (error) {
 		console.error('Error fetching user:', error);
-		res.status(500).json({ message: 'Error fetching the user' });
+		return res.status(500).json({ message: 'Error fetching the user' });
     }
 });
 

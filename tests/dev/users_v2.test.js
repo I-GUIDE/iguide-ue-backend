@@ -71,6 +71,42 @@ describe("Users V2 Endpoint API Testing", () => {
         // expect(res.body).toHaveProperty("total-contributions");
         generated_user_id = res.body['id'];
     });
+    it("2.1 Should not allow to get user's email or openId for no jwt token request based on provided open_id", async () => {
+        // let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
+        let encoded_openid = encodeURIComponent(testData.trusted_user.openid);
+        const res = await request(app)
+            .get('/api/users/' + encoded_openid)
+            // .set('Cookie', generated_auth_cookie)
+           .set('Accept', '*/*')
+           .set('Content-Type',"application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).not.toHaveProperty("openid");
+        expect(res.body).not.toHaveProperty("first-name");
+        expect(res.body).not.toHaveProperty("last-name");
+        expect(res.body).not.toHaveProperty("email");
+        expect(res.body).not.toHaveProperty("aliases");
+        expect(res.body).toHaveProperty("display-first-name", testData.trusted_user.first_name);
+        expect(res.body).toHaveProperty("display-last-name", testData.trusted_user.last_name);
+        // expect(res.body).toHaveProperty("total-contributions");
+        // generated_user_id = res.body['id'];
+    });
+     it("2.2 Should allow ADMIN to get all user details based on provided open_id", async () => {
+        // let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
+        let encoded_openid = encodeURIComponent(testData.trusted_user.openid);
+        const res = await request(app)
+            .get('/api/users/' + encoded_openid)
+            .set('Cookie', generated_auth_super_admin_cookie)
+           .set('Accept', '*/*')
+           .set('Content-Type',"application/json");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("openid", testData.trusted_user.openid);
+        expect(res.body).toHaveProperty("first-name", testData.trusted_user.first_name);
+        expect(res.body).toHaveProperty("last-name", testData.trusted_user.last_name);
+        expect(res.body).toHaveProperty("email", testData.trusted_user.email);
+        expect(res.body).toHaveProperty("aliases");
+        // expect(res.body).toHaveProperty("total-contributions");
+        // generated_user_id = res.body['id'];
+    });
     it("3. Should allow user to fetch the user's role", async () => {
         let encoded_id = encodeURIComponent(testData.trusted_user.openid);
         let generated_auth_cookie = createAuthCookie({id: testData.trusted_user.openid, role: Role.TRUSTED_USER});
