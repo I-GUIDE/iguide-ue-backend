@@ -82,20 +82,19 @@ async function newOpenSearchIndex(newIndexName) {
           authors: resource["authors"],
           tags: resource["tags"],
           "resource-type": resource["resource-type"],
-          "thumbnail-image":
-            resource["thumbnail-image"]?.original || resource["thumbnail-image"],
+          'thumbnail-image': resource['thumbnail-image']['original'],
 
           // spatial (if they exist in resource)
-          "spatial-coverage": resource["spatial-coverage"] || null,
-          "spatial-geometry": resource["spatial-geometry"] || null,
-          "spatial-geometry-geojson": geo_spatial_resource["spatial-geometry-geojson"] || null,
-          "spatial-bounding-box": resource["spatial-bounding-box"] || null,
-          "spatial-bounding-box-geojson": geo_spatial_resource["spatial-bounding-box-geojson"] || null,
-          "spatial-centroid": resource["spatial-centroid"] || null,
-          "spatial-centroid-geojson": geo_spatial_resource["spatial-centroid-geojson"] || null,
-          "spatial-georeferenced": resource["spatial-georeferenced"] || null,
-          "spatial-temporal-coverage": resource["spatial-temporal-coverage"] || null,
-          "spatial-index-year": resource["spatial-index-year"] || null,
+          "spatial-coverage": resource["spatial-coverage"],
+          "spatial-geometry": resource["spatial-geometry"],
+          "spatial-geometry-geojson": geo_spatial_resource["spatial-geometry-geojson"],
+          "spatial-bounding-box": resource["spatial-bounding-box"],
+          "spatial-bounding-box-geojson": geo_spatial_resource["spatial-bounding-box-geojson"],
+          "spatial-centroid": resource["spatial-centroid"],
+          "spatial-centroid-geojson": geo_spatial_resource["spatial-centroid-geojson"],
+          "spatial-georeferenced": resource["spatial-georeferenced"],
+          "spatial-temporal-coverage": resource["spatial-temporal-coverage"],
+          "spatial-index-year": resource["spatial-index-year"],
         };
 
         // Override contributor with new format
