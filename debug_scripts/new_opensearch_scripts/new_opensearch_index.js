@@ -114,6 +114,7 @@ async function newOpenSearchIndex(newIndexName) {
         try {
           if (resource["contents"]) {
             const contentEmbedding = await getFlaskEmbeddingResponse(resource["contents"]);
+            console.log(`contentEmbedding response for element ${elementId} is`, contentEmbedding);
             if (contentEmbedding) {
               os_element["contents-embedding"] = contentEmbedding;
             }
