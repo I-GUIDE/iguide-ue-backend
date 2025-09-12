@@ -82,7 +82,7 @@ async function newOpenSearchIndex(newIndexName) {
           authors: resource["authors"],
           tags: resource["tags"],
           "resource-type": resource["resource-type"],
-          'thumbnail-image': resource['thumbnail-image']['original'],
+          "thumbnail-image": resource["thumbnail-image"]?.original || resource["thumbnail-image"],
 
           // spatial (if they exist in resource)
           "spatial-coverage": resource["spatial-coverage"],
