@@ -1,5 +1,5 @@
 import { callLlamaModel, createQueryPayload, callGPTModel } from './llm_modules.js';
-import { getKeywordSearchResults, getSemanticSearchResults, getNeo4jSearchResults} from './search_modules.js';
+import { getKeywordSearchResults, getSemanticSearchResults, getNeo4jSearchResults, getOpenSearchAgentResults} from './search_modules.js';
 import { getSpatialSearchResults } from './spatial_search_modules.js';
 import fs from 'fs';
 import csv from 'csv-parser';
@@ -51,7 +51,7 @@ Methods: getSemanticSearchResults, getKeywordSearchResults
 
 Q: What is the flood map for Chicago?
 Reasoning: The query is about a map for a location, so semantic and spatial search are relevant.
-Methods: getSemanticSearchResults, getSpatialSearchResults
+Methods: getSemanticSearchResults, getOpenSearchAgentResults
 
 Q: Climate change datasets
 Reasoning: The query is a general topic, so keyword search is appropriate.
@@ -59,7 +59,7 @@ Methods: getKeywordSearchResults
 
 Q: Anything near Colorado?
 Reasoning: The query is about proximity to a location, so spatial search is relevant.
-Methods: getSpatialSearchResults
+Methods: getOpenSearchAgentResults
 `;
 
   return prompt;
@@ -71,6 +71,7 @@ const functionMapping = {
   getKeywordSearchResults,
   getSemanticSearchResults,
   getSpatialSearchResults,
+  getOpenSearchAgentResults,
 };
 
 // Route the user query dynamically based on LLM's selection

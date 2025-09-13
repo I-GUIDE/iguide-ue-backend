@@ -44,14 +44,14 @@ export async function getEmbeddingFromFlask(userQuery) {
   }
 }
 
-export async function getSemanticSearchResults(userQuery) {
+export async function getSemanticSearchResults(userQuery, size = 12) {
   const embedding = await getEmbeddingFromFlask(userQuery);
   if (!embedding) return [];
   try {
     const response = await client.search({
       index: process.env.OPENSEARCH_INDEX,
       body: {
-        size: 12,
+        size: size,
         query: {
           bool: {
             should: [
@@ -79,18 +79,24 @@ export async function getSemanticSearchResults(userQuery) {
 
     // Map results: if inner_hits.pdf_chunk_hits exists, return the chunk, else the whole doc
     return response.body.hits.hits.map(hit => {
-      if (hit.inner_hits && hit.inner_hits.pdf_chunk_hits && hit.inner_hits.pdf_chunk_hits.hits.hits.length > 0) {
-        // Return the matching chunk(s) with parent doc info
+      if (
+        hit.inner_hits &&
+        hit.inner_hits.pdf_chunk_hits &&
+        hit.inner_hits.pdf_chunk_hits.hits.hits.length > 0
+      ) {
         const chunkHit = hit.inner_hits.pdf_chunk_hits.hits.hits[0];
+        const pdfChunk = chunkHit._source?.pdf_chunks;
         return {
           _id: hit._id,
           _score: hit._score,
           _source: {
             ...hit._source,
-            pdf_chunk: {
-              chunk_id: chunkHit._source.pdf_chunks.chunk_id,
-              text: chunkHit._source.pdf_chunks.text
-            }
+            pdf_chunk: pdfChunk
+              ? {
+                  chunk_id: pdfChunk.chunk_id,
+                  text: pdfChunk.text
+                }
+              : undefined
           }
         };
       } else {
@@ -130,6 +136,41 @@ export async function getNeo4jSearchResults(userQuery) {
     }));
   } catch (error) {
     console.error("Error in getNeo4jSearchResults:", error);
+    return [];
+  }
+}
+import { agentSpatialTemporalSearchWithLLM, getOpenSearchSchema } from './opensearch_agent.js';
+
+export async function getOpenSearchAgentResults(userQuery) {
+  try {
+    // Fetch schema (cached if available)
+    const schema = await getOpenSearchSchema();
+
+    // Pass schema to the agent
+    const result = await agentSpatialTemporalSearchWithLLM(userQuery, schema);
+
+    if (!result || !Array.isArray(result.results)) {
+      console.warn("OpenSearch agent returned no usable results.");
+      return [];
+    }
+
+    // Normalize result format (like other search results)
+    return result.results.map((doc, i) => ({
+      _id: doc._id,
+      _score: doc._score ?? 1.0,
+      _source: {
+        contributor: doc.contributor,
+        contents: doc.contents,
+        "resource-type": doc["resource-type"],
+        title: doc.title,
+        authors: doc.authors || [],
+        tags: doc.tags || [],
+        "thumbnail-image": doc["thumbnail-image"],
+        click_count: doc.click_count ?? 0
+      }
+    }));
+  } catch (error) {
+    console.error("Error in getOpenSearchAgentResults:", error);
     return [];
   }
 }
